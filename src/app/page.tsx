@@ -1,101 +1,287 @@
-import Image from "next/image";
+// Landing page — Server Component (no "use client" needed, no JS interactivity yet).
+// Matches the repEAT_v3.html landing screen pixel-for-pixel.
+import {
+  IconMapPin,
+  IconUsers,
+  IconBuildingStore,
+  IconDeviceMobileStar,
+  IconArrowRight,
+} from "@tabler/icons-react";
 
-export default function Home() {
+// ─── Portal card data ─────────────────────────────────────────────────────
+// Each portal has its own colour scheme from the HTML prototype.
+const PORTALS = [
+  {
+    href: "/customer",
+    iconBg: "bg-[#FFF3EC]",                 // --blt (orange tint)
+    icon: <IconUsers size={26} style={{ color: "var(--br)" }} />,
+    title: "Customer",
+    subtitle: "/ Foodie",
+    description: "Browse deals near you, filter by city, cuisine, or deal type",
+    ctaText: "Browse deals",
+    ctaColor: "var(--br)",                  // orange
+  },
+  {
+    href: "/restaurant",
+    iconBg: "bg-[#ECFDF5]",                 // green tint
+    icon: <IconBuildingStore size={26} style={{ color: "#065F46" }} />,
+    title: "Restaurant",
+    subtitle: "/ Business",
+    description: "List deals, import menu from Google, track redemptions — free",
+    ctaText: "List your restaurant",
+    ctaColor: "#065F46",                    // dark green
+  },
+  {
+    href: "/creator",
+    iconBg: "bg-[#FDF4FF]",                 // purple tint
+    icon: <IconDeviceMobileStar size={26} style={{ color: "#7E22CE" }} />,
+    title: "Creator",
+    subtitle: "/ Influencer",
+    description: "Find restaurant collabs, negotiate in-app, earn on every deal",
+    ctaText: "Find collabs",
+    ctaColor: "#7E22CE",                    // purple
+  },
+];
+
+// ─── Stats row data ───────────────────────────────────────────────────────
+const STATS = [
+  { value: "400+", label: "Restaurants" },
+  { value: "15",   label: "Ontario cities" },
+  { value: "$0",   label: "Monthly fee" },
+  { value: "0%",   label: "Commission" },
+];
+
+export default function LandingPage() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    // Full-height flex column — nav at top, hero centred in the rest
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      {/* ── Nav bar ─────────────────────────────────────────────────────── */}
+      <nav
+        style={{
+          padding: "20px 24px 0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          maxWidth: 1100,
+          margin: "0 auto",
+          width: "100%",
+        }}
+      >
+        {/* Logo: "Rep" in default text colour + "EAT" in orange */}
+        <div className="logo" style={{ fontSize: 34 }}>
+          Rep<span className="eat">EAT</span>
+        </div>
+
+        {/* Sign in button — outlined style from HTML (.bol class) */}
+        <a
+          href="/customer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            height: 38,
+            padding: "0 18px",
+            borderRadius: "var(--rs)",
+            border: "1.5px solid var(--bd2)",
+            color: "var(--tx)",
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            transition: "all 0.14s",
+          }}
+          onMouseOver={undefined}  // hover handled by CSS if needed
+        >
+          Sign in
+        </a>
+      </nav>
+
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "2rem 1.5rem",
+        }}
+      >
+        <div style={{ maxWidth: 980, width: "100%", textAlign: "center" }}>
+
+          {/* Ontario badge pill */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: "var(--blt)",
+              color: "var(--br)",
+              fontSize: 13,
+              fontWeight: 700,
+              padding: "6px 16px",
+              borderRadius: 100,
+              marginBottom: 20,
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <IconMapPin size={14} />
+            Ontario-wide · Starting with GTA &amp; KW
+          </div>
+
+          {/* Main headline */}
+          <h1
+            style={{
+              // clamp() scales the font between 36 px and 66 px depending on viewport
+              fontSize: "clamp(36px, 6vw, 66px)",
+              fontWeight: 800,
+              lineHeight: 1.08,
+              marginBottom: 18,
+              letterSpacing: "-2px",
+            }}
           >
-            Read our docs
-          </a>
+            Restaurant deals,
+            <br />
+            <span style={{ color: "var(--br)" }}>claimed in person.</span>
+          </h1>
+
+          {/* Sub-headline */}
+          <p
+            style={{
+              fontSize: 17,
+              color: "var(--t2)",
+              maxWidth: 500,
+              margin: "0 auto 48px",
+              lineHeight: 1.7,
+            }}
+          >
+            Discover weekly promotions from local restaurants across Ontario. No
+            delivery fees, no apps — just show your QR code at the door.
+          </p>
+
+          {/* ── Three portal cards ────────────────────────────────────────── */}
+          {/* auto-fit grid: each card is at least 260 px wide, expands to fill */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 14,
+              textAlign: "left",
+            }}
+          >
+            {PORTALS.map((p) => (
+              <a
+                key={p.href}
+                href={p.href}
+                style={{
+                  background: "var(--sf)",
+                  borderRadius: "var(--r)",
+                  padding: 22,
+                  cursor: "pointer",
+                  border: "2px solid var(--bd)",
+                  transition: "all 0.16s",
+                  boxShadow: "var(--sh)",
+                  textDecoration: "none",
+                  color: "inherit",
+                  display: "block",
+                }}
+                // Inline hover not possible in JSX — Tailwind group hover handles it
+                className="group hover:-translate-y-1 hover:shadow-lg"
+              >
+                {/* Icon circle */}
+                <div
+                  className={p.iconBg}
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 13,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: 14,
+                  }}
+                >
+                  {p.icon}
+                </div>
+
+                {/* Title + subtitle */}
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+                  {p.title}{" "}
+                  <span style={{ color: "var(--t3)", fontSize: 13, fontWeight: 400 }}>
+                    {p.subtitle}
+                  </span>
+                </div>
+
+                {/* Description */}
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "var(--t2)",
+                    lineHeight: 1.6,
+                    marginBottom: 14,
+                  }}
+                >
+                  {p.description}
+                </div>
+
+                {/* CTA link-style row */}
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: p.ctaColor,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  {p.ctaText} <IconArrowRight size={14} />
+                </div>
+              </a>
+            ))}
+          </div>
+
+          {/* ── Stats row ─────────────────────────────────────────────────── */}
+          {/* Shows platform credibility numbers below the cards */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: "clamp(24px, 5vw, 64px)",
+              marginTop: 48,
+              flexWrap: "wrap",
+            }}
+          >
+            {STATS.map((s) => (
+              <div key={s.label} style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontFamily: "var(--fh)",
+                    fontSize: "clamp(22px, 4vw, 32px)",
+                    fontWeight: 800,
+                    color: "var(--br)",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {s.value}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--t2)", marginTop: 4 }}>
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Ontario tagline */}
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--t3)",
+              marginTop: 32,
+              letterSpacing: "0.02em",
+            }}
+          >
+            🍁 Made for Ontario restaurants · repeateats.ca
+          </p>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RepEAT — Local Restaurant Deals</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css">
+<style>
+:root{--br:#E85D04;--br2:#FF7A30;--blt:#FFF3EC;--bdk:#A03C01;--bg:#F8F7F4;--sf:#fff;--sf2:#F2F1EE;--bd:rgba(0,0,0,0.09);--bd2:rgba(0,0,0,0.18);--tx:#111;--t2:#5A5A5A;--t3:#999;--gr:#22C55E;--rd:#EF4444;--r:14px;--rs:9px;--sh:0 2px 12px rgba(0,0,0,0.08);--sh2:0 6px 28px rgba(0,0,0,0.14);--ff:'Plus Jakarta Sans',sans-serif;--fh:'Syne',sans-serif}
+@media(prefers-color-scheme:dark){:root{--br:#FF7A30;--blt:#2A1200;--bdk:#FFB088;--bg:#0F0F0F;--sf:#1A1A1A;--sf2:#242424;--bd:rgba(255,255,255,0.09);--bd2:rgba(255,255,255,0.2);--tx:#F2F2F2;--t2:#AAA;--t3:#666;--sh:0 2px 14px rgba(0,0,0,0.4);--sh2:0 6px 28px rgba(0,0,0,0.55)}}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+body{font-family:var(--ff);background:var(--bg);color:var(--tx);min-height:100vh;line-height:1.5}
+h1,h2,h3,.logo{font-family:var(--fh)}
+.scr{display:none}.scr.on{display:block}
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.56);z-index:200;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)}.ov.on{display:flex}
+.ob{background:var(--sf);border-radius:var(--r);width:100%;animation:su .22s ease;box-shadow:var(--sh2)}
+@keyframes su{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:46px;border-radius:var(--rs);border:none;font-size:15px;font-weight:600;cursor:pointer;padding:0 22px;transition:all .14s;font-family:var(--ff);white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.bbr{background:var(--br);color:#fff}.bbr:hover{background:var(--br2)}
+.bol{background:transparent;border:1.5px solid var(--bd2);color:var(--tx)}.bol:hover{border-color:var(--br);color:var(--br)}
+.bgh{background:transparent;border:none;color:var(--t2);font-family:var(--ff);font-size:14px;font-weight:500;cursor:pointer;padding:6px 10px;border-radius:var(--rs);transition:all .14s}.bgh:hover{background:var(--sf2);color:var(--tx)}
+.logo{letter-spacing:-2px;line-height:1;font-weight:800}.logo .e{color:var(--br)}
+.f{margin-bottom:14px}.f label{display:block;font-size:13px;color:var(--t2);margin-bottom:5px;font-weight:600}
+.f input,.f select,.f textarea{width:100%;padding:0 14px;height:46px;border:1.5px solid var(--bd2);border-radius:var(--rs);background:var(--sf);color:var(--tx);font-size:15px;font-family:var(--ff);outline:none;transition:border-color .14s,box-shadow .14s}
+.f input:focus,.f select:focus,.f textarea:focus{border-color:var(--br);box-shadow:0 0 0 3px rgba(232,93,4,0.11)}
+.f textarea{height:auto;padding:12px 14px;resize:vertical}
+.f select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:7px 15px;border-radius:100px;font-size:13px;font-weight:600;border:1.5px solid var(--bd2);background:var(--sf);color:var(--t2);cursor:pointer;transition:all .14s;white-space:nowrap;font-family:var(--ff)}
+.chip.on,.chip:hover{background:var(--br);color:#fff;border-color:var(--br)}
+.day-pill{height:34px;min-width:44px;padding:0 10px;border-radius:100px;font-size:12px;font-weight:700;border:1.5px solid var(--bd2);background:var(--sf);color:var(--t2);cursor:pointer;transition:all .14s;font-family:var(--ff)}
+.day-pill.on{background:var(--br);color:#fff;border-color:var(--br)}
+.dt-pill{height:36px;padding:0 14px;border-radius:100px;font-size:13px;font-weight:600;border:1.5px solid var(--bd2);background:var(--sf);color:var(--t2);cursor:pointer;transition:all .14s;font-family:var(--ff);display:inline-flex;align-items:center;gap:5px}
+.dt-pill.on{background:var(--br);color:#fff;border-color:var(--br)}
+.pbar{height:5px;background:var(--sf2);border-radius:5px;overflow:hidden}.pbar .fill{height:100%;background:var(--br);border-radius:5px;transition:width .4s}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--t2);cursor:pointer;background:none;border:none;font-family:var(--ff);font-weight:500;padding:4px 0}.back:hover{color:var(--br)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:100px;border:1px solid}
+.bdi{background:#EEF5FF;color:#1D4ED8;border-color:#BFDBFE}
+.bpk{background:#ECFDF5;color:#065F46;border-color:#A7F3D0}
+.bcm{background:#FFF7ED;color:#92400E;border-color:#FED7AA}
+.crd{background:var(--sf);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:transform .16s,box-shadow .16s;box-shadow:var(--sh)}
+.crd:hover{transform:translateY(-3px);box-shadow:var(--sh2)}
+.sw{position:relative}.sw input{height:44px;border:1.5px solid var(--bd2);border-radius:100px;background:var(--sf2);color:var(--tx);font-size:14px;font-family:var(--ff);padding:0 16px 0 42px;width:100%;outline:none;transition:all .14s}
+.sw input:focus{background:var(--sf);border-color:var(--br);box-shadow:0 0 0 3px rgba(232,93,4,0.1)}
+.sw .si{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:17px;pointer-events:none}
+.dd{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--sf);border:1.5px solid var(--bd2);border-radius:var(--r);z-index:60;box-shadow:var(--sh2);max-height:280px;overflow-y:auto;display:none}
+.dd.on{display:block}
+.di{padding:11px 16px;cursor:pointer;transition:background .12s;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--bd)}
+.di:last-child{border-bottom:none}
+.di:hover{background:var(--sf2)}
+.cat-row{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:4px 0}
+.cat-row::-webkit-scrollbar{display:none}
+.ci{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;flex-shrink:0;transition:transform .14s}
+.ci:hover,.ci.on{transform:scale(1.05)}
+.cicon{width:66px;height:66px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px;border:2.5px solid transparent;transition:all .14s;background:var(--sf)}
+.ci.on .cicon{border-color:var(--br);box-shadow:0 0 0 3px rgba(232,93,4,0.15)}
+.ci-lbl{font-size:12px;font-weight:600;color:var(--t2);white-space:nowrap}
+.ci.on .ci-lbl{color:var(--br)}
+.ntab{padding:10px 16px;font-size:14px;font-weight:600;color:var(--t2);cursor:pointer;border-bottom:2.5px solid transparent;transition:all .14s;white-space:nowrap;font-family:var(--ff);background:none;border-top:none;border-left:none;border-right:none}
+.ntab.on{color:var(--br);border-bottom-color:var(--br)}
+.mtab{display:flex;background:var(--sf2);border-radius:var(--rs);padding:4px;gap:3px;margin-bottom:16px}
+.mtab-b{flex:1;height:36px;border-radius:6px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--ff);background:transparent;color:var(--t2);transition:all .14s}
+.mtab-b.on{background:var(--sf);color:var(--tx);box-shadow:0 1px 4px rgba(0,0,0,0.1)}
+.tog{width:44px;height:24px;border-radius:12px;background:var(--bd2);border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.tog.on{background:var(--br)}
+.tog::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s}
+.tog.on::after{left:23px}
+.vm-btn{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:var(--rs);border:1.5px solid var(--bd2);background:var(--sf);color:var(--t2);font-family:var(--ff);font-size:13px;font-weight:600;cursor:pointer;transition:all .14s}
+.vm-btn:hover{border-color:var(--br);color:var(--br)}
+.vm-btn.rec{background:#FEE2E2;border-color:#EF4444;color:#B91C1C;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.35)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
+.inp-sm{height:42px;border:1.5px solid var(--bd2);border-radius:var(--rs);background:var(--sf);color:var(--tx);font-size:14px;font-family:var(--ff);padding:0 12px;outline:none;transition:border-color .14s;width:100%}
+.inp-sm:focus{border-color:var(--br)}
+.msg-bub{max-width:82%;padding:10px 14px;line-height:1.55;font-size:14px;word-break:break-word;border-radius:18px}
+.msg-me .msg-bub{background:var(--br);color:#fff;border-radius:18px 18px 4px 18px}
+.msg-them .msg-bub{background:var(--sf2);color:var(--tx);border-radius:18px 18px 18px 4px;border:1px solid var(--bd)}
+.msg-w{display:flex;flex-direction:column;animation:fi .2s ease}
+.msg-me{align-items:flex-end}.msg-them{align-items:flex-start}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(10px);background:#111;color:#fff;padding:12px 22px;border-radius:100px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:all .28s;pointer-events:none;white-space:nowrap;box-shadow:var(--sh2);max-width:90vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.sdot{height:7px;background:var(--bd2);border-radius:4px;transition:all .25s}
+.sdot.done{background:var(--br);width:7px}.sdot.cur{background:var(--br);width:22px}.sdot.todo{width:7px}
+.tpl-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:all .14s}
+.tpl-card:hover{border-color:var(--br);background:var(--blt)}
+.menu-item-cb{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--rs);border:1.5px solid var(--bd);margin-bottom:8px;cursor:pointer;transition:all .14s}
+.menu-item-cb:hover{border-color:var(--br);background:var(--blt)}
+.menu-item-cb.sel{border-color:var(--br);background:var(--blt)}
+input[type=range]{accent-color:var(--br);width:100%}
+.loc-tag{display:inline-flex;align-items:center;gap:5px;background:var(--sf);border:1px solid var(--bd2);border-radius:100px;padding:4px 10px 4px 6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .14s}
+.loc-tag:hover{border-color:var(--br);color:var(--br)}
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="s-land" class="scr on">
+<div style="min-height:100vh;display:flex;flex-direction:column">
+  <div style="padding:20px 24px 0;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;width:100%">
+    <div class="logo" style="font-size:34px">Rep<span class="e">EAT</span></div>
+    <div style="display:flex;gap:8px"><button class="btn bol" style="height:38px;font-size:13px" onclick="go('s-cl')">Sign in</button></div>
+  </div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:2rem 1.5rem">
+    <div style="max-width:980px;width:100%;text-align:center">
+      <div style="display:inline-flex;align-items:center;gap:6px;background:var(--blt);color:var(--br);font-size:13px;font-weight:700;padding:6px 16px;border-radius:100px;margin-bottom:20px"><i class="ti ti-map-pin" style="font-size:14px"></i>Ontario-wide · Starting with GTA & KW</div>
+      <h1 style="font-size:clamp(36px,6vw,66px);font-weight:800;line-height:1.08;margin-bottom:18px;letter-spacing:-2px">Restaurant deals,<br><span style="color:var(--br)">claimed in person.</span></h1>
+      <p style="font-size:17px;color:var(--t2);max-width:500px;margin:0 auto 48px;line-height:1.7">Discover weekly promotions from local restaurants across Ontario. No delivery fees, no apps — just show your QR code at the door.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;text-align:left">
+        <div onclick="go('s-cl')" class="lc" style="background:var(--sf);border-radius:var(--r);padding:22px;cursor:pointer;border:2px solid var(--bd);transition:all .16s;box-shadow:var(--sh)">
+          <div style="width:52px;height:52px;border-radius:13px;background:var(--blt);display:flex;align-items:center;justify-content:center;margin-bottom:14px"><i class="ti ti-users" style="font-size:26px;color:var(--br)"></i></div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:4px">Customer <span style="color:var(--t3);font-size:13px;font-weight:400">/ Foodie</span></div>
+          <div style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:14px">Browse deals near you, filter by city, cuisine, or deal type</div>
+          <div style="font-size:13px;font-weight:700;color:var(--br);display:flex;align-items:center;gap:4px">Browse deals <i class="ti ti-arrow-right" style="font-size:14px"></i></div>
+        </div>
+        <div onclick="go('s-bl')" class="lc" style="background:var(--sf);border-radius:var(--r);padding:22px;cursor:pointer;border:2px solid var(--bd);transition:all .16s;box-shadow:var(--sh)">
+          <div style="width:52px;height:52px;border-radius:13px;background:#ECFDF5;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><i class="ti ti-building-store" style="font-size:26px;color:#065F46"></i></div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:4px">Restaurant <span style="color:var(--t3);font-size:13px;font-weight:400">/ Business</span></div>
+          <div style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:14px">List deals, import menu from Google, track redemptions — free</div>
+          <div style="font-size:13px;font-weight:700;color:#065F46;display:flex;align-items:center;gap:4px">List your restaurant <i class="ti ti-arrow-right" style="font-size:14px"></i></div>
+        </div>
+        <div onclick="go('s-il')" class="lc" style="background:var(--sf);border-radius:var(--r);padding:22px;cursor:pointer;border:2px solid var(--bd);transition:all .16s;box-shadow:var(--sh)">
+          <div style="width:52px;height:52px;border-radius:13px;background:#FDF4FF;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><i class="ti ti-device-mobile-star" style="font-size:26px;color:#7E22CE"></i></div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:4px">Creator <span style="color:var(--t3);font-size:13px;font-weight:400">/ Influencer</span></div>
+          <div style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:14px">Find restaurant collabs, negotiate in-app, earn on every deal</div>
+          <div style="font-size:13px;font-weight:700;color:#7E22CE;display:flex;align-items:center;gap:4px">Find collabs <i class="ti ti-arrow-right" style="font-size:14px"></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- CUSTOMER LOGIN -->
+<div id="s-cl" class="scr">
+<div style="min-height:100vh;display:grid;grid-template-columns:1fr 1fr">
+  <div style="background:var(--br);display:flex;flex-direction:column;justify-content:center;padding:3rem;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-80px;right:-80px;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,0.07)"></div>
+    <div style="position:absolute;bottom:-60px;left:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,0.05)"></div>
+    <div class="logo" style="font-size:40px;color:#fff;margin-bottom:22px">Rep<span style="color:rgba(255,255,255,0.55)">EAT</span></div>
+    <h2 style="font-size:30px;color:#fff;line-height:1.25;margin-bottom:14px;font-weight:800">Ontario's restaurant deals, all in one place.</h2>
+    <p style="color:rgba(255,255,255,0.78);font-size:15px;line-height:1.7;margin-bottom:24px">From Mississauga to Markham, Brampton to Burlington — find deals from local restaurants across the GTA and beyond.</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.9);font-size:13px"><div style="width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center"><i class="ti ti-check" style="font-size:14px"></i></div>Search by city or browse by radius</div>
+      <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.9);font-size:13px"><div style="width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center"><i class="ti ti-check" style="font-size:14px"></i></div>Claim deals with a unique QR code</div>
+      <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.9);font-size:13px"><div style="width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center"><i class="ti ti-check" style="font-size:14px"></i></div>See what's coming next week</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;padding:3rem 2rem;background:var(--bg)">
+    <div style="width:100%;max-width:380px">
+      <button class="back" onclick="go('s-land')" style="margin-bottom:22px"><i class="ti ti-arrow-left" style="font-size:16px"></i>Back</button>
+      <h2 style="font-size:26px;font-weight:800;margin-bottom:5px">Welcome back</h2>
+      <p style="color:var(--t2);font-size:14px;margin-bottom:22px">Sign in to browse and claim deals near you</p>
+      <div class="f"><label>Email</label><input type="email" placeholder="you@email.com"></div>
+      <div class="f"><label>Password</label><input type="password" placeholder="••••••••"></div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px"><a href="#" style="font-size:13px;color:var(--br)">Forgot password?</a></div>
+      <button class="btn bbr" style="width:100%" onclick="go('s-cf')">Sign in</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:12px 0"><div style="flex:1;height:1px;background:var(--bd)"></div><span style="font-size:12px;color:var(--t3)">or</span><div style="flex:1;height:1px;background:var(--bd)"></div></div>
+      <button class="btn bol" style="width:100%" onclick="go('s-cf')"><i class="ti ti-brand-google" style="font-size:16px"></i>Continue with Google</button>
+      <p style="text-align:center;font-size:13px;color:var(--t2);margin-top:16px">No account? <a href="#" style="color:var(--br)" onclick="go('s-cf')">Create one free →</a></p>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- CUSTOMER FEED -->
+<div id="s-cf" class="scr">
+  <div style="position:sticky;top:0;z-index:50;background:var(--sf);border-bottom:1px solid var(--bd);box-shadow:0 1px 8px rgba(0,0,0,0.06)">
+    <div style="max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:12px">
+      <div class="logo" style="font-size:22px;flex-shrink:0">Rep<span class="e">EAT</span></div>
+      <div class="sw" style="flex:1;max-width:520px">
+        <i class="ti ti-search si"></i>
+        <input type="text" id="cs" placeholder="Search restaurants, dishes, deals..." oninput="custSearch(this.value)" onfocus="sDrop('sd',true)" onblur="setTimeout(()=>sDrop('sd',false),200)">
+        <div class="dd" id="sd"></div>
+      </div>
+      <button onclick="openOv('ov-loc')" style="display:flex;align-items:center;gap:6px;background:var(--blt);border:1.5px solid var(--br);border-radius:100px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;color:var(--br);white-space:nowrap;flex-shrink:0;transition:all .14s" onmouseover="this.style.background='var(--br)';this.style.color='#fff'" onmouseout="this.style.background='var(--blt)';this.style.color='var(--br)'">
+        <i class="ti ti-map-pin" style="font-size:14px"></i><span id="loc-label">GTA Area · 30 km</span>
+      </button>
+      <div onclick="go('s-land')" style="width:34px;height:34px;border-radius:50%;background:var(--blt);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"><i class="ti ti-user" style="font-size:15px;color:var(--br)"></i></div>
+    </div>
+    <div style="max-width:1100px;margin:0 auto;padding:0 20px;display:flex;gap:0;border-top:1px solid var(--bd)">
+      <button class="ntab on" id="tab-a" onclick="switchTab('active',this)">Deals This Week</button>
+      <button class="ntab" id="tab-c" onclick="switchTab('coming',this)">Coming Next Week</button>
+      <button class="ntab" id="tab-all" onclick="switchTab('all',this)">All Restaurants</button>
+    </div>
+  </div>
+  <div style="max-width:1100px;margin:0 auto;padding:20px 20px 60px">
+    <div class="cat-row" id="cat-row" style="margin-bottom:20px">
+      <div class="ci on" onclick="fCat(this,'all')"><div class="cicon" style="background:#FFF3EC">🍽️</div><div class="ci-lbl">All</div></div>
+      <div class="ci" onclick="fCat(this,'indian')"><div class="cicon" style="background:#FFF7ED">🍛</div><div class="ci-lbl">Indian</div></div>
+      <div class="ci" onclick="fCat(this,'italian')"><div class="cicon" style="background:#FFF1F0">🍝</div><div class="ci-lbl">Italian</div></div>
+      <div class="ci" onclick="fCat(this,'bbq')"><div class="cicon" style="background:#FEF3C7">🥩</div><div class="ci-lbl">BBQ</div></div>
+      <div class="ci" onclick="fCat(this,'bar')"><div class="cicon" style="background:#EFF6FF">🍺</div><div class="ci-lbl">Bar & Grill</div></div>
+      <div class="ci" onclick="fCat(this,'canadian')"><div class="cicon" style="background:#F0FDF4">🍁</div><div class="ci-lbl">Canadian</div></div>
+      <div class="ci" onclick="fCat(this,'burgers')"><div class="cicon" style="background:#FFF7ED">🍔</div><div class="ci-lbl">Burgers</div></div>
+      <div class="ci" onclick="fCat(this,'chinese')"><div class="cicon" style="background:#F0FDF4">🥢</div><div class="ci-lbl">Chinese</div></div>
+      <div class="ci" onclick="fCat(this,'sushi')"><div class="cicon" style="background:#EFF6FF">🍣</div><div class="ci-lbl">Sushi</div></div>
+      <div class="ci" onclick="fCat(this,'pizza')"><div class="cicon" style="background:#FFF1F0">🍕</div><div class="ci-lbl">Pizza</div></div>
+      <div class="ci" onclick="fCat(this,'desserts')"><div class="cicon" style="background:#FDF4FF">🧁</div><div class="ci-lbl">Desserts</div></div>
+      <div class="ci" onclick="fCat(this,'vegan')"><div class="cicon" style="background:#F0FDF4">🥗</div><div class="ci-lbl">Vegan</div></div>
+      <div class="ci" onclick="fCat(this,'bubbletea')"><div class="cicon" style="background:#FDF4FF">🧋</div><div class="ci-lbl">Bubble Tea</div></div>
+    </div>
+    <div id="fchips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+      <button class="chip on" onclick="fType(this,'all')">All Types</button>
+      <button class="chip" onclick="fType(this,'dine-in')"><i class="ti ti-building-store" style="font-size:12px"></i>Dine-in</button>
+      <button class="chip" onclick="fType(this,'pickup')"><i class="ti ti-shopping-bag" style="font-size:12px"></i>Pickup</button>
+      <button class="chip" onclick="fType(this,'delivery')"><i class="ti ti-truck" style="font-size:12px"></i>Delivery</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 id="ft" style="font-size:20px;font-weight:700">Deals near you</h2>
+      <span id="fc" style="font-size:14px;color:var(--t2)"></span>
+    </div>
+    <div id="dg" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:15px"></div>
+    <div id="nr" style="display:none;text-align:center;padding:60px 20px;color:var(--t2)"><div style="font-size:46px;margin-bottom:12px">🔍</div><div style="font-size:18px;font-weight:700;margin-bottom:6px">No deals found</div><div style="font-size:14px">Try a different category, type, or location</div></div>
+  </div>
+</div>
+
+<!-- LOCATION OV -->
+<div id="ov-loc" class="ov" onclick="bgC(event,'ov-loc')">
+<div class="ob" style="max-width:400px;padding:22px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+    <span style="font-family:var(--fh);font-size:17px;font-weight:700">Location &amp; Radius</span>
+    <button onclick="closeOv('ov-loc')" style="background:none;border:none;cursor:pointer;padding:4px"><i class="ti ti-x" style="font-size:18px;color:var(--t2)"></i></button>
+  </div>
+  <!-- City search -->
+  <div style="font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px">Search city or area</div>
+  <div class="sw" style="margin-bottom:12px">
+    <i class="ti ti-map-pin si"></i>
+    <input type="text" id="city-in" placeholder="e.g. Mississauga, Brampton, Toronto..." oninput="citySearch(this.value)" onfocus="sDrop('city-dd',true)" onblur="setTimeout(()=>sDrop('city-dd',false),200)" style="background:var(--sf)">
+    <div class="dd" id="city-dd"></div>
+  </div>
+  <!-- Quick city chips -->
+  <div style="font-size:12px;color:var(--t3);font-weight:600;margin-bottom:8px">Quick select</div>
+  <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px" id="city-chips">
+    <button class="loc-tag on" onclick="selCity('GTA Area',this)"><i class="ti ti-map" style="font-size:12px;color:var(--br)"></i>GTA Area</button>
+    <button class="loc-tag" onclick="selCity('Mississauga',this)">📍 Mississauga</button>
+    <button class="loc-tag" onclick="selCity('Brampton',this)">📍 Brampton</button>
+    <button class="loc-tag" onclick="selCity('Toronto',this)">📍 Toronto</button>
+    <button class="loc-tag" onclick="selCity('Markham',this)">📍 Markham</button>
+    <button class="loc-tag" onclick="selCity('Kitchener-Waterloo',this)">📍 KW</button>
+    <button class="loc-tag" onclick="selCity('Hamilton',this)">📍 Hamilton</button>
+    <button class="loc-tag" onclick="selCity('Oakville',this)">📍 Oakville</button>
+  </div>
+  <div style="font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px">Radius from <span id="city-cur" style="color:var(--br)">GTA Area</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
+    <span style="font-size:13px;color:var(--t2)">Show restaurants within</span>
+    <span style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--br)"><span id="rv">30</span> km</span>
+  </div>
+  <input type="range" min="5" max="100" step="5" value="30" id="rslide" oninput="document.getElementById('rv').textContent=this.value" style="margin-bottom:6px">
+  <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-bottom:18px"><span>5 km</span><span>25</span><span>50</span><span>75</span><span>100 km</span></div>
+  <button class="btn bbr" style="width:100%" onclick="applyLoc()">Show deals in this area</button>
+</div>
+</div>
+
+<!-- DEAL DETAIL OV -->
+<div id="ov-dd" class="ov" onclick="bgC(event,'ov-dd')">
+<div class="ob" style="max-width:420px;max-height:93vh;overflow-y:auto">
+  <div id="dh" style="height:148px;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;border-radius:var(--r) var(--r) 0 0">
+    <button onclick="closeOv('ov-dd')" style="position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.3);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2"><i class="ti ti-x" style="font-size:15px;color:#fff"></i></button>
+    <span id="de" style="font-size:62px"></span>
+  </div>
+  <div style="padding:20px">
+    <div id="db" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <div id="dr" style="font-size:13px;color:var(--t2);margin-bottom:4px"></div>
+    <div id="dn" style="font-family:var(--fh);font-size:20px;font-weight:700;margin-bottom:10px;line-height:1.3"></div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+      <span id="dd" style="font-family:var(--fh);font-size:34px;font-weight:800;color:var(--br)"></span>
+      <span id="dexp" style="font-size:13px;color:var(--t2)"></span>
+    </div>
+    <p id="ddesc" style="font-size:14px;color:var(--t2);line-height:1.65;margin-bottom:16px"></p>
+    <div style="background:var(--sf2);border-radius:var(--rs);padding:12px 14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t3);margin-bottom:5px"><span id="dcl"></span><span id="dlft"></span></div>
+      <div class="pbar"><div id="dfill" class="fill"></div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)"><i class="ti ti-map-pin" style="color:var(--br);font-size:15px"></i><span id="daddr"></span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)"><i class="ti ti-clock" style="color:var(--t3);font-size:15px"></i><span id="dhrs"></span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)"><i class="ti ti-calendar" style="color:var(--t3);font-size:15px"></i><span id="ddays"></span></div>
+    </div>
+    <button id="dcbtn" class="btn bbr" style="width:100%;height:50px;font-size:16px" onclick="claimDeal()"></button>
+  </div>
+</div>
+</div>
+
+<!-- QR OV -->
+<div id="ov-qr" class="ov" onclick="bgC(event,'ov-qr')">
+<div class="ob" style="max-width:300px;padding:26px;text-align:center">
+  <div style="width:50px;height:50px;background:var(--blt);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-circle-check" style="font-size:26px;color:var(--br)"></i></div>
+  <div style="font-family:var(--fh);font-size:20px;font-weight:700;margin-bottom:4px">Deal Claimed!</div>
+  <div id="qrr" style="font-size:13px;color:var(--t2);margin-bottom:18px"></div>
+  <div style="background:#fff;border:1px solid #E0E0E0;border-radius:10px;padding:14px;display:inline-block;margin-bottom:16px">
+    <svg width="148" height="148" viewBox="0 0 148 148" fill="none"><rect width="148" height="148" fill="white"/>
+    <rect x="8" y="8" width="44" height="44" rx="3" fill="#E85D04"/><rect x="14" y="14" width="32" height="32" rx="2" fill="white"/><rect x="19" y="19" width="22" height="22" rx="1" fill="#E85D04"/>
+    <rect x="96" y="8" width="44" height="44" rx="3" fill="#111"/><rect x="102" y="14" width="32" height="32" rx="2" fill="white"/><rect x="107" y="19" width="22" height="22" rx="1" fill="#111"/>
+    <rect x="8" y="96" width="44" height="44" rx="3" fill="#111"/><rect x="14" y="102" width="32" height="32" rx="2" fill="white"/><rect x="19" y="107" width="22" height="22" rx="1" fill="#111"/>
+    <g fill="#111"><rect x="60" y="8" width="7" height="7"/><rect x="72" y="8" width="7" height="7"/><rect x="84" y="8" width="7" height="7"/><rect x="60" y="20" width="7" height="7"/><rect x="80" y="20" width="7" height="7"/><rect x="66" y="32" width="7" height="7"/><rect x="84" y="32" width="7" height="7"/><rect x="60" y="44" width="7" height="7"/><rect x="72" y="44" width="7" height="7"/><rect x="8" y="60" width="7" height="7"/><rect x="20" y="60" width="7" height="7"/><rect x="38" y="60" width="7" height="7"/><rect x="60" y="60" width="7" height="7"/><rect x="72" y="60" width="7" height="7"/><rect x="84" y="60" width="7" height="7"/><rect x="96" y="60" width="7" height="7"/><rect x="118" y="60" width="7" height="7"/><rect x="134" y="60" width="7" height="7"/><rect x="8" y="72" width="7" height="7"/><rect x="32" y="72" width="7" height="7"/><rect x="60" y="72" width="7" height="7"/><rect x="80" y="72" width="7" height="7"/><rect x="102" y="72" width="7" height="7"/><rect x="128" y="72" width="7" height="7"/><rect x="20" y="84" width="7" height="7"/><rect x="38" y="84" width="7" height="7"/><rect x="68" y="84" width="7" height="7"/><rect x="84" y="84" width="7" height="7"/><rect x="108" y="84" width="7" height="7"/><rect x="134" y="84" width="7" height="7"/><rect x="60" y="96" width="7" height="7"/><rect x="80" y="96" width="7" height="7"/><rect x="102" y="96" width="7" height="7"/><rect x="66" y="108" width="7" height="7"/><rect x="84" y="108" width="7" height="7"/><rect x="120" y="108" width="7" height="7"/><rect x="60" y="120" width="7" height="7"/><rect x="72" y="120" width="7" height="7"/><rect x="102" y="120" width="7" height="7"/><rect x="134" y="120" width="7" height="7"/></g></svg>
+  </div>
+  <div id="qrc" style="font-family:var(--fh);font-size:22px;font-weight:800;letter-spacing:5px;color:var(--br);margin-bottom:4px">R8-4729</div>
+  <div id="qrd" style="font-size:12px;color:var(--t3);margin-bottom:14px"></div>
+  <div style="font-size:12px;color:var(--t2);background:var(--blt);padding:10px;border-radius:var(--rs);margin-bottom:16px;line-height:1.5"><i class="ti ti-info-circle" style="font-size:13px;vertical-align:-1px;margin-right:4px;color:var(--br)"></i>Show to restaurant staff to redeem your deal</div>
+  <button class="btn bbr" style="width:100%;height:40px" onclick="closeOv('ov-qr');closeOv('ov-dd')">Done</button>
+</div>
+</div>
+
+<!-- BIZ LOGIN -->
+<div id="s-bl" class="scr">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:var(--bg)">
+  <div style="width:100%;max-width:420px">
+    <button class="back" onclick="go('s-land')" style="margin-bottom:22px"><i class="ti ti-arrow-left" style="font-size:16px"></i>Back</button>
+    <div style="background:var(--sf);border-radius:var(--r);padding:30px;box-shadow:var(--sh)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+        <div style="width:48px;height:48px;border-radius:12px;background:#ECFDF5;display:flex;align-items:center;justify-content:center"><i class="ti ti-building-store" style="font-size:22px;color:#065F46"></i></div>
+        <div><div class="logo" style="font-size:22px">Rep<span class="e">EAT</span></div><div style="font-size:12px;color:var(--t2)">Restaurant Portal · Ontario</div></div>
+      </div>
+      <div class="f"><label>Business email</label><input type="email" placeholder="owner@yourrestaurant.com"></div>
+      <div class="f"><label>Password</label><input type="password" placeholder="••••••••"></div>
+      <button class="btn bbr" style="width:100%;margin-bottom:10px" onclick="go('s-bo')">Sign in</button>
+      <button class="btn bol" style="width:100%" onclick="go('s-bo')"><i class="ti ti-plus" style="font-size:15px"></i>Register your restaurant — free</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:12px;text-align:center"><div style="font-size:18px;font-weight:700">$0</div><div style="font-size:11px;color:var(--t2)">Monthly fee</div></div>
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:12px;text-align:center"><div style="font-size:18px;font-weight:700">0%</div><div style="font-size:11px;color:var(--t2)">Commission</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- BIZ ONBOARDING -->
+<div id="s-bo" class="scr">
+<div style="max-width:620px;margin:0 auto;padding:2rem 1.5rem 5rem">
+  <button class="back" onclick="go('s-bl')" style="margin-bottom:18px"><i class="ti ti-arrow-left" style="font-size:16px"></i>Back</button>
+  <div style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span id="ob-lbl" style="font-family:var(--fh);font-size:21px;font-weight:700"></span>
+      <span id="ob-n" style="font-size:13px;color:var(--t2);font-weight:600"></span>
+    </div>
+    <div style="display:flex;gap:5px" id="ob-d"></div>
+  </div>
+
+  <!-- Step 1: Google Maps search -->
+  <div id="os1">
+    <div style="background:var(--blt);border-radius:var(--rs);padding:14px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px">
+      <i class="ti ti-brand-google-maps" style="font-size:20px;color:var(--br);flex-shrink:0;margin-top:1px"></i>
+      <div><div style="font-size:14px;font-weight:600;color:var(--bdk);margin-bottom:2px">Auto-fill from Google Maps (Ontario-wide)</div><div style="font-size:13px;color:var(--bdk);opacity:.85">Search any restaurant in Ontario — address, hours, phone, and menu items auto-populate.</div></div>
+    </div>
+    <div class="sw" style="margin-bottom:14px">
+      <i class="ti ti-search si"></i>
+      <input type="text" id="gms" placeholder="Search your restaurant in Ontario..." oninput="gmSearch(this.value)" onfocus="sDrop('gmd',true)" onblur="setTimeout(()=>sDrop('gmd',false),200)" style="background:var(--sf);height:48px;border-radius:var(--rs)">
+      <div class="dd" id="gmd"></div>
+    </div>
+
+    <!-- Editable auto-fill section -->
+    <div id="gm-filled" style="display:none;background:var(--sf);border-radius:var(--r);border:1.5px solid var(--br);padding:16px;margin-bottom:16px;box-shadow:0 0 0 3px rgba(232,93,4,0.08)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--br)"><i class="ti ti-circle-check" style="font-size:14px"></i>Auto-filled from Google Maps</div>
+        <button onclick="toggleEdit()" id="edit-btn" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--t2);background:var(--sf2);border:1px solid var(--bd);border-radius:var(--rs);padding:5px 12px;cursor:pointer"><i class="ti ti-pencil" style="font-size:13px"></i>Edit details</button>
+      </div>
+      <div id="gm-preview" style="font-size:14px;color:var(--tx);line-height:1.8"></div>
+      <div id="gm-edit-fields" style="display:none">
+        <div style="height:1px;background:var(--bd);margin:14px 0"></div>
+        <div class="f"><label>Restaurant name</label><input type="text" id="gm-name" placeholder="Restaurant name"></div>
+        <div class="f"><label>Full address</label><input type="text" id="gm-addr" placeholder="Address"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="f"><label>Phone number</label><input type="tel" id="gm-phone" placeholder="+1 (XXX) XXX-XXXX"></div>
+          <div class="f"><label>Website</label><input type="url" id="gm-web" placeholder="https://..."></div>
+        </div>
+        <div class="f"><label>Opening hours</label><input type="text" id="gm-hrs" placeholder="e.g. Mon–Sat 11AM–10PM · Sun Closed"></div>
+        <div class="f"><label>Cuisine type</label>
+          <select id="r-cuisine"><option value="">Select cuisine</option><option>Indian / South Asian</option><option>Pakistani / Bangladeshi</option><option>Italian</option><option>Canadian / American</option><option>BBQ / Smokehouse</option><option>Chinese</option><option>Japanese / Sushi</option><option>Mexican</option><option>Mediterranean / Greek</option><option>Middle Eastern / Lebanese</option><option>Thai / Vietnamese</option><option>Burgers / Fast Casual</option><option>Pizza</option><option>Seafood</option><option>Vegetarian / Vegan</option><option>Bar & Grill</option><option>Bubble Tea / Café</option><option>Other</option></select>
+        </div>
+        <button onclick="saveEdits()" class="btn bbr" style="height:38px;font-size:13px"><i class="ti ti-check" style="font-size:14px"></i>Save edits</button>
+      </div>
+    </div>
+    <div class="f"><label>Restaurant name <span style="color:var(--rd)">*</span></label><input type="text" id="rn" placeholder="Or type your restaurant name here"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="f"><label>Cuisine type</label>
+        <select id="rc"><option value="">Select cuisine</option><option>Indian / South Asian</option><option>Pakistani / Bangladeshi</option><option>Italian</option><option>Canadian / American</option><option>BBQ / Smokehouse</option><option>Chinese</option><option>Japanese / Sushi</option><option>Mexican</option><option>Burgers / Fast Casual</option><option>Pizza</option><option>Bar & Grill</option><option>Bubble Tea / Café</option><option>Vegetarian / Vegan</option><option>Other</option></select>
+      </div>
+      <div class="f"><label>City / Area</label>
+        <select id="rarea"><option>Mississauga</option><option>Brampton</option><option>Toronto</option><option>Markham</option><option>Scarborough</option><option>North York</option><option>Etobicoke</option><option>Vaughan</option><option>Richmond Hill</option><option>Oakville</option><option>Burlington</option><option>Hamilton</option><option>Kitchener-Waterloo</option><option>London</option><option>Ottawa</option></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Location & Contact -->
+  <div id="os2" style="display:none">
+    <div class="f"><label>Street address <span style="color:var(--rd)">*</span></label><input type="text" id="ra" placeholder="123 Hurontario St"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="f"><label>City</label><input type="text" id="rc2" placeholder="Mississauga"></div>
+      <div class="f"><label>Province</label><input type="text" id="rp" value="ON"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="f"><label>Postal code</label><input type="text" id="rpc" placeholder="L5B 1M4"></div>
+      <div class="f"><label>Phone</label><input type="tel" id="rph" placeholder="+1 (905) 555-0100"></div>
+    </div>
+    <div class="f"><label>Website</label><input type="url" id="rw" placeholder="https://yourrestaurant.com"></div>
+    <div class="f"><label>Instagram</label><input type="text" id="rig" placeholder="@yourrestaurant"></div>
+  </div>
+
+  <!-- Step 3: Hours + Deal Types + Days -->
+  <div id="os3" style="display:none">
+    <p style="font-size:14px;color:var(--t2);margin-bottom:16px">Set your hours and which deal types you'll accept.</p>
+    <div id="ob-hrs"></div>
+    <div style="height:1px;background:var(--bd);margin:18px 0"></div>
+    <div class="f">
+      <label>Accept which deal types?</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--sf2);border-radius:var(--rs);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-building-store" style="font-size:15px;color:var(--t2)"></i><span style="font-size:14px">Dine-in deals</span></div>
+          <button class="tog on" id="tog-di" onclick="togBtn(this)"></button>
+        </label>
+        <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--sf2);border-radius:var(--rs);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-shopping-bag" style="font-size:15px;color:var(--t2)"></i><span style="font-size:14px">Pickup deals</span></div>
+          <button class="tog on" id="tog-pk" onclick="togBtn(this)"></button>
+        </label>
+        <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--sf2);border-radius:var(--rs);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-truck" style="font-size:15px;color:var(--t2)"></i><span style="font-size:14px">Delivery deals</span></div>
+          <button class="tog" id="tog-dl" onclick="togBtn(this)"></button>
+        </label>
+        <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--sf2);border-radius:var(--rs);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-device-mobile-star" style="font-size:15px;color:#7E22CE"></i><span style="font-size:14px">Open to influencer collabs</span></div>
+          <button class="tog" id="tog-inf" onclick="togBtn(this)"></button>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Smart Deal Creator -->
+  <div id="os4" style="display:none">
+    <div class="mtab" id="deal-mode-tabs">
+      <button class="mtab-b on" onclick="setDealMode('template',this)">🎯 Templates</button>
+      <button class="mtab-b" onclick="setDealMode('manual',this)">✏️ Manual</button>
+      <button class="mtab-b" onclick="setDealMode('voice',this)">🎙️ Voice</button>
+      <button class="mtab-b" onclick="setDealMode('menu',this)">📋 Menu Import</button>
+    </div>
+
+    <!-- Template mode -->
+    <div id="dm-template">
+      <p style="font-size:13px;color:var(--t2);margin-bottom:14px">Pick a deal template — all fields pre-fill, you just customize the value.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px" id="tpl-grid"></div>
+    </div>
+
+    <!-- Manual mode -->
+    <div id="dm-manual" style="display:none">
+      <!-- Deal scope -->
+      <div class="f">
+        <label>Deal scope</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="scope-pills">
+          <button class="dt-pill on" onclick="setScope('single',this)">🍽️ Single dish</button>
+          <button class="dt-pill" onclick="setScope('category',this)">📂 Menu category</button>
+          <button class="dt-pill" onclick="setScope('menu',this)">🗂️ Entire menu</button>
+          <button class="dt-pill" onclick="setScope('bundle',this)">🎁 Bundle / combo</button>
+        </div>
+      </div>
+      <div id="scope-single">
+        <div class="f"><label>Dish / item name</label><input type="text" id="d-dish" placeholder="e.g. Butter Chicken, Beef Wellington..."></div>
+      </div>
+      <div id="scope-category" style="display:none">
+        <div class="f"><label>Menu category</label>
+          <select id="d-cat"><option>All Starters / Appetizers</option><option>All Main Course</option><option>All Pasta & Noodles</option><option>All Pizzas</option><option>All Burgers</option><option>All Desserts</option><option>All Drinks</option><option>All Seafood</option><option>All Grills & BBQ</option><option>All Vegetarian items</option><option>All items over $20</option></select>
+        </div>
+      </div>
+      <div id="scope-menu" style="display:none">
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:12px;margin-bottom:12px;font-size:13px;color:var(--t2)"><i class="ti ti-info-circle" style="font-size:13px;vertical-align:-1px;margin-right:4px;color:var(--br)"></i>This deal applies to everything on your menu. Just set the discount below.</div>
+      </div>
+      <div id="scope-bundle" style="display:none">
+        <div class="f"><label>Bundle description</label><input type="text" id="d-bundle" placeholder="e.g. Any Starter + Any Main, Family Pack (4 mains + 2 drinks)"></div>
+      </div>
+
+      <!-- Deal type multi-select -->
+      <div class="f">
+        <label>Deal available for <span style="font-size:11px;color:var(--t3);font-weight:400">(select all that apply)</span></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="dtype-pills">
+          <button class="dt-pill on" onclick="togDT(this,'dine-in')">🍽️ Dine-in</button>
+          <button class="dt-pill" onclick="togDT(this,'pickup')">🛍️ Pickup</button>
+          <button class="dt-pill" onclick="togDT(this,'delivery')">🚚 Delivery</button>
+          <button class="dt-pill" onclick="togDT(this,'catering')">🍱 Catering</button>
+          <button class="dt-pill" onclick="togDT(this,'events')">🎉 Events/Party</button>
+          <button class="dt-pill" onclick="togDT(this,'earlybird')">🐦 Early Bird</button>
+          <button class="dt-pill" onclick="togDT(this,'custom')">+ Custom</button>
+        </div>
+        <div id="custom-dtype" style="display:none;margin-top:10px">
+          <input class="inp-sm" type="text" placeholder="Describe your custom deal type..." style="width:100%">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="f"><label>Discount type</label>
+          <select id="d-dtype"><option>Percentage off</option><option>Fixed $ off</option><option>Free item / BOGO</option><option>2 for 1</option><option>Set price</option><option>Free delivery</option><option>Buy X get Y free</option></select>
+        </div>
+        <div class="f"><label>Value</label><input class="inp-sm" type="text" id="d-val" placeholder="e.g. 20% or $10 off" style="height:46px;font-size:15px;border-color:var(--bd2)"></div>
+      </div>
+      <div class="f"><label>Deal description</label><textarea rows="3" id="d-desc" placeholder="What's included, any conditions, minimum spend..."></textarea></div>
+    </div>
+
+    <!-- Voice mode -->
+    <div id="dm-voice" style="display:none">
+      <div style="background:var(--sf2);border-radius:var(--r);padding:24px;text-align:center;margin-bottom:16px">
+        <div style="font-size:14px;color:var(--t2);margin-bottom:16px">Click the mic and describe your deal naturally. e.g.<br><em style="color:var(--tx)">"20% off all pasta dishes every Tuesday, dine-in only"</em></div>
+        <button id="voice-btn" class="vm-btn" onclick="toggleVoice()" style="margin:0 auto;height:52px;padding:0 24px;font-size:15px;border-radius:100px">
+          <i class="ti ti-microphone" style="font-size:20px"></i><span id="vb-txt">Start recording</span>
+        </button>
+        <div id="voice-status" style="font-size:12px;color:var(--t3);margin-top:12px"></div>
+      </div>
+      <div class="f"><label>Transcribed deal (editable)</label><textarea rows="4" id="voice-out" placeholder="Your spoken deal description will appear here..."></textarea></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="f" style="flex:1;min-width:140px"><label>Discount</label><input class="inp-sm" type="text" id="vd-val" placeholder="e.g. 20%" style="height:46px;font-size:15px;border-color:var(--bd2)"></div>
+        <div class="f" style="flex:1;min-width:140px"><label>Available days</label><input class="inp-sm" type="text" id="vd-days" placeholder="e.g. Tuesday only" style="height:46px;font-size:15px;border-color:var(--bd2)"></div>
+      </div>
+    </div>
+
+    <!-- Menu Import mode -->
+    <div id="dm-menu" style="display:none">
+      <div style="background:var(--blt);border-radius:var(--rs);padding:12px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
+        <i class="ti ti-brand-google" style="font-size:16px;color:var(--br);flex-shrink:0;margin-top:1px"></i>
+        <div style="font-size:13px;color:var(--bdk)">Menu items fetched from your Google Maps listing. Select items to create deals, or select all for a menu-wide promotion.</div>
+      </div>
+      <div id="menu-items"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn bol" style="flex:1;height:38px;font-size:13px" onclick="selAllMenu(false)">Deselect all</button>
+        <button class="btn bbr" style="flex:1;height:38px;font-size:13px" onclick="selAllMenu(true)">Select all items</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div class="f"><label>Discount for selected</label><input class="inp-sm" type="text" id="mi-val" placeholder="e.g. 25% off" style="height:46px;border-color:var(--bd2)"></div>
+        <div class="f"><label>Deal type</label>
+          <select class="inp-sm" style="height:46px;border-color:var(--bd2)"><option>Dine-in</option><option>Pickup</option><option>All types</option></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Days selector (shown in all modes) -->
+    <div style="height:1px;background:var(--bd);margin:16px 0"></div>
+    <div class="f">
+      <label>Deal available on <span style="font-size:11px;color:var(--t3);font-weight:400">(select days)</span></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" id="day-pills">
+        <button class="day-pill on" onclick="togAll(this)" id="dp-all">All days</button>
+        <button class="day-pill" onclick="togDay(this,'Mon')" id="dp-mon">Mon</button>
+        <button class="day-pill" onclick="togDay(this,'Tue')" id="dp-tue">Tue</button>
+        <button class="day-pill" onclick="togDay(this,'Wed')" id="dp-wed">Wed</button>
+        <button class="day-pill" onclick="togDay(this,'Thu')" id="dp-thu">Thu</button>
+        <button class="day-pill" onclick="togDay(this,'Fri')" id="dp-fri">Fri</button>
+        <button class="day-pill" onclick="togDay(this,'Sat')" id="dp-sat">Sat</button>
+        <button class="day-pill" onclick="togDay(this,'Sun')" id="dp-sun">Sun</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="f"><label>Valid from</label><input type="date" id="d-from" class="inp-sm" style="height:46px;border-color:var(--bd2)"></div>
+      <div class="f"><label>Valid until</label><input type="date" id="d-to" class="inp-sm" style="height:46px;border-color:var(--bd2)"></div>
+    </div>
+    <div class="f"><label>Max redemptions <span style="color:var(--t3);font-weight:400;font-size:12px">(optional)</span></label><input type="number" id="d-max" placeholder="Leave blank for unlimited" class="inp-sm" style="height:46px;border-color:var(--bd2)"></div>
+  </div>
+
+  <!-- Step 5: Photo & Publish -->
+  <div id="os5" style="display:none">
+    <div class="f">
+      <label>Dish / deal photo <span style="font-size:12px;color:var(--t3);font-weight:400">— deals with photos get 3× more claims</span></label>
+      <div id="pzone" style="border:2px dashed var(--bd2);border-radius:var(--rs);padding:32px;text-align:center;cursor:pointer;transition:all .14s" onclick="document.getElementById('fph').click()" onmouseover="this.style.borderColor='var(--br)';this.style.background='var(--blt)'" onmouseout="this.style.borderColor='var(--bd2)';this.style.background='transparent'">
+        <i class="ti ti-camera" style="font-size:36px;color:var(--t3);display:block;margin-bottom:8px"></i>
+        <div style="font-size:14px;font-weight:600;color:var(--t2)">Click to upload dish photo</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:4px">JPG, PNG · Max 5MB</div>
+        <input type="file" id="fph" accept="image/*" style="display:none" onchange="prvPh(this)">
+      </div>
+      <div id="pp" style="display:none;margin-top:10px"><img id="pi" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--rs)"><button onclick="rmPh()" style="margin-top:6px;font-size:12px;color:var(--t3);background:none;border:none;cursor:pointer;font-family:var(--ff)"><i class="ti ti-trash" style="font-size:12px;vertical-align:-1px"></i> Remove</button></div>
+    </div>
+    <div style="background:var(--sf2);border-radius:var(--r);padding:16px;border:1.5px solid var(--bd);margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px"><i class="ti ti-eye" style="font-size:14px;vertical-align:-2px;margin-right:5px"></i>Customer preview</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div id="pv-ini" style="width:46px;height:46px;background:var(--blt);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:20px;font-weight:800;color:var(--br)">?</div>
+        <div><div id="pv-nm" style="font-size:14px;font-weight:700">Your Restaurant</div><div id="pv-cu" style="font-size:12px;color:var(--t2)">Cuisine · Location</div></div>
+      </div>
+      <div id="pv-dl" style="font-size:15px;font-weight:600;margin-bottom:4px">Deal description</div>
+      <div id="pv-dc" style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--br)">—</div>
+    </div>
+    <button class="btn bbr" style="width:100%;height:52px;font-size:16px" onclick="pubRest()"><i class="ti ti-rocket" style="font-size:18px"></i>Publish & Go Live!</button>
+    <p style="text-align:center;font-size:12px;color:var(--t3);margin-top:10px">Visible to customers in your area immediately · Always free</p>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:22px">
+    <button id="ob-pv" class="btn bol" style="flex:1;display:none" onclick="obPrev()"><i class="ti ti-arrow-left" style="font-size:15px"></i>Previous</button>
+    <button id="ob-nx" class="btn bbr" style="flex:1" onclick="obNext()">Next step <i class="ti ti-arrow-right" style="font-size:15px"></i></button>
+  </div>
+</div>
+</div>
+
+<!-- BIZ DASHBOARD -->
+<div id="s-bd" class="scr">
+<div style="position:sticky;top:0;z-index:50;background:var(--sf);border-bottom:1px solid var(--bd)">
+  <div style="max-width:900px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between">
+    <div class="logo" style="font-size:22px">Rep<span class="e">EAT</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span id="bd-rn" style="font-size:14px;font-weight:600;color:var(--t2)"></span><button class="btn bol" style="height:36px;font-size:13px" onclick="go('s-land')">Sign out</button></div>
+  </div>
+</div>
+<div style="max-width:900px;margin:0 auto;padding:24px 20px 60px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:12px">
+    <div><div id="bd-tt" style="font-family:var(--fh);font-size:24px;font-weight:800;margin-bottom:5px"></div><div style="display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#065F46;background:#ECFDF5;padding:4px 12px;border-radius:100px;border:1px solid #A7F3D0"><i class="ti ti-circle-check" style="font-size:13px"></i>Live on RepEAT</div></div>
+    <button class="btn bbr" onclick="toast('Deal creator — go to Step 4 in onboarding')"><i class="ti ti-plus" style="font-size:16px"></i>New deal</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:26px">
+    <div style="background:var(--sf);border-radius:var(--r);padding:16px;box-shadow:var(--sh)"><div style="font-size:12px;color:var(--t2);font-weight:600;margin-bottom:6px">Total Claims</div><div style="font-family:var(--fh);font-size:30px;font-weight:800">168</div><div style="font-size:11px;color:var(--gr)">↑ 12% this week</div></div>
+    <div style="background:var(--sf);border-radius:var(--r);padding:16px;box-shadow:var(--sh)"><div style="font-size:12px;color:var(--t2);font-weight:600;margin-bottom:6px">Active Deals</div><div style="font-family:var(--fh);font-size:30px;font-weight:800">3</div><div style="font-size:11px;color:var(--t3)">2 expiring soon</div></div>
+    <div style="background:var(--sf);border-radius:var(--r);padding:16px;box-shadow:var(--sh)"><div style="font-size:12px;color:var(--t2);font-weight:600;margin-bottom:6px">Profile Views</div><div style="font-family:var(--fh);font-size:30px;font-weight:800">412</div><div style="font-size:11px;color:var(--gr)">↑ 8% this week</div></div>
+    <div style="background:var(--sf);border-radius:var(--r);padding:16px;box-shadow:var(--sh)"><div style="font-size:12px;color:var(--t2);font-weight:600;margin-bottom:6px">Collab Requests</div><div style="font-family:var(--fh);font-size:30px;font-weight:800">2</div><div style="font-size:11px;color:var(--br)">2 new</div></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="font-size:17px;font-weight:700">Active Deals</h3></div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+    <div style="background:var(--sf);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div style="font-size:15px;font-weight:600">20% Off All Main Course</div><div style="font-size:12px;color:var(--t2);margin-top:2px">Dine-in · Tue–Thu · Ends May 25 · <b>26 left</b></div></div>
+        <span class="badge bdi">Dine-in</span>
+      </div>
+      <div class="pbar"><div class="fill" style="width:57%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-top:4px"><span>34 claimed</span><span>60 total</span></div>
+    </div>
+    <div style="background:var(--sf);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div style="font-size:15px;font-weight:600">Weekend Family Combo — 2 Mains + Free Dessert</div><div style="font-size:12px;color:var(--t2);margin-top:2px">Dine-in + Pickup · Sat–Sun only</div></div>
+        <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:100px;background:#FFF7ED;color:#92400E;border:1px solid #FED7AA">Expiring</span>
+      </div>
+      <div class="pbar"><div class="fill" style="width:45%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-top:4px"><span>45 claimed</span><span>55 left</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- INFLUENCER LOGIN -->
+<div id="s-il" class="scr">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:var(--bg)">
+  <div style="width:100%;max-width:420px">
+    <button class="back" onclick="go('s-land')" style="margin-bottom:22px"><i class="ti ti-arrow-left" style="font-size:16px"></i>Back</button>
+    <div style="background:var(--sf);border-radius:var(--r);padding:30px;box-shadow:var(--sh)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+        <div style="width:48px;height:48px;border-radius:12px;background:#FDF4FF;display:flex;align-items:center;justify-content:center"><i class="ti ti-device-mobile-star" style="font-size:22px;color:#7E22CE"></i></div>
+        <div><div class="logo" style="font-size:22px">Rep<span class="e">EAT</span></div><div style="font-size:12px;color:var(--t2)">Creator Portal · Ontario</div></div>
+      </div>
+      <div class="f"><label>Email</label><input type="email" placeholder="you@email.com"></div>
+      <div class="f"><label>Password</label><input type="password" placeholder="••••••••"></div>
+      <button class="btn bbr" style="width:100%;margin-bottom:10px" onclick="go('s-if')">Sign in</button>
+      <button class="btn bol" style="width:100%;background:#F8F0FF;border-color:#E9D5FF;color:#7E22CE;margin-bottom:14px" onclick="go('s-if')"><i class="ti ti-brand-instagram" style="font-size:16px"></i>Connect with Instagram</button>
+      <div style="background:var(--sf2);border-radius:var(--rs);padding:12px;font-size:13px;color:var(--t2);line-height:1.55"><i class="ti ti-shield-check" style="font-size:14px;vertical-align:-2px;margin-right:4px;color:var(--br)"></i>All collabs managed in-app. RepEAT takes only <b>2%</b> on completed deals. Payments in escrow until approved.</div>
+      <p style="text-align:center;font-size:13px;color:var(--t2);margin-top:14px">New? <a href="#" style="color:var(--br)" onclick="go('s-if')">Join RepEAT Creators →</a></p>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- INFLUENCER FEED -->
+<div id="s-if" class="scr">
+<div style="position:sticky;top:0;z-index:50;background:var(--sf);border-bottom:1px solid var(--bd)">
+  <div style="max-width:900px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:12px">
+    <div class="logo" style="font-size:22px;flex-shrink:0">Rep<span class="e">EAT</span></div>
+    <div class="sw" style="flex:1">
+      <i class="ti ti-search si"></i>
+      <input type="text" placeholder="Search restaurants, cuisine..." oninput="infSrch(this.value)">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+      <span style="font-size:13px;color:var(--t2);font-weight:600">@creator</span>
+      <div onclick="go('s-land')" style="width:32px;height:32px;border-radius:50%;background:#FDF4FF;display:flex;align-items:center;justify-content:center;cursor:pointer"><i class="ti ti-user" style="font-size:14px;color:#7E22CE"></i></div>
+    </div>
+  </div>
+  <div style="max-width:900px;margin:0 auto;padding:0 20px 10px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none" id="ic">
+    <button class="chip on" onclick="fCol(this,'all')">All Ontario</button>
+    <button class="chip" onclick="fCol(this,'gta')">GTA Area</button>
+    <button class="chip" onclick="fCol(this,'indian')">🍛 Indian</button>
+    <button class="chip" onclick="fCol(this,'italian')">🍝 Italian</button>
+    <button class="chip" onclick="fCol(this,'bbq')">🥩 BBQ</button>
+    <button class="chip" onclick="fCol(this,'bar')">🍺 Bar</button>
+    <button class="chip" onclick="fCol(this,'canadian')">🍁 Canadian</button>
+    <button class="chip" onclick="fCol(this,'kw')">KW Area</button>
+  </div>
+</div>
+<div style="max-width:900px;margin:0 auto;padding:20px 20px 60px">
+  <div style="background:linear-gradient(135deg,#7E22CE,#A855F7);border-radius:var(--r);padding:18px 20px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div><div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:2px">Your Creator Stats</div><div style="font-size:13px;color:rgba(255,255,255,0.78)">2 active collabs · $420 in escrow · 4.8★ rating</div></div>
+    <button class="btn" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.3);height:36px;font-size:13px">View earnings →</button>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <h2 id="ct" style="font-size:20px;font-weight:700">Open for Collab — Ontario</h2>
+    <span id="cc" style="font-size:14px;color:var(--t2)"></span>
+  </div>
+  <div id="cg" style="display:flex;flex-direction:column;gap:13px"></div>
+</div>
+</div>
+
+<!-- NEG OV -->
+<div id="ov-neg" class="ov" onclick="bgC(event,'ov-neg')">
+<div class="ob" style="max-width:450px;max-height:90vh;overflow-y:auto">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--sf);border-radius:var(--r) var(--r) 0 0;z-index:1">
+    <div><div id="nt" style="font-family:var(--fh);font-size:15px;font-weight:700"></div><div id="ns" style="font-size:12px;color:var(--t2)"></div></div>
+    <button onclick="closeOv('ov-neg')" style="width:28px;height:28px;border-radius:50%;background:var(--sf2);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="ti ti-x" style="font-size:14px"></i></button>
+  </div>
+  <div style="background:var(--sf2);padding:12px 18px;border-bottom:1px solid var(--bd)">
+    <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Restaurant's offer</div>
+    <span id="no" style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--br)"></span><span id="ndl" style="font-size:13px;color:var(--t2);margin-left:8px"></span>
+  </div>
+  <div style="padding:14px 18px;border-bottom:1px solid var(--bd)">
+    <div style="font-size:14px;font-weight:700;margin-bottom:10px">Quick counter-offer</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px">
+      <button class="chip" onclick="sCA('$200')">$200</button><button class="chip" onclick="sCA('$250')">$250</button><button class="chip" onclick="sCA('$300')">$300</button><button class="chip" onclick="sCA('$350')">$350</button><button class="chip" onclick="sCA('$400')">$400</button><button class="chip" onclick="sCA('$500')">$500</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input class="inp-sm" type="text" id="ca" placeholder="Custom amount" style="flex:1">
+      <select class="inp-sm" style="flex:1"><option>1 Reel + 3 Stories</option><option>2 Reels</option><option>1 Reel</option><option>3 Stories</option><option>TikTok video</option><option>YouTube Short</option></select>
+    </div>
+    <div class="f"><label>Your pitch</label><textarea rows="3" placeholder="Audience demographics, engagement rate, past food collabs..."></textarea></div>
+    <button class="btn bbr" style="width:100%" onclick="sendCO()"><i class="ti ti-send" style="font-size:14px"></i>Send counter-offer</button>
+  </div>
+  <div style="padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div><div style="font-size:14px;font-weight:600">Want a deeper discussion?</div><div style="font-size:12px;color:var(--t2)">Open a full chat with this restaurant</div></div>
+    <button class="btn bol" style="height:36px;padding:0 14px;font-size:13px" onclick="openChatFN()"><i class="ti ti-message-circle" style="font-size:14px"></i>Open chat</button>
+  </div>
+</div>
+</div>
+
+<!-- CHAT OV — FULLY FIXED CLOSE -->
+<div id="ov-chat" class="ov">
+<div class="ob" style="max-width:450px;height:86vh;display:flex;flex-direction:column;overflow:hidden">
+  <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--bd);flex-shrink:0;border-radius:var(--r) var(--r) 0 0">
+    <button onclick="closeOv('ov-chat')" style="width:30px;height:30px;min-width:30px;border-radius:50%;background:var(--sf2);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Close chat"><i class="ti ti-arrow-left" style="font-size:16px"></i></button>
+    <div style="flex:1;min-width:0"><div id="crn" style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div><div style="font-size:11px;color:var(--gr)">● Online · Collab chat</div></div>
+    <button onclick="closeOv('ov-chat')" style="width:30px;height:30px;min-width:30px;border-radius:50%;background:var(--sf2);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Close"><i class="ti ti-x" style="font-size:14px"></i></button>
+  </div>
+  <div id="cbr" style="padding:8px 14px;background:var(--blt);border-bottom:1px solid rgba(232,93,4,0.15);flex-shrink:0">
+    <div id="cbt" style="font-size:12px;color:var(--bdk);font-weight:600"></div>
+  </div>
+  <div id="cm" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--bg)"></div>
+  <div style="padding:10px 12px;border-top:1px solid var(--bd);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--sf)">
+    <textarea id="ci" rows="1" placeholder="Type a message… Enter to send" style="flex:1;min-height:40px;max-height:110px;border:1.5px solid var(--bd2);border-radius:20px;padding:10px 14px;font-size:14px;font-family:var(--ff);background:var(--sf2);color:var(--tx);resize:none;outline:none;line-height:1.4;transition:border-color .14s" onkeydown="ckd(event)" oninput="ar(this)" onfocus="this.style.borderColor='var(--br)'"></textarea>
+    <button onclick="sMsg()" style="width:40px;height:40px;min-width:40px;border-radius:50%;background:var(--br);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='var(--br2)'" onmouseout="this.style.background='var(--br)'"><i class="ti ti-send" style="font-size:16px;color:#fff;margin-left:1px"></i></button>
+  </div>
+</div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script>
+// ═══════════════ DATA ═══════════════
+const DB={get:k=>{try{return JSON.parse(localStorage.getItem('rp3_'+k)||'null')}catch{return null}},set:(k,v)=>localStorage.setItem('rp3_'+k,JSON.stringify(v)),push:(k,i)=>{const a=DB.get(k)||[];const x={...i,id:Date.now()+Math.random()};a.push(x);DB.set(k,a);return x}};
+
+const DEALS=[
+  {id:1,rn:"Karahi Boys",cu:"Pakistani",cat:"indian",deal:"$10 Off Any Karahi (Family Size)",disc:"$10 OFF",type:"dine-in",exp:"Ends Sun May 25",hrs:"Daily 11AM–11PM",addr:"3024 Hurontario St, Mississauga",city:"Mississauga",cl:67,tot:100,col:"#B05C20",em:"🍛",coming:false,desc:"$10 off any family-size karahi. Tender braised lamb, chicken, or beef in rich spiced sauce. Dine-in only, no min spend.",days:"All days",stars:4.7},
+  {id:2,rn:"Bombay Chowpatty",cu:"Indian Street Food",cat:"indian",deal:"Free Pani Puri (6 pcs) with Main",disc:"FREE",type:"dine-in",exp:"Ends Sat May 24",hrs:"Tue–Sun 11AM–10PM",addr:"10 Gillingham Dr, Brampton",city:"Brampton",cl:43,tot:60,col:"#D97706",em:"🥘",coming:false,desc:"Order any main course and get 6 crispy pani puri free. Authentic Mumbai street food experience right in Brampton.",days:"Tue–Sun",stars:4.5},
+  {id:3,rn:"Real Fruit Bubble Tea",cu:"Bubble Tea",cat:"bubbletea",deal:"Buy 2 Get 1 Free — Any Drink",disc:"BUY 2 GET 1",type:"pickup",exp:"Daily offer",hrs:"Mon–Sun 10AM–10PM",addr:"1151 Dundas St W, Mississauga",city:"Mississauga",cl:89,tot:200,col:"#7C3AED",em:"🧋",coming:false,desc:"Buy any 2 drinks and get the cheapest one free. Valid on all bubble tea, smoothies, and specialty drinks. Pickup only.",days:"All days",stars:4.3},
+  {id:4,rn:"Charcoal Steak House",cu:"Steakhouse",cat:"bbq",deal:"20% Off Beef Wellington",disc:"20% OFF",type:"dine-in",exp:"Ends Sun May 25",hrs:"Mon–Sat 11AM–11PM",addr:"2980 King St E, Kitchener",city:"KW",cl:34,tot:60,col:"#B05C20",em:"🥩",coming:false,desc:"20% off our famous Beef Wellington. AAA beef in golden pastry. Dine-in only, show RepEAT QR to server.",days:"All days",stars:4.6},
+  {id:5,rn:"The Bauer Kitchen",cu:"Canadian",cat:"canadian",deal:"Free Dessert with any Entrée",disc:"FREE DESSERT",type:"dine-in",exp:"Ends Sat May 24",hrs:"Mon–Sun 11AM–11PM",addr:"187 King St S, Waterloo",city:"KW",cl:28,tot:40,col:"#2B7A5A",em:"🍁",coming:false,desc:"Order any entrée and choose a complimentary dessert. Crème brûlée, lemon tart, or seasonal sorbet.",days:"All days",stars:4.5},
+  {id:6,rn:"Pind Punjabi Kitchen",cu:"Indian",cat:"indian",deal:"Lunch Thali Special — $12",disc:"$12 THALI",type:"dine-in",exp:"Weekdays only",hrs:"Mon–Fri 11AM–3PM",addr:"720 Bristol Rd W, Mississauga",city:"Mississauga",cl:55,tot:80,col:"#DC2626",em:"🍲",coming:false,desc:"Full thali — dal, sabzi, rice, 2 rotis, salad, and dessert for only $12. Weekday lunch special. Dine-in only.",days:"Mon–Fri",stars:4.4},
+  {id:7,rn:"PUBLIC Kitchen & Bar",cu:"Contemporary",cat:"bar",deal:"Buck-a-Shuck — $1 Oysters",disc:"$1 EACH",type:"dine-in",exp:"Wednesdays only",hrs:"Tue–Sat 4PM–10PM",addr:"300 Victoria St N, Kitchener",city:"KW",cl:38,tot:80,col:"#1A5A68",em:"🦞",coming:true,desc:"$1 oysters every Wednesday. No min, no max. Best deal in KW. Comes with mignonette or hot sauce.",days:"Wednesday",stars:4.6},
+  {id:8,rn:"Dhaba Express",cu:"Indian",cat:"indian",deal:"20% Off Entire Menu — Mondays",disc:"20% OFF",type:"dine-in",exp:"Every Monday",hrs:"Mon–Sun 11AM–10PM",addr:"2344 Hurontario St, Mississauga",city:"Mississauga",cl:22,tot:50,col:"#B45309",em:"🍱",coming:true,desc:"Every Monday — 20% off your entire order. Authentic Punjabi dhaba-style food. Dine-in only, no code needed.",days:"Monday",stars:4.2},
+  {id:9,rn:"Lancaster Smokehouse",cu:"BBQ",cat:"bbq",deal:"2-for-1 BBQ Platters",disc:"2 FOR 1",type:"pickup",exp:"Sat & Sun only",hrs:"Mon–Sat 11:30AM–9PM",addr:"574 Lancaster St W, Kitchener",city:"KW",cl:19,tot:30,col:"#963B18",em:"🍖",coming:false,desc:"Order one BBQ Platter, get the second free. Mix brisket, ribs, or pulled pork. Pickup only.",days:"Sat–Sun",stars:4.6},
+  {id:10,rn:"Chili's Grill & Bar",cu:"Bar & Grill",cat:"bar",deal:"Happy Hour: 2-for-1 Cocktails",disc:"2 FOR 1",type:"dine-in",exp:"Daily 4–7 PM",hrs:"Mon–Sun 11AM–11PM",addr:"4141 Living Arts Dr, Mississauga",city:"Mississauga",cl:77,tot:150,col:"#1E4F7A",em:"🍹",coming:false,desc:"2-for-1 cocktails every day 4–7 PM. Margaritas, mojitos, and bar specials. Dine-in only, must be seated.",days:"All days",stars:4.1},
+  {id:11,rn:"Spice Route",cu:"Indian",cat:"indian",deal:"Family Feast for 4 — $49",disc:"$49 DEAL",type:"dine-in",exp:"Fri & Sat evenings",hrs:"Daily 5PM–10:30PM",addr:"5230 Dixie Rd, Mississauga",city:"Mississauga",cl:31,tot:40,col:"#7C3AED",em:"🫕",coming:true,desc:"Family feast for 4 — 2 curries, biryani, naan, raita, and gulab jamun. Perfect Friday or Saturday dinner.",days:"Fri–Sat",stars:4.6},
+  {id:12,rn:"Del's Italian Kitchen",cu:"Italian",cat:"italian",deal:"Date Night: 2 Courses for $45",disc:"$45 DEAL",type:"dine-in",exp:"Fri & Sat evenings",hrs:"Daily 4PM–10PM",addr:"2980 King St E, Kitchener",city:"KW",cl:22,tot:35,col:"#6B2E7C",em:"🍕",coming:false,desc:"Any starter + any main for $45/person. Homemade pasta, candlelit atmosphere. Perfect for date night.",days:"Fri–Sat",stars:4.6}
+];
+
+const COLLABS=[
+  {id:1,rn:"Karahi Boys",cu:"Pakistani · GTA",addr:"Mississauga",offer:"$150–$300",del:"1 Reel + 3 Stories",req:"8K–25K followers",brief:"Showcase our family karahi experience. South Asian audience preferred. Show the cooking process, the aroma, the joy of sharing food.",col:"#B05C20",em:"🍛",tags:["indian","gta"]},
+  {id:2,rn:"Bombay Chowpatty",cu:"Indian Street Food · Brampton",addr:"Brampton",offer:"$80–$150",del:"2 Stories + 1 Post",req:"5K+ followers",brief:"Pani puri, bhel puri, vada pav — Mumbai street food vibes in Brampton. Fun, energetic, colourful content wanted!",col:"#D97706",em:"🥘",tags:["indian","gta"]},
+  {id:3,rn:"Charcoal Steak House",cu:"Steakhouse · KW",addr:"Kitchener",offer:"$300–$500",del:"1 YouTube Short + 1 Reel",req:"25K+ followers",brief:"Premium Beef Wellington showcase. Upscale feel — anniversaries, date nights. Refined food photography welcome.",col:"#B05C20",em:"🥩",tags:["bbq","kw"]},
+  {id:4,rn:"PUBLIC Kitchen & Bar",cu:"Contemporary · KW",addr:"Kitchener",offer:"$80–$120",del:"2 Stories + 1 Post",req:"5K+ followers",brief:"Promote our Wednesday Buck-a-Shuck oyster night. Fun crowd, great atmosphere, great drinks.",col:"#1A5A68",em:"🦞",tags:["bar","kw"]},
+  {id:5,rn:"Pind Punjabi Kitchen",cu:"Indian · Mississauga",addr:"Mississauga",offer:"$100–$200",del:"1 Reel",req:"5K+ followers",brief:"Authentic Punjabi home cooking. We want warm, inviting content that speaks to the South Asian diaspora.",col:"#DC2626",em:"🍲",tags:["indian","gta"]},
+  {id:6,rn:"Lancaster Smokehouse",cu:"BBQ · KW",addr:"Kitchener",offer:"$200–$350",del:"1 TikTok + 1 Reel",req:"15K+ followers",brief:"High-energy BBQ taste-test. Legendary platters, massive portions. We want wow reactions and honest reviews.",col:"#963B18",em:"🍖",tags:["bbq","kw"]},
+  {id:7,rn:"Spice Route",cu:"Indian · Mississauga",addr:"Mississauga",offer:"$120–$250",del:"1 Reel + carousel",req:"8K+ followers",brief:"Family feast content. Warm family dining experience, vibrant colours, multiple dishes. Weekend content focus.",col:"#7C3AED",em:"🫕",tags:["indian","gta"]}
+];
+
+const GMAPS=[
+  {name:"Karahi Boys",addr:"3024 Hurontario St, Mississauga, ON L5B 3C4",phone:"+1 905-270-0567",hrs:"Daily 11AM–11PM",cuisine:"Pakistani",web:"karahiboys.com",city:"Mississauga",menu:["Chicken Karahi (Half)","Chicken Karahi (Full)","Lamb Karahi","Beef Karahi","Haleem","Nihari","Biryani","Naan","Chai"]},
+  {name:"Bombay Chowpatty",addr:"10 Gillingham Dr, Brampton, ON L6X 4W8",phone:"+1 905-451-9876",hrs:"Tue–Sun 11AM–10PM",cuisine:"Indian",web:"bombaychowpatty.ca",city:"Brampton",menu:["Pani Puri (6 pcs)","Sev Puri","Dahi Puri","Pav Bhaji","Vada Pav","Bhel Puri","Masala Chai","Lassi","Kulfi"]},
+  {name:"Real Fruit Bubble Tea",addr:"1151 Dundas St W, Mississauga, ON L5G 1E1",phone:"+1 905-891-5432",hrs:"Mon–Sun 10AM–10PM",cuisine:"Bubble Tea",web:"realfruitbubbleetea.com",city:"Mississauga",menu:["Classic Milk Tea","Taro Milk Tea","Matcha Latte","Brown Sugar Boba","Mango Smoothie","Strawberry Smoothie","Thai Tea","Wintermelon Tea","Coconut Jelly Drink"]},
+  {name:"Pind Punjabi Kitchen",addr:"720 Bristol Rd W, Mississauga, ON L5R 4A3",phone:"+1 905-712-0034",hrs:"Mon–Sun 11AM–10PM",cuisine:"Indian",web:"pindpunjabi.ca",city:"Mississauga",menu:["Butter Chicken","Lamb Rogan Josh","Dal Makhani","Palak Paneer","Chicken Tikka","Seekh Kebab","Garlic Naan","Biryani","Gulab Jamun","Kheer"]},
+  {name:"Charcoal Steak House",addr:"2980 King St E, Kitchener, ON N2A 1A9",phone:"+1 519-893-6570",hrs:"Mon–Sat 11AM–11PM · Sun 9AM–10PM",cuisine:"Steakhouse",web:"charcoalsteakhouse.ca",city:"KW",menu:["Beef Wellington","New York Striploin","Chicken Madeira","Seafood Risotto","Caesar Salad","Soup of the Day","Crème Brûlée","Chocolate Lava Cake"]},
+  {name:"The Bauer Kitchen",addr:"187 King St S, Waterloo, ON N2L 0A5",phone:"+1 519-772-0790",hrs:"Mon–Thu 11AM–11PM · Fri–Sat 10AM–12AM",cuisine:"Canadian",web:"bauerkitchen.com",city:"KW",menu:["Bauer Burger","Seared Tuna Crudo","Duck Wings","Christmas Turkey","Squash & Apple Soup","Truffle Parmesan Fries","Lemon Meringue Tart","Sorbet"]},
+  {name:"Dhaba Express",addr:"2344 Hurontario St, Mississauga, ON L5A 2H1",phone:"+1 905-272-4567",hrs:"Mon–Sun 11AM–10PM",cuisine:"Indian",web:"dhabaexpress.ca",city:"Mississauga",menu:["Chicken Tikka Masala","Lamb Biryani","Dal Tadka","Chana Masala","Tandoori Roti","Mango Lassi","Jeera Rice","Raita","Rasmalai"]},
+  {name:"Spice Route",addr:"5230 Dixie Rd, Mississauga, ON L4W 4Y5",phone:"+1 905-602-8891",hrs:"Daily 5PM–10:30PM",cuisine:"Indian",web:"spiceroute.ca",city:"Mississauga",menu:["Butter Chicken","Lamb Biryani","Paneer Tikka","Fish Curry","Garlic Naan","Pulao Rice","Gulab Jamun","Kheer","Mango Kulfi"]},
+  {name:"Lancaster Smokehouse",addr:"574 Lancaster St W, Kitchener, ON N2K 1M3",phone:"+1 519-743-4331",hrs:"Mon–Sat 11:30AM–9PM",cuisine:"BBQ",web:"lancastersmokehouse.com",city:"KW",menu:["Brisket Platter","Baby Back Ribs","Pulled Pork Sandwich","Smoked Chicken","Mac & Cheese","Fried Brussels Sprouts","Banana Pudding","Sweet Potato Pie"]},
+  {name:"PUBLIC Kitchen & Bar",addr:"300 Victoria St N, Kitchener, ON N2H 6R7",phone:"+1 519-954-8111",hrs:"Tue–Sat 4PM–10PM",cuisine:"Bar & Grill",web:"publickitchen.ca",city:"KW",menu:["Buck-a-Shuck Oysters","Bauer Burger","Seared Halibut","Beef Tartare","Charcuterie Board","Duck Confit","Crème Brûlée","Seasonal Cocktails"]},
+  {name:"271West Restaurant",addr:"60 Charles St W, Kitchener, ON N2G 1B1",phone:"+1 519-954-8821",hrs:"Mon–Fri 11:30AM–9PM · Sat 4:30PM–9:30PM",cuisine:"Italian",web:"271west.ca",city:"KW",menu:["Spaghetti Bolognese","Handmade Gnocchi","Chicken Fettuccine","Shrimp Pasta","Caesar Salad","Bruschetta","Tiramisu","Panna Cotta"]},
+  {name:"Del's Italian Kitchen",addr:"2980 King St E, Kitchener, ON N2A 1A9",phone:"+1 519-893-2911",hrs:"Daily 4PM–10PM",cuisine:"Italian",web:"delsitaliankitchen.com",city:"KW",menu:["Fettuccine Alfredo","Wild Boar Gnocchi","Stella Fettuccine","Feta Bruschetta","Caesar Salad","Flower Pot Bread","Cheesecake","Tiramisu"]},
+  {name:"Borealis Grille & Bar",addr:"4336 King St E, Kitchener, ON N2P 3W6",phone:"+1 519-219-9007",hrs:"Mon–Sat 11:30AM–10PM · Sun 10:30AM–9PM",cuisine:"Bar & Grill",web:"borealisgrille.ca",city:"KW",menu:["Kale Caesar Salad","Roast Prime Rib","Seafood Risotto","Veggie Stir-fry","Craft Beer","Signature Cocktails","Seasonal Dessert"]},
+  {name:"J & B Family Restaurant",addr:"79 Victoria St N, Kitchener, ON N2H 5C1",phone:"+1 519-568-8361",hrs:"Tue–Sun 11AM–9PM",cuisine:"Serbian",web:"jbfamilyrest.ca",city:"KW",menu:["Chevapi","Karadjordjeva Schnitzel","Mixed Grill Platter","Pork Chops","Serbian Sausage","Garlic Bread","Serbian Beer","Baklava"]}
+];
+
+const REPLIES=["Thanks for reaching out! We'd love to work with you.","Your content style fits our brand perfectly!","We can arrange a complimentary dinner for filming — let's book a date.","Absolutely, we're flexible on the timeline. Next weekend?","Can you share your latest analytics? Want to ensure it's a strong match.","Your previous food content is exactly the vibe we're going for!","We'll also give you a behind-the-scenes kitchen tour during the shoot.","We can go up to the higher end of that range for the right creator."];
+
+const CITIES=["GTA Area","Mississauga","Brampton","Toronto","Markham","Scarborough","North York","Etobicoke","Vaughan","Richmond Hill","Oakville","Burlington","Hamilton","Kitchener-Waterloo","London ON","Ottawa"];
+
+const TEMPLATES=[
+  {em:"⏰",name:"Happy Hour",disc:"20% off all drinks",days:"All days",type:["dine-in"],desc:"Happy hour deal on all beverages",dtype:"Percentage off",val:"20"},
+  {em:"💑",name:"Date Night",disc:"2 courses for $X",days:"Fri–Sat",type:["dine-in"],desc:"Any starter + any main for a set price",dtype:"Set price",val:""},
+  {em:"👨‍👩‍👧‍👦",name:"Family Feast",disc:"Free kids meal",days:"Sat–Sun",type:["dine-in"],desc:"Free kids meal with every adult main course",dtype:"Free item / BOGO",val:""},
+  {em:"☀️",name:"Lunch Special",disc:"$X lunch combo",days:"Mon–Fri",type:["dine-in","pickup"],desc:"Weekday lunch combo — main + drink + dessert",dtype:"Set price",val:""},
+  {em:"🎂",name:"BOGO",disc:"Buy 1 Get 1 Free",days:"All days",type:["dine-in","pickup"],desc:"Buy one get one free on selected items",dtype:"Free item / BOGO",val:""},
+  {em:"🌙",name:"Late Night",disc:"25% off after 9PM",days:"Fri–Sat",type:["dine-in"],desc:"Quarter off your entire order after 9PM",dtype:"Percentage off",val:"25"},
+  {em:"🛍️",name:"Pickup Deal",disc:"10% off pickup",days:"All days",type:["pickup"],desc:"Save 10% on all pickup orders",dtype:"Percentage off",val:"10"},
+  {em:"🎉",name:"Weekend Special",disc:"Free appetizer",days:"Sat–Sun",type:["dine-in"],desc:"Free starter with any main course on weekends",dtype:"Free item / BOGO",val:""},
+];
+</script>
+<script>
+// ═══════════════ STATE ═══════════════
+let aTab='active',aCat='all',aType='all',aCity='GTA Area',aRad=30;
+let curDeal=null,curCol=null,chatH={},obS=1,obData={},dealMode='template',scopeMode='single',selDTs=['dine-in'],selDays='all';
+let voiceRec=null,voiceOn=false;
+
+// ═══════════════ NAV ═══════════════
+function go(id){document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));const e=document.getElementById(id);if(e){e.classList.add('on');window.scrollTo(0,0);}if(id==='s-cf')rFeed();if(id==='s-if')rCols(COLLABS);if(id==='s-bo'){obS=1;rOB();}}
+function openOv(id){document.getElementById(id).classList.add('on');document.body.style.overflow='hidden';}
+function closeOv(id){document.getElementById(id).classList.remove('on');document.body.style.overflow='';}
+function bgC(e,id){if(e.target===e.currentTarget)closeOv(id);}
+function toast(m,d=3000){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),d);}
+
+// ═══════════════ CUSTOMER FEED ═══════════════
+function allDeals(){return[...DEALS,...(DB.get('deals')||[])];}
+function rFeed(){
+  let d=allDeals();
+  if(aTab==='active')d=d.filter(x=>!x.coming);
+  else if(aTab==='coming')d=d.filter(x=>x.coming);
+  if(aCat!=='all')d=d.filter(x=>x.cat===aCat);
+  if(aType!=='all')d=d.filter(x=>x.type===aType);
+  // filter by city
+  if(aCity!=='GTA Area' && aCity!=='Kitchener-Waterloo'){
+    d=d.filter(x=>x.city===aCity||x.addr.toLowerCase().includes(aCity.toLowerCase()));
+  }
+  const T={active:'Deals This Week',coming:'Coming Next Week',all:'All Deals'};
+  document.getElementById('ft').textContent=T[aTab];
+  document.getElementById('fc').textContent=d.length+' deal'+(d.length!==1?'s':'');
+  const g=document.getElementById('dg'),nr=document.getElementById('nr');
+  if(!d.length){g.innerHTML='';nr.style.display='block';return;}
+  nr.style.display='none';
+  g.innerHTML=d.map(dCard).join('');
+}
+function dCard(d){
+  const pct=Math.round(d.cl/d.tot*100),low=(d.tot-d.cl)<=5;
+  const bs=d.type==='dine-in'?'bdi':d.type==='pickup'?'bpk':'bcm';
+  const bl=d.type==='dine-in'?'Dine-in':d.type==='pickup'?'Pickup':'Delivery';
+  return`<div class="crd" onclick="openDeal(${d.id})">
+    <div style="height:118px;background:${d.col}22;display:flex;align-items:center;justify-content:center;position:relative">
+      <span style="font-size:52px">${d.em}</span>
+      <span class="badge ${bs}" style="position:absolute;top:9px;left:9px">${bl}</span>
+      ${d.coming?`<span style="position:absolute;top:9px;right:9px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:100px;background:rgba(0,0,0,0.5);color:#fff">Next week</span>`:''}
+      ${low&&!d.coming?`<span style="position:absolute;top:9px;right:9px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:100px;background:var(--rd);color:#fff">Only ${d.tot-d.cl} left!</span>`:''}
+    </div>
+    <div style="padding:13px">
+      <div style="font-size:11px;color:var(--t3);margin-bottom:2px">${d.rn} · ${d.city||d.addr.split(',')[1]||''}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:8px;line-height:1.4;min-height:38px">${d.deal}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-family:var(--fh);font-size:20px;font-weight:800;color:var(--br)">${d.disc}</span>
+        <span style="font-size:11px;color:var(--t3)"><i class="ti ti-clock" style="font-size:11px;vertical-align:-1px;margin-right:2px"></i>${d.exp}</span>
+      </div>
+      <div class="pbar"><div class="fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-top:3px"><span>${d.cl} claimed</span><span>${d.tot-d.cl} left</span></div>
+    </div>
+  </div>`;
+}
+function openDeal(id){
+  const all=allDeals();curDeal=all.find(x=>x.id===id);if(!curDeal)return;
+  document.getElementById('dh').style.background=curDeal.col+'28';
+  document.getElementById('de').textContent=curDeal.em;
+  const bt=curDeal.type==='dine-in'?'bdi':curDeal.type==='pickup'?'bpk':'bcm';
+  const bl=curDeal.type==='dine-in'?'Dine-in':curDeal.type==='pickup'?'Pickup':'Delivery';
+  document.getElementById('db').innerHTML=`<span class="badge ${bt}">${bl}</span>${curDeal.coming?'<span class="badge bcm">Coming next week</span>':''}`;
+  document.getElementById('dr').textContent=curDeal.rn+' · '+curDeal.cu;
+  document.getElementById('dn').textContent=curDeal.deal;
+  document.getElementById('dd').textContent=curDeal.disc;
+  document.getElementById('dexp').innerHTML=`<i class="ti ti-clock" style="font-size:12px;vertical-align:-1px;margin-right:3px"></i>${curDeal.exp}`;
+  document.getElementById('ddesc').textContent=curDeal.desc;
+  document.getElementById('dcl').textContent=curDeal.cl+' claimed';
+  document.getElementById('dlft').textContent=(curDeal.tot-curDeal.cl)+' remaining';
+  document.getElementById('dfill').style.width=Math.round(curDeal.cl/curDeal.tot*100)+'%';
+  document.getElementById('daddr').textContent=curDeal.addr;
+  document.getElementById('dhrs').textContent=curDeal.hrs||'';
+  document.getElementById('ddays').textContent='Available: '+(curDeal.days||'All days');
+  const btn=document.getElementById('dcbtn');
+  btn.textContent=curDeal.coming?'🔔 Notify me when live':'🎟️ Claim this deal';
+  btn.style.background=curDeal.coming?'#888':'var(--br)';
+  openOv('ov-dd');
+}
+function claimDeal(){
+  if(!curDeal)return;
+  if(curDeal.coming){closeOv('ov-dd');toast('🔔 We\'ll notify you when this goes live!');return;}
+  const code='R8-'+Math.floor(1000+Math.random()*9000);
+  document.getElementById('qrc').textContent=code;
+  document.getElementById('qrr').textContent=curDeal.rn;
+  document.getElementById('qrd').textContent=curDeal.deal;
+  openOv('ov-qr');
+}
+function switchTab(t,btn){aTab=t;document.querySelectorAll('.ntab').forEach(x=>x.classList.remove('on'));btn.classList.add('on');rFeed();}
+function fCat(el,c){aCat=c;document.querySelectorAll('.ci').forEach(x=>x.classList.remove('on'));el.classList.add('on');rFeed();}
+function fType(btn,t){aType=t;document.querySelectorAll('#fchips .chip').forEach(x=>x.classList.remove('on'));btn.classList.add('on');rFeed();}
+function custSearch(q){
+  const sd=document.getElementById('sd');
+  if(!q.trim()){sd.classList.remove('on');rFeed();return;}
+  const res=allDeals().filter(d=>d.rn.toLowerCase().includes(q.toLowerCase())||d.deal.toLowerCase().includes(q.toLowerCase())||d.cu.toLowerCase().includes(q.toLowerCase()));
+  sd.innerHTML=res.slice(0,6).map(d=>`<div class="di" onclick="openDeal(${d.id});sDrop('sd',false)"><span style="font-size:22px">${d.em}</span><div><div style="font-size:14px;font-weight:600">${d.rn}</div><div style="font-size:12px;color:var(--t2)">${d.deal} · ${d.disc} · ${d.city||''}</div></div></div>`).join('')||'<div style="padding:14px;text-align:center;font-size:14px;color:var(--t3)">No results</div>';
+  sd.classList.add('on');
+  document.getElementById('dg').innerHTML=res.map(dCard).join('');
+  document.getElementById('fc').textContent=res.length+' result'+(res.length!==1?'s':'');
+  document.getElementById('nr').style.display=res.length?'none':'block';
+}
+function sDrop(id,on){const e=document.getElementById(id);if(e)e.classList[on?'add':'remove']('on');}
+
+// ═══════════════ LOCATION ═══════════════
+let selCityEl=null;
+function selCity(city,btn){
+  aCity=city;
+  document.getElementById('city-cur').textContent=city;
+  document.getElementById('city-in').value=city;
+  document.querySelectorAll('#city-chips .loc-tag').forEach(x=>x.classList.remove('on'));
+  btn.classList.add('on');selCityEl=btn;
+}
+function citySearch(q){
+  const dd=document.getElementById('city-dd');
+  if(!q.trim()){dd.classList.remove('on');return;}
+  const res=CITIES.filter(c=>c.toLowerCase().includes(q.toLowerCase()));
+  dd.innerHTML=res.map(c=>`<div class="di" onclick="selCityInput('${c}')"><i class="ti ti-map-pin" style="font-size:15px;color:var(--br)"></i><span style="font-size:14px">${c}</span></div>`).join('');
+  dd.classList.add('on');
+}
+function selCityInput(c){aCity=c;document.getElementById('city-in').value=c;document.getElementById('city-cur').textContent=c;sDrop('city-dd',false);}
+function applyLoc(){
+  const r=document.getElementById('rslide').value;
+  aRad=parseInt(r);
+  document.getElementById('loc-label').textContent=aCity+' · '+r+' km';
+  closeOv('ov-loc');
+  rFeed();
+  toast('Showing deals in '+aCity+' within '+r+' km');
+}
+</script>
+<script>
+// ═══════════════ BUSINESS ONBOARDING ═══════════════
+const OBLABELS=['Find your restaurant','Location & contact','Hours & deal types','Create your deals','Photo & publish'];
+function rOB(){
+  document.getElementById('ob-d').innerHTML=OBLABELS.map((_,i)=>`<div class="sdot ${i+1===obS?'cur':i+1<obS?'done':'todo'}"></div>`).join('');
+  document.getElementById('ob-lbl').textContent=OBLABELS[obS-1];
+  document.getElementById('ob-n').textContent='Step '+obS+' of 5';
+  for(let i=1;i<=5;i++){const e=document.getElementById('os'+i);if(e)e.style.display=i===obS?'block':'none';}
+  document.getElementById('ob-pv').style.display=obS>1?'block':'none';
+  document.getElementById('ob-nx').style.display=obS<5?'block':'none';
+  if(obS===3)buildHrs();
+  if(obS===4)initDealMode();
+  if(obS===5)updPrev();
+}
+function obNext(){if(obS<5){obS++;rOB();window.scrollTo(0,0);}}
+function obPrev(){if(obS>1){obS--;rOB();window.scrollTo(0,0);}}
+
+function buildHrs(){
+  const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const def=[['11:00','22:00'],['11:00','22:00'],['11:00','22:00'],['11:00','22:00'],['11:00','23:00'],['10:00','23:00'],['11:00','21:00']];
+  document.getElementById('ob-hrs').innerHTML=
+    `<div style="display:grid;grid-template-columns:110px 1fr 1fr 50px;gap:8px;margin-bottom:8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.3px"><span>Day</span><span>Opens</span><span>Closes</span><span>Closed</span></div>`+
+    days.map((d,i)=>`<div style="display:grid;grid-template-columns:110px 1fr 1fr 50px;gap:8px;align-items:center;margin-bottom:8px">
+      <span style="font-size:14px;font-weight:500">${d}</span>
+      <input type="time" value="${def[i][0]}" class="inp-sm" style="width:100%">
+      <input type="time" value="${def[i][1]}" class="inp-sm" style="width:100%">
+      <div style="display:flex;justify-content:center"><button class="tog" onclick="togBtn(this)"></button></div>
+    </div>`).join('');
+}
+function togBtn(b){b.classList.toggle('on');}
+
+// Google Maps search
+let gmSelData=null;
+function gmSearch(q){
+  const dd=document.getElementById('gmd');
+  if(!q.trim()||q.length<2){dd.classList.remove('on');return;}
+  const res=GMAPS.filter(r=>r.name.toLowerCase().includes(q.toLowerCase())||r.addr.toLowerCase().includes(q.toLowerCase())||r.city.toLowerCase().includes(q.toLowerCase()));
+  dd.innerHTML=res.slice(0,6).map((r,_)=>`<div class="di" onclick="onGmSelect('${r.name.replace(/'/g,"\\'")}')">
+    <div style="width:34px;height:34px;border-radius:8px;background:var(--blt);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-map-pin" style="font-size:15px;color:var(--br)"></i></div>
+    <div><div style="font-size:14px;font-weight:600">${r.name}</div><div style="font-size:12px;color:var(--t2)">${r.addr}</div><div style="font-size:11px;color:var(--t3)">★ · ${r.cuisine} · ${r.city}</div></div>
+  </div>`).join('')||`<div style="padding:14px;text-align:center;font-size:14px;color:var(--t3)">No results — type your restaurant name below</div>`;
+  dd.classList.add('on');
+}
+function onGmSelect(name){
+  gmSelData=GMAPS.find(r=>r.name===name);
+  if(!gmSelData)return;
+  sDrop('gmd',false);
+  document.getElementById('gms').value=name;
+  document.getElementById('rn').value=name;
+  // populate edit fields
+  document.getElementById('gm-name').value=name;
+  document.getElementById('gm-addr').value=gmSelData.addr;
+  document.getElementById('gm-phone').value=gmSelData.phone||'';
+  document.getElementById('gm-web').value=gmSelData.web?'https://'+gmSelData.web:'';
+  document.getElementById('gm-hrs').value=gmSelData.hrs||'';
+  // set cuisine in select
+  const cu=document.getElementById('r-cuisine');
+  for(const o of cu.options){if(o.text.toLowerCase().includes((gmSelData.cuisine||'').toLowerCase())){cu.value=o.value;break;}}
+  document.getElementById('gm-preview').innerHTML=
+    `<div style="display:flex;flex-direction:column;gap:3px">
+      <div style="font-size:14px;font-weight:700;color:var(--tx)">${name}</div>
+      <div style="font-size:13px;color:var(--t2)"><i class="ti ti-map-pin" style="font-size:12px;vertical-align:-1px;margin-right:4px;color:var(--br)"></i>${gmSelData.addr}</div>
+      <div style="font-size:13px;color:var(--t2)"><i class="ti ti-clock" style="font-size:12px;vertical-align:-1px;margin-right:4px;color:var(--t3)"></i>${gmSelData.hrs}</div>
+      <div style="font-size:13px;color:var(--t2)"><i class="ti ti-phone" style="font-size:12px;vertical-align:-1px;margin-right:4px;color:var(--t3)"></i>${gmSelData.phone}</div>
+    </div>`;
+  document.getElementById('gm-filled').style.display='block';
+  document.getElementById('gm-edit-fields').style.display='none';
+  document.getElementById('edit-btn').innerHTML='<i class="ti ti-pencil" style="font-size:13px"></i>Edit details';
+  toast('✓ Auto-filled from Google Maps! Click "Edit details" to change anything.');
+}
+function toggleEdit(){
+  const ef=document.getElementById('gm-edit-fields');
+  const eb=document.getElementById('edit-btn');
+  const open=ef.style.display==='block';
+  ef.style.display=open?'none':'block';
+  eb.innerHTML=open?'<i class="ti ti-pencil" style="font-size:13px"></i>Edit details':'<i class="ti ti-check" style="font-size:13px"></i>Done editing';
+}
+function saveEdits(){
+  const n=document.getElementById('gm-name').value;
+  const a=document.getElementById('gm-addr').value;
+  const p=document.getElementById('gm-phone').value;
+  const h=document.getElementById('gm-hrs').value;
+  document.getElementById('gm-preview').innerHTML=
+    `<div style="display:flex;flex-direction:column;gap:3px">
+      <div style="font-size:14px;font-weight:700;color:var(--tx)">${n}</div>
+      <div style="font-size:13px;color:var(--t2)"><i class="ti ti-map-pin" style="font-size:12px;vertical-align:-1px;margin-right:4px;color:var(--br)"></i>${a}</div>
+      <div style="font-size:13px;color:var(--t2)"><i class="ti ti-clock" style="font-size:12px;vertical-align:-1px;margin-right:4px;color:var(--t3)"></i>${h}</div>
+      <div style="font-size:13px;color:var(--t2)"><i class="ti ti-phone" style="font-size:12px;vertical-align:-1px;margin-right:4px;color:var(--t3)"></i>${p}</div>
+    </div>`;
+  document.getElementById('rn').value=n;
+  toggleEdit();
+  toast('✓ Details updated!');
+}
+
+// Deal Creator
+function initDealMode(){rTemplates();initMenuItems();}
+function setDealMode(m,btn){
+  dealMode=m;
+  document.querySelectorAll('#deal-mode-tabs .mtab-b').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ['dm-template','dm-manual','dm-voice','dm-menu'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  const el=document.getElementById('dm-'+m);if(el)el.style.display='block';
+}
+function rTemplates(){
+  document.getElementById('tpl-grid').innerHTML=TEMPLATES.map((t,i)=>`
+    <div class="tpl-card" onclick="applyTpl(${i})">
+      <div style="font-size:28px;margin-bottom:8px">${t.em}</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:3px">${t.name}</div>
+      <div style="font-size:12px;color:var(--br);font-weight:600;margin-bottom:3px">${t.disc}</div>
+      <div style="font-size:11px;color:var(--t3)">${t.days} · ${t.type.join(' + ')}</div>
+    </div>`).join('');
+}
+function applyTpl(i){
+  const t=TEMPLATES[i];
+  setDealMode('manual',document.querySelector('#deal-mode-tabs .mtab-b:nth-child(2)'));
+  const dv=document.getElementById('d-val');const dd=document.getElementById('d-dtype');
+  if(dv)dv.value=t.val||t.disc;
+  if(dd){for(const o of dd.options){if(o.text===t.dtype){dd.value=o.value;break;}}}
+  const de=document.getElementById('d-desc');if(de)de.value=t.desc;
+  // set days
+  selDays=t.days;setDayPills(t.days);
+  // set types
+  selDTs=t.type;
+  document.querySelectorAll('#dtype-pills .dt-pill').forEach(p=>{
+    const txt=p.textContent.replace(/[^\w\s-]/g,'').trim();
+    p.classList[t.type.some(tp=>p.getAttribute('onclick').includes(tp))?'add':'remove']('on');
+  });
+  toast('✓ Template "'+t.name+'" applied! Fill in the value and you\'re ready.');
+}
+function setScope(s,btn){
+  scopeMode=s;
+  document.querySelectorAll('#scope-pills .dt-pill').forEach(p=>p.classList.remove('on'));
+  btn.classList.add('on');
+  ['single','category','menu','bundle'].forEach(id=>{const e=document.getElementById('scope-'+id);if(e)e.style.display='none';});
+  const el=document.getElementById('scope-'+s);if(el)el.style.display='block';
+}
+function togDT(btn,type){
+  if(type==='custom'){
+    btn.classList.toggle('on');
+    const cd=document.getElementById('custom-dtype');
+    if(cd)cd.style.display=btn.classList.contains('on')?'block':'none';
+    return;
+  }
+  btn.classList.toggle('on');
+  if(btn.classList.contains('on'))selDTs.push(type);
+  else selDTs=selDTs.filter(x=>x!==type);
+}
+function togDay(btn,day){
+  document.getElementById('dp-all').classList.remove('on');
+  btn.classList.toggle('on');
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const sel=days.filter(d=>document.getElementById('dp-'+d.toLowerCase())?.classList.contains('on'));
+  selDays=sel.length===7?'all':sel.join('–');
+}
+function togAll(btn){
+  btn.classList.add('on');
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{const e=document.getElementById('dp-'+d);if(e)e.classList.remove('on');});
+  selDays='all';
+}
+function setDayPills(days){
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{const e=document.getElementById('dp-'+d);if(e)e.classList.remove('on');});
+  if(days==='All days'||days==='all'){document.getElementById('dp-all').classList.add('on');return;}
+  document.getElementById('dp-all').classList.remove('on');
+  const dayMap={Mon:'mon',Tue:'tue',Wed:'wed',Thu:'thu',Fri:'fri',Sat:'sat',Sun:'sun'};
+  days.split(/[–,\s]+/).forEach(d=>{const e=document.getElementById('dp-'+dayMap[d]);if(e)e.classList.add('on');});
+}
+
+// Voice to Text
+function toggleVoice(){
+  if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){toast('⚠️ Voice input requires Chrome browser');return;}
+  if(voiceOn){voiceRec&&voiceRec.stop();voiceOn=false;document.getElementById('voice-btn').classList.remove('rec');document.getElementById('vb-txt').textContent='Start recording';document.getElementById('voice-status').textContent='';return;}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  voiceRec=new SR();voiceRec.continuous=false;voiceRec.interimResults=true;voiceRec.lang='en-CA';
+  voiceRec.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join('');document.getElementById('voice-out').value=t;};
+  voiceRec.onend=()=>{voiceOn=false;document.getElementById('voice-btn').classList.remove('rec');document.getElementById('vb-txt').textContent='Start recording';document.getElementById('voice-status').textContent='✓ Done — edit above if needed';parseVoice(document.getElementById('voice-out').value);};
+  voiceRec.onerror=()=>{toast('⚠️ Microphone not available');voiceOn=false;};
+  voiceRec.start();voiceOn=true;
+  document.getElementById('voice-btn').classList.add('rec');document.getElementById('vb-txt').textContent='Recording... click to stop';
+  document.getElementById('voice-status').textContent='🎙️ Speak your deal — e.g. "20% off all pasta every Tuesday, dine-in only"';
+}
+function parseVoice(txt){
+  const pct=txt.match(/(\d+)%/);const dl=txt.match(/\$(\d+)/);
+  if(pct)document.getElementById('vd-val').value=pct[0];
+  else if(dl)document.getElementById('vd-val').value='$'+dl[1];
+  const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const found=days.filter(d=>txt.toLowerCase().includes(d.toLowerCase()));
+  if(found.length)document.getElementById('vd-days').value=found.join(', ');
+}
+
+// Menu import
+function initMenuItems(){
+  if(!gmSelData||!gmSelData.menu){document.getElementById('menu-items').innerHTML='<div style="padding:14px;text-align:center;font-size:14px;color:var(--t2)">🔍 Search and select your restaurant in Step 1 first — we\'ll load your Google menu here.</div>';return;}
+  document.getElementById('menu-items').innerHTML=gmSelData.menu.map((item,i)=>`
+    <div class="menu-item-cb" id="mi-${i}" onclick="togMI(${i})">
+      <input type="checkbox" id="mic-${i}" style="accent-color:var(--br);width:16px;height:16px;flex-shrink:0">
+      <div style="flex:1"><div style="font-size:14px;font-weight:500">${item}</div></div>
+    </div>`).join('');
+}
+function togMI(i){
+  const el=document.getElementById('mi-'+i),cb=document.getElementById('mic-'+i);
+  el.classList.toggle('sel');cb.checked=!cb.checked;
+}
+function selAllMenu(sel){
+  if(!gmSelData||!gmSelData.menu)return;
+  gmSelData.menu.forEach((_,i)=>{const el=document.getElementById('mi-'+i),cb=document.getElementById('mic-'+i);if(el&&cb){el.classList[sel?'add':'remove']('sel');cb.checked=sel;}});
+}
+
+function updPrev(){
+  const n=document.getElementById('rn').value||'Your Restaurant';
+  const c=document.getElementById('rc').value||'Cuisine';
+  const a=document.getElementById('rarea').value||'Location';
+  document.getElementById('pv-ini').textContent=n[0]||'?';
+  document.getElementById('pv-nm').textContent=n;
+  document.getElementById('pv-cu').textContent=c+' · '+a;
+  const dv=document.getElementById('d-val'),dd=document.getElementById('d-dish');
+  document.getElementById('pv-dl').textContent=(dd&&dd.value)||'Your deal';
+  document.getElementById('pv-dc').textContent=(dv&&dv.value)||'—';
+}
+function prvPh(inp){const r=new FileReader();r.onload=e=>{document.getElementById('pi').src=e.target.result;document.getElementById('pp').style.display='block';};r.readAsDataURL(inp.files[0]);}
+function rmPh(){document.getElementById('pp').style.display='none';document.getElementById('fph').value='';}
+function pubRest(){
+  const n=document.getElementById('rn').value||'New Restaurant';
+  const c=document.getElementById('rc').value||'Restaurant';
+  const a=document.getElementById('rarea').value||'Ontario';
+  DB.push('restaurants',{name:n,cuisine:c,city:a,time:Date.now()});
+  document.getElementById('bd-rn').textContent=n;
+  document.getElementById('bd-tt').textContent='Welcome, '+n+'!';
+  go('s-bd');
+  setTimeout(()=>toast('🎉 '+n+' is now live on RepEAT!'),400);
+}
+
+// ═══════════════ INFLUENCER ═══════════════
+function rCols(data){
+  document.getElementById('cc').textContent=data.length+' restaurant'+(data.length!==1?'s':'');
+  document.getElementById('cg').innerHTML=data.map(colCard).join('');
+}
+function colCard(c){
+  return`<div style="background:var(--sf);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);transition:box-shadow .15s" onmouseover="this.style.boxShadow='var(--sh2)'" onmouseout="this.style.boxShadow='var(--sh)'">
+    <div style="display:flex;gap:14px;padding:16px;align-items:flex-start">
+      <div style="width:56px;height:56px;border-radius:14px;background:${c.col}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:28px">${c.em}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">
+          <div style="font-size:15px;font-weight:700">${c.rn}</div>
+          <div style="font-family:var(--fh);font-size:18px;font-weight:800;color:var(--br);white-space:nowrap">${c.offer}</div>
+        </div>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:8px">${c.cu} · ${c.addr}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <span class="badge bdi">${c.del}</span>
+          <span class="badge bpk"><i class="ti ti-users" style="font-size:11px"></i>${c.req}</span>
+        </div>
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:9px 12px;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Brief</div>
+          <div style="font-size:13px;color:var(--t2);line-height:1.5">"${c.brief}"</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn bbr" style="height:36px;font-size:13px" onclick="openNeg(${c.id})"><i class="ti ti-currency-dollar" style="font-size:14px"></i>Negotiate</button>
+          <button class="btn bol" style="height:36px;font-size:13px" onclick="openChatD(${c.id})"><i class="ti ti-message-circle" style="font-size:14px"></i>Chat</button>
+          <button class="bgh" style="height:36px;border-radius:var(--rs)" onclick="toast('✅ Offer accepted! Restaurant notified.')"><i class="ti ti-check" style="font-size:14px"></i>Accept</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function fCol(btn,tag){
+  document.querySelectorAll('#ic .chip').forEach(c=>c.classList.remove('on'));btn.classList.add('on');
+  const f=tag==='all'?COLLABS:COLLABS.filter(c=>c.tags&&c.tags.includes(tag));
+  document.getElementById('ct').textContent=tag==='all'?'Open for Collab — Ontario':tag.toUpperCase()+' Restaurants';
+  rCols(f);
+}
+function infSrch(q){
+  if(!q.trim()){rCols(COLLABS);return;}
+  rCols(COLLABS.filter(c=>c.rn.toLowerCase().includes(q.toLowerCase())||c.cu.toLowerCase().includes(q.toLowerCase())||c.brief.toLowerCase().includes(q.toLowerCase())));
+}
+function openNeg(id){
+  curCol=COLLABS.find(x=>x.id===id);if(!curCol)return;
+  document.getElementById('nt').textContent=curCol.rn;
+  document.getElementById('ns').textContent=curCol.cu+' · '+curCol.addr;
+  document.getElementById('no').textContent=curCol.offer;
+  document.getElementById('ndl').textContent='· '+curCol.del;
+  openOv('ov-neg');
+}
+function sCA(v){document.getElementById('ca').value=v;}
+function sendCO(){closeOv('ov-neg');toast('✅ Counter-offer sent! Restaurant responds within 24 hrs.');}
+function openChatFN(){closeOv('ov-neg');if(curCol)openChatD(curCol.id);}
+function openChatD(id){
+  curCol=COLLABS.find(x=>x.id===id)||curCol;if(!curCol)return;
+  document.getElementById('crn').textContent=curCol.rn;
+  document.getElementById('cbt').textContent='💼 Brief: '+curCol.brief.substring(0,88)+'…';
+  const k='ch_'+id;
+  if(!chatH[k]){chatH[k]=[
+    {from:'them',txt:'Hi! Thanks for your interest in collaborating with '+curCol.rn+' 🙌 We love working with Ontario food creators.',t:fT(-3)},
+    {from:'them',txt:'Current offer is '+curCol.offer+' for '+curCol.del+'. We can also arrange a complimentary dinner for content creation.',t:fT(-1)}
+  ];}
+  rChat(k);openOv('ov-chat');
+  setTimeout(()=>{const m=document.getElementById('cm');m.scrollTop=m.scrollHeight;},80);
+}
+function rChat(k){
+  const msgs=chatH[k]||[];
+  document.getElementById('cm').innerHTML=msgs.map(m=>`<div class="msg-w ${m.from==='me'?'msg-me':'msg-them'}"><div class="msg-bub">${m.txt}</div><div style="font-size:11px;color:var(--t3);margin-top:3px;padding:0 4px">${m.t}</div></div>`).join('');
+}
+function sMsg(){
+  const i=document.getElementById('ci');const txt=i.value.trim();if(!txt||!curCol)return;
+  const k='ch_'+curCol.id;if(!chatH[k])chatH[k]=[];
+  chatH[k].push({from:'me',txt,t:fT(0)});rChat(k);i.value='';i.style.height='40px';
+  const m=document.getElementById('cm');m.scrollTop=m.scrollHeight;
+  setTimeout(()=>{chatH[k].push({from:'them',txt:REPLIES[Math.floor(Math.random()*REPLIES.length)],t:fT(0)});rChat(k);m.scrollTop=m.scrollHeight;},800+Math.random()*600);
+}
+function ckd(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sMsg();}}
+function ar(el){el.style.height='40px';el.style.height=el.scrollHeight+'px';}
+function fT(ago){const d=new Date(Date.now()-ago*60000);return d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');}
+
+// ═══════════════ INIT ═══════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.lc').forEach(c=>{c.addEventListener('mouseover',()=>{c.style.borderColor='var(--br)';c.style.transform='translateY(-3px)';c.style.boxShadow='var(--sh2)';});c.addEventListener('mouseout',()=>{c.style.borderColor='var(--bd)';c.style.transform='none';c.style.boxShadow='var(--sh)';});});
+  const today=new Date().toISOString().split('T')[0];const nextWk=new Date(Date.now()+7*864e5).toISOString().split('T')[0];
+  const df=document.getElementById('d-from'),dt=document.getElementById('d-to');
+  if(df)df.value=today;if(dt)dt.value=nextWk;
+});
+</script>
+</body>
+</html>

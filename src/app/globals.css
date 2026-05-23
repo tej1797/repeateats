@@ -1,27 +1,85 @@
+/* Fonts are loaded via next/font in layout.tsx — no @import needed here */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Brand CSS Variables (ported directly from repEAT_v3.html) ─────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand colours */
+  --br: #E85D04;       /* primary orange */
+  --br2: #FF7A30;      /* hover orange */
+  --blt: #FFF3EC;      /* light orange tint (badge bg, focus ring) */
+  --bdk: #A03C01;      /* dark orange (used on orange backgrounds) */
+
+  /* Surface / background */
+  --bg: #F8F7F4;       /* page background — warm off-white */
+  --sf: #fff;          /* card surface */
+  --sf2: #F2F1EE;      /* subtle surface 2 */
+
+  /* Borders */
+  --bd: rgba(0, 0, 0, 0.09);
+  --bd2: rgba(0, 0, 0, 0.18);
+
+  /* Text */
+  --tx: #111;          /* primary text */
+  --t2: #5A5A5A;       /* secondary text */
+  --t3: #999;          /* tertiary / placeholder text */
+
+  /* Status */
+  --gr: #22C55E;       /* green */
+  --rd: #EF4444;       /* red */
+
+  /* Shape */
+  --r: 14px;           /* border-radius large */
+  --rs: 9px;           /* border-radius small */
+
+  /* Shadows */
+  --sh: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --sh2: 0 6px 28px rgba(0, 0, 0, 0.14);
+
+  /* Fonts — var(--font-jakarta) and var(--font-syne) come from layout.tsx */
+  --ff: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
+  --fh: var(--font-syne), 'Syne', sans-serif;
 }
 
+/* Dark mode overrides */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --br: #FF7A30;
+    --blt: #2A1200;
+    --bdk: #FFB088;
+    --bg: #0F0F0F;
+    --sf: #1A1A1A;
+    --sf2: #242424;
+    --bd: rgba(255, 255, 255, 0.09);
+    --bd2: rgba(255, 255, 255, 0.2);
+    --tx: #F2F2F2;
+    --t2: #AAA;
+    --t3: #666;
+    --sh: 0 2px 14px rgba(0, 0, 0, 0.4);
+    --sh2: 0 6px 28px rgba(0, 0, 0, 0.55);
   }
+}
+
+/* ─── Global resets (match the HTML prototype) ───────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--ff);
+  background: var(--bg);
+  color: var(--tx);
+  min-height: 100vh;
+  line-height: 1.5;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Headings and the logo use the display font (Syne) */
+h1, h2, h3 {
+  font-family: var(--fh);
 }
