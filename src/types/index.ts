@@ -75,8 +75,9 @@ export interface Deal {
 }
 
 // Deal with its restaurant info joined in (returned by GET /deals)
+// category is included so the client can filter the feed by cuisine type
 export interface DealWithRestaurant extends Deal {
-  restaurant: Pick<Restaurant, 'id' | 'name' | 'cuisine' | 'city' | 'address' | 'rating'>;
+  restaurant: Pick<Restaurant, 'id' | 'name' | 'cuisine' | 'category' | 'city' | 'address' | 'rating'> | null;
 }
 
 // ─── Claim ────────────────────────────────────────────────────

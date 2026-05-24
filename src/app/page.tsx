@@ -32,7 +32,7 @@ const PORTALS = [
     ctaColor: "#065F46",                    // dark green
   },
   {
-    href: "/creator",
+    href: "/influencer",
     iconBg: "bg-[#FDF4FF]",                 // purple tint
     icon: <IconDeviceMobileStar size={26} style={{ color: "#7E22CE" }} />,
     title: "Creator",

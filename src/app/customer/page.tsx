@@ -5,6 +5,7 @@
 // (filters, modals, search). "use client" means this runs in the browser.
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   IconSearch, IconMapPin, IconX, IconCircleCheck,
@@ -548,18 +549,31 @@ export default function CustomerPage() {
   const [claimError,    setClaimError]    = useState<string | null>(null);
 
   // ── Auth state ──────────────────────────────────────────────
-  const [user, setUser] = useState<User | null>(null);
+  const [user,        setUser]        = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const supabase = useRef(createClient()).current;
+  const router   = useRouter();
 
   useEffect(() => {
-    // Check current session on mount
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    // Listen for auth changes (sign in / sign out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    // Check current session on mount — redirect to login if not signed in
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        router.replace('/customer/login');
+      } else {
+        setUser(data.user);
+        setAuthChecked(true);
+      }
+    });
+    // Listen for auth changes (sign out → redirect back to login)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/customer/login');
+      } else {
+        setUser(session.user);
+      }
     });
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, [supabase, router]);
 
   // ── Data hooks ──────────────────────────────────────────────
   const { deals, loading: dealsLoading, error: dealsError, refetch } = useDeals({
@@ -620,6 +634,11 @@ export default function CustomerPage() {
     coming: 'Coming next week',
     all:    'All restaurants',
   };
+
+  // Show blank screen while redirecting unauthenticated users
+  if (!authChecked) {
+    return <div className="min-h-screen bg-[var(--bg)]" />;
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">

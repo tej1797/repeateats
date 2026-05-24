@@ -5,6 +5,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { CreateDealBody } from '@/types/api';
 
+// Local shape of the joined row returned by Supabase
+type RestaurantInfo = {
+  id: string;
+  name: string;
+  cuisine: string | null;
+  category: string | null;
+  city: string;
+  address: string | null;
+  rating: number;
+} | null;
+
 // ─── GET ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const supabase = createClient();
@@ -13,54 +24,50 @@ export async function GET(request: NextRequest) {
   const city          = searchParams.get('city');
   const category      = searchParams.get('category');  // e.g. "indian"
   const type          = searchParams.get('type');       // e.g. "dine-in"
-  const tab           = searchParams.get('tab') ?? 'active'; // active | coming | all
+  const tab           = searchParams.get('tab') ?? 'active';
   const restaurant_id = searchParams.get('restaurant_id');
 
-  // Supabase's nested select: get deal fields + the restaurant's key fields
+  // Include category in the restaurant join so client can filter by it
   let query = supabase
     .from('deals')
     .select(`
       *,
       restaurant:restaurants (
-        id, name, cuisine, city, address, rating
+        id, name, cuisine, category, city, address, rating
       )
     `)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
-  // Tab filter
+  // Tab filter (done at DB level — efficient)
   if (tab === 'active')  query = query.eq('is_coming', false);
   if (tab === 'coming')  query = query.eq('is_coming', true);
-  // tab === 'all' → no extra filter
 
-  // Optional filters
-  if (restaurant_id) {
-    query = query.eq('restaurant_id', restaurant_id);
-  }
-
-  if (category && category !== 'all') {
-    // Filter via the joined restaurant's category column
-    query = query.eq('restaurant.category', category);
-  }
-
+  // restaurant_id and deal_type filters are reliable on the deals table itself
+  if (restaurant_id) query = query.eq('restaurant_id', restaurant_id);
   if (type && type !== 'all') {
-    // deal_types is an array column; @> checks if the array contains the value
-    // (Postgres syntax: '{"dine-in"}'::text[])
+    // deal_types is a Postgres text[] column; @> checks array containment
     query = query.contains('deal_types', [type]);
   }
 
   const { data, error } = await query;
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Optional city filter applied after fetch (avoids complex join filter)
-  const filtered = city && city !== 'GTA Area'
-    ? (data ?? []).filter((d) => (d.restaurant as { city: string } | null)?.city === city)
-    : data ?? [];
+  // Category and city filters applied after fetch.
+  // Filtering on joined/aliased tables via .eq() has inconsistent behaviour
+  // across Supabase SDK versions, so we do it in JS — the dataset is small.
+  let results = (data ?? []) as Array<typeof data[number] & { restaurant: RestaurantInfo }>;
 
-  return NextResponse.json({ data: filtered });
+  if (category && category !== 'all') {
+    results = results.filter((d) => d.restaurant?.category === category);
+  }
+  if (city && city !== 'GTA Area') {
+    results = results.filter((d) => d.restaurant?.city === city);
+  }
+
+  return NextResponse.json({ data: results });
 }
 
 // ─── POST ────────────────────────────────────────────────────
@@ -86,7 +93,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Confirm the user owns this restaurant before inserting
   const { data: restaurant } = await supabase
     .from('restaurants')
     .select('owner_id')
