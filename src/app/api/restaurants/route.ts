@@ -11,8 +11,8 @@ export async function GET(request: NextRequest) {
 
   // Pull query params from the URL: /api/restaurants?city=Mississauga&radius_km=30
   const { searchParams } = new URL(request.url);
-  const city      = searchParams.get('city');
-  const radius_km = searchParams.get('radius_km'); // reserved for future PostGIS use
+  const city = searchParams.get('city');
+  // radius_km param accepted but filtering done client-side (PostGIS not yet enabled)
 
   // Start a query against the restaurants table
   let query = supabase

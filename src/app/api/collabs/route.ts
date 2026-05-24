@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const cuisine = searchParams.get('cuisine');
   const city    = searchParams.get('city');
 
-  let query = supabase
+  const { data, error } = await supabase
     .from('collabs')
     .select(`
       *,
@@ -27,8 +27,6 @@ export async function GET(request: NextRequest) {
     `)
     .eq('status', status)
     .order('created_at', { ascending: false });
-
-  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

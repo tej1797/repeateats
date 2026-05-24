@@ -1,7 +1,7 @@
 // POST /api/claims  — claim a deal (auth required), returns QR code
 // GET  /api/claims  — list all claims for the logged-in user
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { CreateClaimBody } from '@/types/api';
 
@@ -18,7 +18,7 @@ function generateQrCode(): string {
 }
 
 // ─── GET ─────────────────────────────────────────────────────
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const supabase = createClient();
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();

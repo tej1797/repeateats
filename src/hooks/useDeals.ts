@@ -32,12 +32,20 @@ export function useDeals(filters: DealsQuery = {}): UseDealsResult {
     if (filters.restaurant_id) params.set('restaurant_id', filters.restaurant_id);
 
     try {
-      const res  = await fetch(`/api/deals?${params.toString()}`);
-      const json = await res.json() as { data?: DealWithRestaurant[]; error?: string };
+      const res = await fetch(`/api/deals?${params.toString()}`);
 
-      if (!res.ok || json.error) {
-        throw new Error(json.error ?? 'Failed to load deals');
+      // Check status before parsing — a non-200 may return HTML (not JSON)
+      if (!res.ok) {
+        let msg = `Failed to load deals (${res.status})`;
+        try {
+          const body = await res.json() as { error?: string };
+          if (body.error) msg = body.error;
+        } catch { /* response was not JSON */ }
+        throw new Error(msg);
       }
+
+      const json = await res.json() as { data?: DealWithRestaurant[]; error?: string };
+      if (json.error) throw new Error(json.error);
 
       setDeals(json.data ?? []);
     } catch (err) {
