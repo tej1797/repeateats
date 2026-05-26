@@ -9,7 +9,7 @@ import Link from 'next/link';
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const SAMPLE_DEALS = [
-  { emoji: '🍛', title: '30% Off Full Menu',      restaurant: 'Karahi Boys',         discount: '30% OFF', tag: 'dine-in' },
+  { emoji: '🍛', title: '30% Off Full Menu',      restaurant: 'Nirvana Restaurant',   discount: '30% OFF', tag: 'dine-in' },
   { emoji: '🍣', title: 'Free Appetizer',           restaurant: 'Tokyo Garden',         discount: 'FREE',    tag: 'pickup'  },
   { emoji: '🥩', title: '$10 Off Any Order $40+',  restaurant: 'Lancaster Smokehouse', discount: '$10',     tag: 'dine-in' },
 ];
@@ -61,7 +61,7 @@ const STEPS = [
 ];
 
 const RESTAURANTS = [
-  'Karahi Boys', 'Bombay Chowpatty', 'Lancaster Smokehouse', 'Tokyo Garden',
+  'Nirvana Restaurant', 'Mughal Mahal', 'Lancaster Smokehouse', 'Tokyo Garden',
   'Pizza Nova', 'Banh Mi Boys', "Sneaky Dee's", 'The Rec Room', 'Burrito Boyz',
   'Wildcraft Brewery', 'Lahore Tikka House', 'Jerusalem Restaurant',
   'Masala Bay', 'Saffron Indian Bistro', 'The Keg Steakhouse',

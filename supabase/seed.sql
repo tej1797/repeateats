@@ -20,22 +20,22 @@ VALUES
 
 -- GTA — Mississauga
 ('11111111-0001-0000-0000-000000000000', NULL,
- 'Karahi Boys', 'Pakistani', 'indian', 'Mississauga',
- '3024 Hurontario St, Mississauga, ON L5B 3C4',
- '+1 905-270-0567', 'karahiboys.com',
+ 'Nirvana Restaurant', 'Indian', 'indian', 'Brampton',
+ '2130 North Park Dr, Brampton, ON L6S 0C9',
+ '+1 905-792-9111', 'nirvanarestaurant.ca',
  '{"all": "Daily 11AM–11PM"}',
  true, true, true, false, true,
  4.7, 312,
- 'Famous for their slow-braised karahis. A Mississauga institution for Pakistani food.'),
+ 'Authentic North Indian cuisine in Brampton. Famous for rich curries, tandoor dishes, and warm hospitality.'),
 
 ('11111111-0002-0000-0000-000000000000', NULL,
- 'Bombay Chowpatty', 'Indian Street Food', 'indian', 'Brampton',
- '10 Gillingham Dr, Brampton, ON L6X 4W8',
- '+1 905-451-9876', 'bombaychowpatty.ca',
+ 'Mughal Mahal', 'Indian', 'indian', 'Mississauga',
+ '2980 Drew Rd, Mississauga, ON L4T 0A7',
+ '+1 905-451-9876', 'mughalmahal.ca',
  '{"all": "Tue–Sun 11AM–10PM"}',
  true, true, false, false, true,
  4.5, 187,
- 'Authentic Mumbai street food in Brampton — pani puri, pav bhaji, bhel puri.'),
+ 'Authentic Mughlai cuisine in Mississauga — pani puri, pav bhaji, bhel puri.'),
 
 ('11111111-0003-0000-0000-000000000000', NULL,
  'Real Fruit Bubble Tea', 'Bubble Tea', 'bubbletea', 'Mississauga',
@@ -47,13 +47,13 @@ VALUES
  'Fresh fruit bubble teas, smoothies, and specialty drinks with real ingredients.'),
 
 ('11111111-0004-0000-0000-000000000000', NULL,
- 'Pind Punjabi Kitchen', 'Indian', 'indian', 'Mississauga',
- '720 Bristol Rd W, Mississauga, ON L5R 4A3',
- '+1 905-712-0034', 'pindpunjabi.ca',
+ 'India''s Taste', 'Indian', 'indian', 'Toronto',
+ '1315 Lawrence Ave E, Toronto, ON M3A 3R3',
+ '+1 416-447-5100', 'indiastaste.ca',
  '{"all": "Mon–Sun 11AM–10PM"}',
  true, true, true, false, true,
  4.4, 156,
- 'Warm, home-style Punjabi cooking. Comfort food for the South Asian diaspora.'),
+ 'Classic Indian comfort food in East York. Known for butter chicken, biryani, and generous lunch specials.'),
 
 ('11111111-0005-0000-0000-000000000000', NULL,
  'Dhaba Express', 'Indian', 'indian', 'Mississauga',
@@ -137,20 +137,20 @@ INSERT INTO public.deals
    max_claims, current_claims, is_coming, is_active)
 VALUES
 
--- Karahi Boys
+-- Nirvana Restaurant
 ('22222222-0001-0000-0000-000000000000',
  '11111111-0001-0000-0000-000000000000',
- '$10 Off Any Karahi (Family Size)',
- '$10 off any family-size karahi. Tender braised lamb, chicken, or beef in rich spiced sauce. Dine-in only, no min spend.',
+ '$10 Off Any Curry (Family Size)',
+ '$10 off any family-size curry. Tender braised lamb, chicken, or paneer in rich spiced sauce. Dine-in only, no min spend.',
  'fixed', '$10 OFF',
  ARRAY['dine-in'], ARRAY['all'], 'category', 'Family-size Karahis', '🍛',
  100, 67, false, true),
 
--- Bombay Chowpatty
+-- Mughal Mahal
 ('22222222-0002-0000-0000-000000000000',
  '11111111-0002-0000-0000-000000000000',
- 'Free Pani Puri (6 pcs) with Any Main',
- 'Order any main course and get 6 crispy pani puri free. Authentic Mumbai street food experience right in Brampton.',
+ 'Free Naan with Any Main Course',
+ 'Order any main course and get complimentary naan. Authentic Mughlai biryani, kebabs, and curries in Mississauga.',
  'free_item', 'FREE',
  ARRAY['dine-in'], ARRAY['Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], 'single', 'Pani Puri (6 pcs)', '🥘',
  60, 43, false, true),
@@ -164,7 +164,7 @@ VALUES
  ARRAY['pickup'], ARRAY['all'], 'menu', NULL, '🧋',
  200, 89, false, true),
 
--- Pind Punjabi Kitchen
+-- India's Taste
 ('22222222-0004-0000-0000-000000000000',
  '11111111-0004-0000-0000-000000000000',
  'Lunch Thali Special — $12',
@@ -245,16 +245,16 @@ VALUES
  ARRAY['dine-in'], ARRAY['Fri', 'Sat'], 'bundle', 'Starter + Main', '🍕',
  35, 22, false, true),
 
--- Karahi Boys — extra
+-- Nirvana Restaurant — extra
 ('22222222-0013-0000-0000-000000000000',
  '11111111-0001-0000-0000-000000000000',
  'Free Chai with Any Main Course',
- 'Get a complimentary chai with every main course ordered. Valid all week, dine-in only.',
+ 'Get a complimentary mango lassi with every main course ordered. Valid all week, dine-in only.',
  'free_item', 'FREE CHAI',
  ARRAY['dine-in'], ARRAY['all'], 'single', 'Chai', '☕',
  NULL, 14, false, true),
 
--- Pind Punjabi Kitchen — weekend
+-- India's Taste — weekend
 ('22222222-0014-0000-0000-000000000000',
  '11111111-0004-0000-0000-000000000000',
  'Weekend Family Platter — $35',
@@ -284,13 +284,13 @@ VALUES
 ('33333333-0001-0000-0000-000000000000',
  '11111111-0001-0000-0000-000000000000', NULL,
  150, 300, '1 Reel + 3 Stories', '8K–25K followers',
- 'Showcase our family karahi experience. South Asian audience preferred. Show the cooking process, the aroma, the joy of sharing food.',
+ 'Showcase our authentic Indian dining experience. South Asian audience preferred. Show the cooking process, the aroma, the joy of sharing food.',
  'open'),
 
 ('33333333-0002-0000-0000-000000000000',
  '11111111-0002-0000-0000-000000000000', NULL,
  80, 150, '2 Stories + 1 Post', '5K+ followers',
- 'Pani puri, bhel puri, vada pav — Mumbai street food vibes in Brampton. Fun, energetic, colourful content wanted!',
+ 'Mughlai biryani, kebabs, rich curries — regal food vibes in Mississauga. Fun, energetic, colourful content wanted!',
  'open'),
 
 ('33333333-0003-0000-0000-000000000000',
@@ -308,7 +308,7 @@ VALUES
 ('33333333-0005-0000-0000-000000000000',
  '11111111-0004-0000-0000-000000000000', NULL,
  100, 200, '1 Reel', '5K+ followers',
- 'Authentic Punjabi home cooking. We want warm, inviting content that speaks to the South Asian diaspora.',
+ 'Authentic Indian comfort food. We want warm, inviting content that speaks to the South Asian diaspora.',
  'open'),
 
 ('33333333-0006-0000-0000-000000000000',

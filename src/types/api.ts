@@ -166,7 +166,7 @@ export type CreateMessageResponse = ApiResponse<Message>;
 
 // ─── GET /api/google-places ──────────────────────────────────
 export interface GooglePlacesQuery {
-  query: string;   // e.g. "Karahi Boys Mississauga"
+  query: string;   // e.g. "Nirvana Restaurant Brampton"
 }
 export interface PlaceResult {
   name: string;
