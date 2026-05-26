@@ -192,7 +192,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/influencer` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
 

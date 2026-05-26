@@ -2,21 +2,23 @@
 // After Google (or any OAuth provider) redirects back here,
 // Supabase exchanges the one-time code for a user session cookie.
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get('code');
-  // 'next' lets us redirect somewhere specific after login (e.g. /restaurant)
-  const next = searchParams.get('next') ?? '/customer';
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const next = searchParams.get('next') ?? '/customer'
 
   if (code) {
-    const supabase = createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const supabase = createClient()
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      return NextResponse.redirect(`${origin}${next}`)
+    }
   }
 
-  // Use new URL() to safely resolve the redirect path against the request origin
-  const redirectUrl = new URL(next, request.url);
-  return NextResponse.redirect(redirectUrl);
+  // Exchange failed — send back to login with an error flag
+  return NextResponse.redirect(`${origin}/customer/login?error=auth`)
 }
