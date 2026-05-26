@@ -1,7 +1,7 @@
 'use client';
 
 // Landing page — dark theme, world-class design.
-// Client component needed for Intersection Observer count-up animations.
+// Client component needed for Intersection Observer count-up + scroll effects.
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -16,7 +16,7 @@ const SAMPLE_DEALS = [
 
 const PORTALS = [
   {
-    href: '/customer',
+    href: '/customer/login',
     emoji: '🍽️',
     emojiBg: 'rgba(232,93,4,0.18)',
     title: 'Customer',
@@ -67,7 +67,6 @@ const RESTAURANTS = [
   'Masala Bay', 'Saffron Indian Bistro', 'The Keg Steakhouse',
 ];
 
-// ─── Float animation configs for the 3 hero cards ─────────────────────────────
 const CARD_STYLES = [
   { left: 0,  top: 0,   animation: 'floatA 5s ease-in-out infinite',        zIndex: 3 },
   { left: 44, top: 140, animation: 'floatB 6s 1s ease-in-out infinite',     zIndex: 2 },
@@ -83,7 +82,6 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
   const [triggered, setTriggered] = useState(false);
   const [count,     setCount]     = useState(0);
 
-  // Trigger when the element scrolls into view
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -95,7 +93,6 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
     return () => obs.disconnect();
   }, []);
 
-  // Count up from 0 → end over ~1.2 s once triggered
   useEffect(() => {
     if (!triggered || end === 0) { setCount(end); return; }
     const steps = 40;
@@ -114,10 +111,8 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
       <div style={{
         fontFamily: 'var(--font-syne, Syne, sans-serif)',
         fontSize: 'clamp(30px,5vw,46px)',
-        fontWeight: 800,
-        color: '#E85D04',
-        lineHeight: 1.1,
-        letterSpacing: '-1px',
+        fontWeight: 800, color: '#E85D04',
+        lineHeight: 1.1, letterSpacing: '-1px',
       }}>
         {prefix}{count}{suffix}
       </div>
@@ -129,6 +124,20 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
 // ─── Main landing page ────────────────────────────────────────────────────────
 
 export default function LandingPage() {
+  const portalsRef = useRef<HTMLElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  // Fade out scroll indicator after user scrolls past 80px
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 80);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const scrollToPortals = () => {
+    portalsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -151,21 +160,18 @@ export default function LandingPage() {
           maxWidth: 1100, width: '100%', margin: '0 auto', padding: '0 24px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          {/* Logo */}
           <div style={{
             fontFamily: 'var(--font-syne, Syne, sans-serif)',
             fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px',
           }}>
             Rep<span style={{ color: '#E85D04' }}>EAT</span>
           </div>
-
-          {/* Sign in */}
-          <Link href="/customer" style={{
+          {/* Sign in → portal chooser */}
+          <Link href="/login" style={{
             display: 'inline-flex', alignItems: 'center',
             height: 36, padding: '0 16px',
             borderRadius: 8, border: '1.5px solid rgba(255,255,255,0.15)',
             color: '#F2F2F2', fontSize: 13, fontWeight: 600, textDecoration: 'none',
-            transition: 'all 0.15s',
           }}>
             Sign in
           </Link>
@@ -219,19 +225,28 @@ export default function LandingPage() {
               🇨🇦 Ontario-wide · GTA &amp; KW
             </div>
 
-            {/* Main headline */}
+            {/* Main headline — overflow visible so gradient text isn't clipped */}
             <h1 style={{
               fontFamily: 'var(--font-syne, Syne, sans-serif)',
-              fontSize: 'clamp(44px, 7vw, 84px)',
-              fontWeight: 800, lineHeight: 1.04, letterSpacing: '-3px',
+              fontSize: 'clamp(42px, 6.5vw, 80px)',
+              fontWeight: 800, lineHeight: 1.06,
+              letterSpacing: '-2px',   /* reduced from -3px to prevent clip */
               marginBottom: 22,
+              overflow: 'visible',
               animation: 'fadeUpIn 0.6s 0.1s ease both',
             }}>
               Restaurant deals,<br />
+              {/*
+                display:inline-block + paddingRight prevents -webkit-background-clip
+                from cutting off the last character ("d") when letter-spacing is tight.
+              */}
               <span style={{
+                display: 'inline-block',
+                paddingRight: '4px',
                 background: 'linear-gradient(135deg, #E85D04 30%, #FF9A4D 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
               }}>
                 claimed in person.
               </span>
@@ -247,30 +262,43 @@ export default function LandingPage() {
               No delivery fees, no apps — just show your QR code at the door.
             </p>
 
-            {/* CTA buttons */}
+            {/* Three CTA buttons */}
             <div style={{
-              display: 'flex', gap: 12, flexWrap: 'wrap',
+              display: 'flex', gap: 10, flexWrap: 'wrap',
               animation: 'fadeUpIn 0.6s 0.3s ease both',
             }}>
-              <Link href="/customer" style={{
+              {/* Primary — Browse deals */}
+              <Link href="/customer/preview" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                height: 50, padding: '0 26px',
+                height: 48, padding: '0 22px',
                 background: 'linear-gradient(135deg, #E85D04, #FF7A30)',
-                color: '#fff', fontSize: 15, fontWeight: 700, borderRadius: 12,
+                color: '#fff', fontSize: 14, fontWeight: 700, borderRadius: 11,
                 textDecoration: 'none',
-                boxShadow: '0 4px 24px rgba(232,93,4,0.45)',
-                transition: 'opacity 0.15s, transform 0.15s',
+                boxShadow: '0 4px 24px rgba(232,93,4,0.4)',
               }}>
                 Browse deals →
               </Link>
+
+              {/* Ghost — List your restaurant */}
               <Link href="/restaurant" style={{
                 display: 'inline-flex', alignItems: 'center',
-                height: 50, padding: '0 24px',
+                height: 48, padding: '0 20px',
                 border: '1.5px solid rgba(255,255,255,0.15)',
-                color: '#F2F2F2', fontSize: 15, fontWeight: 600, borderRadius: 12,
-                textDecoration: 'none', transition: 'border-color 0.15s',
+                color: '#F2F2F2', fontSize: 14, fontWeight: 600, borderRadius: 11,
+                textDecoration: 'none',
               }}>
                 List your restaurant
+              </Link>
+
+              {/* Purple ghost — For food creators */}
+              <Link href="/influencer" style={{
+                display: 'inline-flex', alignItems: 'center',
+                height: 48, padding: '0 20px',
+                border: '1.5px solid rgba(168,85,247,0.35)',
+                color: '#A855F7', fontSize: 14, fontWeight: 600, borderRadius: 11,
+                textDecoration: 'none',
+              }}>
+                For food creators
               </Link>
             </div>
           </div>
@@ -324,21 +352,32 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div style={{
-          position: 'absolute', bottom: 32, left: '50%',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-          color: '#333', fontSize: 10, letterSpacing: '0.15em',
-          animation: 'scrollBounce 2s ease-in-out infinite',
-          zIndex: 2,
-        }}>
-          <span>SCROLL</span>
-          <span style={{ fontSize: 14 }}>↓</span>
-        </div>
+        {/* Scroll indicator — fades out after user scrolls, clicks to portals section */}
+        <button
+          onClick={scrollToPortals}
+          style={{
+            position: 'absolute', bottom: 32, left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+            color: '#444', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
+            background: 'none', border: 'none', cursor: 'pointer',
+            animation: 'scrollBounce 2.2s ease-in-out infinite',
+            opacity: scrolled ? 0 : 1,
+            transition: 'opacity 0.4s ease',
+            zIndex: 2,
+          }}
+          aria-label="Scroll to portal cards"
+        >
+          <span>Scroll</span>
+          {/* Animated chevron */}
+          <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
+            <path d="M1 1L8 8L15 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </section>
 
       {/* ── PORTALS ────────────────────────────────────────────────────────── */}
-      <section style={{ padding: 'clamp(64px,9vw,110px) 24px' }}>
+      <section ref={portalsRef} style={{ padding: 'clamp(64px,9vw,110px) 24px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 52 }}>
             <p style={{
@@ -370,10 +409,8 @@ export default function LandingPage() {
                   display: 'block',
                   background: '#141414',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 18,
-                  padding: 28,
-                  textDecoration: 'none',
-                  color: 'inherit',
+                  borderRadius: 18, padding: 28,
+                  textDecoration: 'none', color: 'inherit',
                 }}
               >
                 <div style={{
@@ -444,7 +481,6 @@ export default function LandingPage() {
           }}>
             {STEPS.map((s, i) => (
               <div key={s.num} style={{ position: 'relative' }}>
-                {/* Dotted connector line between cards (desktop) */}
                 {i < STEPS.length - 1 && (
                   <div className="hidden lg:block" style={{
                     position: 'absolute', top: 30, left: 'calc(100% + 0px)',
@@ -492,8 +528,6 @@ export default function LandingPage() {
         }}>
           Trusted by restaurants across Ontario
         </p>
-
-        {/* Marquee — doubled list scrolls left seamlessly */}
         <div style={{
           display: 'flex', overflow: 'hidden',
           maskImage: 'linear-gradient(90deg, transparent 0%, black 12%, black 88%, transparent 100%)',
@@ -540,12 +574,12 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', gap: 28 }}>
             {[
-              { href: '/customer',   label: 'Customer'    },
-              { href: '/restaurant', label: 'Restaurant'  },
-              { href: '/influencer', label: 'Creator'     },
+              { href: '/customer/preview', label: 'Customer'   },
+              { href: '/restaurant',       label: 'Restaurant' },
+              { href: '/influencer',       label: 'Creator'    },
             ].map((l) => (
               <Link key={l.href} href={l.href} style={{
-                fontSize: 13, color: '#444', textDecoration: 'none', transition: 'color 0.15s',
+                fontSize: 13, color: '#444', textDecoration: 'none',
               }}>
                 {l.label}
               </Link>
