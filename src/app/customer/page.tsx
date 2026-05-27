@@ -7,10 +7,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { QRCode } from 'react-qrcode-logo';
 import {
   IconSearch, IconMapPin, IconX, IconCircleCheck,
   IconInfoCircle, IconUser, IconBuildingStore, IconShoppingBag,
-  IconTruck, IconRefresh,
+  IconTruck, IconRefresh, IconDownload,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
@@ -55,6 +56,21 @@ const TYPE_FILTERS: { id: FilterType; label: string; Icon?: TablerIcon }[] = [
   { id: 'delivery', label: 'Delivery',  Icon: IconTruck },
 ];
 
+// ─── Category → Unsplash food image map ───────────────────────────────────
+const CATEGORY_IMAGES: Record<string, string> = {
+  indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&q=80',
+  bbq:       'https://images.unsplash.com/photo-1558030006-450675393462?w=400&q=80',
+  italian:   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&q=80',
+  bar:       'https://images.unsplash.com/photo-1575444758702-4a6b9222336e?w=400&q=80',
+  canadian:  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=80',
+  bubbletea: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=400&q=80',
+  pizza:     'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80',
+  burgers:   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
+  sushi:     'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80',
+  desserts:  'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&q=80',
+  default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
+};
+
 // ─── SkeletonCard ─────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
@@ -89,65 +105,91 @@ function DealTypeBadge({ types }: { types: string[] }) {
 
 // ─── DealCard ─────────────────────────────────────────────────────────────
 function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => void }) {
-  const fillPct  = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
+  const fillPct   = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
   const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
+  const isUrgent  = spotsLeft !== null && spotsLeft > 0 && spotsLeft <= 5;
+  const isSoldOut = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
+  const imgSrc    = CATEGORY_IMAGES[deal.restaurant?.category ?? ''] ?? CATEGORY_IMAGES.default;
 
   return (
     <div
-      className="bg-surface rounded-brand shadow-brand cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:shadow-brand2 overflow-hidden border border-[var(--bd)] flex flex-col"
+      className="bg-surface rounded-brand shadow-brand cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-brand2 overflow-hidden border border-[var(--bd)] flex flex-col group"
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
     >
-      {/* Emoji header — brand-light tint */}
-      <div className="h-28 bg-brandlt flex items-center justify-center relative flex-shrink-0">
-        <span className="text-5xl select-none">{deal.emoji ?? '🍽️'}</span>
+      {/* Food photo header with gradient overlay */}
+      <div className="relative h-[140px] overflow-hidden flex-shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imgSrc}
+          alt={deal.restaurant?.name ?? ''}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        {/* Dark gradient so text is readable */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 30%, rgba(0,0,0,0.72) 100%)' }} />
+
+        {/* Deal type badge — top left */}
+        {deal.deal_types?.length > 0 && (
+          <div className="absolute top-2 left-2">
+            <DealTypeBadge types={deal.deal_types} />
+          </div>
+        )}
+
+        {/* Coming soon — top right */}
         {deal.is_coming && (
           <span className="absolute top-2 right-2 bg-white/90 text-[10px] font-bold px-2 py-0.5 rounded-full text-t2 border border-[var(--bd)]">
             Coming soon
           </span>
         )}
+
+        {/* Restaurant name + discount overlaid on bottom */}
+        <div className="absolute bottom-2.5 left-3 right-3">
+          <p className="text-white/70 text-[11px] truncate leading-none mb-0.5">
+            {deal.restaurant?.name ?? 'Restaurant'}
+          </p>
+          <p className="font-display text-[22px] font-extrabold text-white leading-none drop-shadow-sm">
+            {deal.discount_value ?? '—'}
+          </p>
+        </div>
       </div>
 
       {/* Card body */}
-      <div className="p-4 flex flex-col flex-1">
-        {/* Type badge */}
-        {deal.deal_types?.length > 0 && (
-          <div className="mb-2"><DealTypeBadge types={deal.deal_types} /></div>
-        )}
-
-        {/* Restaurant name */}
-        <p className="text-[12px] text-t2 mb-0.5 truncate font-medium">
-          {deal.restaurant?.name ?? 'Restaurant'}
-        </p>
-
+      <div className="p-3.5 flex flex-col flex-1">
         {/* Deal title */}
-        <h3 className="font-body font-bold text-[14px] leading-snug mb-2 line-clamp-2 flex-1">
+        <h3 className="font-body font-bold text-[14px] leading-snug mb-2.5 line-clamp-2 flex-1">
           {deal.title}
         </h3>
 
-        {/* Discount value — Syne font, big orange */}
-        <p className="font-display text-[22px] font-extrabold text-brand leading-none mb-3">
-          {deal.discount_value ?? '—'}
-        </p>
-
-        {/* Progress bar — only shown when max_claims is set */}
-        {deal.max_claims !== null && (
+        {/* Progress — unlimited vs capped */}
+        {deal.max_claims === null ? (
+          <div className="flex items-center gap-1.5 text-[11px] text-green-600 font-semibold mb-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+            Unlimited · {deal.current_claims} claimed
+          </div>
+        ) : (
           <div className="mb-2">
-            <div className="flex justify-between text-[11px] text-t3 mb-1">
-              <span>{deal.current_claims} claimed</span>
-              <span>{spotsLeft} left</span>
-            </div>
+            {isUrgent && (
+              <p className="text-[11px] font-bold text-red-500 mb-1 animate-bounce">
+                Only {spotsLeft} left!
+              </p>
+            )}
             <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
-              {/* width must be inline — it's a dynamic percentage */}
-              <div className="h-full bg-brand rounded-full transition-all duration-300" style={{ width: `${fillPct}%` }} />
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${isUrgent || isSoldOut ? 'bg-red-500' : 'bg-brand'}`}
+                style={{ width: `${fillPct}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-t3 mt-1">
+              <span>{deal.current_claims} claimed</span>
+              <span>{isSoldOut ? 'Sold out' : `${spotsLeft} left`}</span>
             </div>
           </div>
         )}
 
         {/* City */}
-        <p className="text-[11px] text-t3 truncate">
+        <p className="text-[11px] text-t3 truncate mt-auto">
           📍 {deal.restaurant?.city ?? ''}
           {deal.available_days?.[0] !== 'all' && (
             <span className="ml-1">· {deal.available_days.join(', ')}</span>
@@ -381,6 +423,8 @@ function DealModal({
 }
 
 // ─── QrModal ─────────────────────────────────────────────────────────────
+const QR_CANVAS_ID = 'repeateats-qr-canvas';
+
 function QrModal({
   qrCode, dealTitle, onClose,
 }: {
@@ -388,57 +432,68 @@ function QrModal({
   dealTitle: string;
   onClose: () => void;
 }) {
+  const handleDownload = () => {
+    const canvas = document.getElementById(QR_CANVAS_ID) as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const url  = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `repeateats-${qrCode}.png`;
+    link.href = url;
+    link.click();
+  };
+
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[300px] p-7 text-center animate-[slideUp_0.22s_ease]">
+      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[310px] p-6 text-center animate-[slideUp_0.22s_ease]">
         {/* Success icon */}
         <div className="w-14 h-14 bg-brandlt rounded-full flex items-center justify-center mx-auto mb-3">
           <IconCircleCheck size={28} className="text-brand" />
         </div>
         <h2 className="font-display text-[20px] font-bold mb-1">Deal Claimed!</h2>
-        <p className="text-[13px] text-t2 mb-5">{dealTitle}</p>
+        <p className="text-[13px] text-t2 mb-4 px-2 line-clamp-2">{dealTitle}</p>
 
-        {/* QR code visual — decorative grid matching the HTML prototype */}
-        <div className="bg-white border border-gray-200 rounded-[10px] p-4 inline-block mb-4">
-          {/* 7×7 dot grid representing a QR pattern */}
-          <div className="w-[148px] h-[148px] relative">
-            {/* Corner squares */}
-            <div className="absolute top-0 left-0 w-11 h-11 bg-brand rounded-sm" />
-            <div className="absolute top-1.5 left-1.5 w-8 h-8 bg-white rounded-sm" />
-            <div className="absolute top-3 left-3 w-5 h-5 bg-brand rounded-sm" />
-            <div className="absolute top-0 right-0 w-11 h-11 bg-tx rounded-sm" />
-            <div className="absolute top-1.5 right-1.5 w-8 h-8 bg-white rounded-sm" />
-            <div className="absolute top-3 right-3 w-5 h-5 bg-tx rounded-sm" />
-            <div className="absolute bottom-0 left-0 w-11 h-11 bg-tx rounded-sm" />
-            <div className="absolute bottom-1.5 left-1.5 w-8 h-8 bg-white rounded-sm" />
-            <div className="absolute bottom-3 left-3 w-5 h-5 bg-tx rounded-sm" />
-            {/* Center dots */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="grid grid-cols-4 gap-1">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className={`w-2.5 h-2.5 rounded-[1px] ${i % 3 === 0 ? 'bg-tx' : 'bg-transparent'}`} />
-                ))}
-              </div>
-            </div>
+        {/* Real scannable QR code */}
+        <div className="flex justify-center mb-4">
+          <div className="bg-white p-3 rounded-[12px] border border-gray-100 shadow-sm inline-block">
+            <QRCode
+              id={QR_CANVAS_ID}
+              value={qrCode}
+              size={180}
+              bgColor="#ffffff"
+              fgColor="#E85D04"
+              qrStyle="dots"
+              eyeRadius={8}
+            />
           </div>
         </div>
 
-        {/* The actual code */}
-        <p className="font-display text-[26px] font-extrabold tracking-widest text-brand mb-1">{qrCode}</p>
-        <p className="text-[12px] text-t3 mb-4">Show this code to restaurant staff</p>
+        {/* Claim code */}
+        <p className="font-display text-[28px] font-extrabold tracking-[0.15em] text-brand mb-0.5">
+          {qrCode}
+        </p>
+        <p className="text-[12px] text-t3 mb-4">Show this to restaurant staff at checkout</p>
 
         {/* Info banner */}
-        <div className="bg-brandlt rounded-brands px-3 py-2.5 text-[12px] text-t2 leading-relaxed mb-5 flex items-start gap-1.5">
+        <div className="bg-brandlt rounded-brands px-3 py-2 text-[12px] text-t2 leading-relaxed mb-4 flex items-start gap-1.5">
           <IconInfoCircle size={13} className="text-brand flex-shrink-0 mt-0.5" />
-          <span>Show to restaurant staff at checkout to redeem your deal</span>
+          <span>Valid for one visit · Single use code</span>
         </div>
 
-        <button
-          onClick={onClose}
-          className="w-full h-10 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors"
-        >
-          Done
-        </button>
+        {/* Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleDownload}
+            className="flex-1 h-10 border border-[var(--bd2)] rounded-brands text-[13px] font-semibold text-t2 hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-1.5"
+          >
+            <IconDownload size={14} /> Save
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 h-10 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors text-[13px]"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </Overlay>
   );
@@ -575,6 +630,26 @@ export default function CustomerPage() {
     return () => subscription.unsubscribe();
   }, [supabase, router]);
 
+  // ── Live claim counts via Supabase Realtime ──────────────────
+  // Overrides deal.current_claims so progress bars update for all watchers.
+  const [liveClaimCounts, setLiveClaimCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!authChecked) return;
+    const channel = supabase
+      .channel('deals-live')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'deals' },
+        (payload) => {
+          const updated = payload.new as { id: string; current_claims: number };
+          setLiveClaimCounts((prev) => ({ ...prev, [updated.id]: updated.current_claims }));
+        }
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [supabase, authChecked]);
+
   // ── Data hooks ──────────────────────────────────────────────
   const { deals, loading: dealsLoading, error: dealsError, refetch } = useDeals({
     category: category === 'all' ? undefined : category,
@@ -587,17 +662,26 @@ export default function CustomerPage() {
   });
   const { claimDeal, loading: claiming } = useClaims();
 
+  // Merge Realtime overrides into the deals from the API
+  const dealsWithLive = useMemo(
+    () => deals.map((d) => ({
+      ...d,
+      current_claims: liveClaimCounts[d.id] ?? d.current_claims,
+    })),
+    [deals, liveClaimCounts]
+  );
+
   // ── Client-side search filter ────────────────────────────────
   // Runs entirely in the browser — no network call on every keystroke
   const filteredDeals = useMemo(() => {
-    if (!search.trim()) return deals;
+    if (!search.trim()) return dealsWithLive;
     const q = search.toLowerCase();
-    return deals.filter((d) =>
+    return dealsWithLive.filter((d) =>
       d.title.toLowerCase().includes(q) ||
       (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
       (d.description ?? '').toLowerCase().includes(q)
     );
-  }, [deals, search]);
+  }, [dealsWithLive, search]);
 
   const filteredRests = useMemo(() => {
     if (!search.trim()) return restaurants;
