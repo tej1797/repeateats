@@ -3,7 +3,8 @@
 // Landing page — dark theme, world-class design.
 // Client component needed for Intersection Observer count-up + scroll effects.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -121,10 +122,29 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
   );
 }
 
+// ─── OAuth redirect catcher ───────────────────────────────────────────────────
+// Suspense boundary required by Next.js 14 for useSearchParams in a page.
+// If Supabase drops ?code= on the homepage instead of /auth/callback,
+// this silently forwards it to the correct route handler.
+
+function OAuthRedirectCatcher() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const code  = searchParams.get('code');
+    const error = searchParams.get('error');
+    if (code)  { router.replace(`/auth/callback?code=${code}`);  return; }
+    if (error) { router.replace(`/customer/login?error=${error}`); }
+  }, [searchParams, router]);
+
+  return null;
+}
+
 // ─── Main landing page ────────────────────────────────────────────────────────
 
 export default function LandingPage() {
-  const portalsRef = useRef<HTMLElement>(null);
+  const portalsRef   = useRef<HTMLElement>(null);
   const [scrolled, setScrolled] = useState(false);
 
   // Fade out scroll indicator after user scrolls past 80px
@@ -146,6 +166,11 @@ export default function LandingPage() {
       fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
       overflowX: 'hidden',
     }}>
+
+      {/* OAuth code forwarder — no-op unless ?code= is present */}
+      <Suspense fallback={null}>
+        <OAuthRedirectCatcher />
+      </Suspense>
 
       {/* ── NAV ────────────────────────────────────────────────────────────── */}
       <nav style={{
