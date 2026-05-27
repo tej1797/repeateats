@@ -8,10 +8,29 @@ export interface User {
   id: string;           // UUID — matches auth.users(id)
   email: string;
   name: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
   city: string;
   radius_km: number;
   role: 'customer' | 'restaurant_owner' | 'influencer';
+  favourite_cuisine: string | null;
+  total_claimed: number;
+  total_saved_cents: number;
+  member_since: string | null;
+  is_repeat_plus: boolean;
+  repeat_plus_since: string | null;
+  streak_days: number;
+  last_claim_date: string | null;
   created_at: string;   // ISO 8601 timestamp string from Postgres
+}
+
+// ─── Google Review ────────────────────────────────────────────
+export interface GoogleReview {
+  author_name: string;
+  rating: number;
+  text: string;
+  relative_time_description: string;
+  profile_photo_url?: string;
 }
 
 // ─── Restaurant ───────────────────────────────────────────────
@@ -39,6 +58,13 @@ export interface Restaurant {
   open_to_collabs: boolean;
   rating: number;
   review_count: number;
+  // Google Places data — populated by syncRestaurantReviews(), refreshed every 24h
+  google_place_id?:     string | null;
+  google_rating?:       number | null;
+  google_review_count?: number | null;
+  google_reviews?:      GoogleReview[] | null;
+  google_photos?:       Record<string, unknown>[] | null;
+  last_synced_at?:      string | null;
   created_at: string;
 }
 

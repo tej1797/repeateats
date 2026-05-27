@@ -12,8 +12,11 @@ import {
   IconSearch, IconMapPin, IconX, IconCircleCheck,
   IconInfoCircle, IconUser, IconBuildingStore, IconShoppingBag,
   IconTruck, IconRefresh, IconDownload,
+  IconCrown, IconTicket, IconChartBar, IconLogout,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import StarRating from '@/components/StarRating';
+import ReviewsSection from '@/components/ReviewsSection';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
@@ -103,6 +106,124 @@ function DealTypeBadge({ types }: { types: string[] }) {
   );
 }
 
+// ─── ProfileDrawer ────────────────────────────────────────────────────────
+// Slide-out sidebar (inspired by Uber Eats) — opens when user taps avatar.
+function ProfileDrawer({
+  user,
+  onClose,
+  onSignOut,
+}: {
+  user: User;
+  onClose: () => void;
+  onSignOut: () => void;
+}) {
+  const avatarUrl  = user.user_metadata?.avatar_url  as string | undefined;
+  const fullName   = (user.user_metadata?.full_name ?? user.user_metadata?.name ?? '') as string;
+  const displayName = fullName || (user.email?.split('@')[0] ?? 'You');
+  const initials    = displayName.charAt(0).toUpperCase();
+
+  // Prevent body scroll while drawer is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Drawer panel — slides in from right */}
+      <div
+        className="relative w-[320px] max-w-[90vw] h-full bg-surface flex flex-col shadow-2xl"
+        style={{ animation: 'slideInRight 0.25s ease' }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-t2 hover:text-tx transition-colors"
+        >
+          <IconX size={16} />
+        </button>
+
+        {/* User header */}
+        <div className="px-5 pt-8 pb-5 border-b border-[var(--bd)]">
+          <div className="flex items-center gap-3 mb-3">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt={displayName} className="w-14 h-14 rounded-full object-cover border-2 border-[var(--bd)]" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-brand flex items-center justify-center border-2 border-[var(--bg)]">
+                <span className="font-display text-[24px] font-bold text-white">{initials}</span>
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-[16px] truncate">{displayName}</p>
+              <p className="text-[12px] text-t2 truncate">{user.email}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          <Link
+            href="/customer"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
+          >
+            <span className="text-[18px]">🏠</span> Browse Deals
+          </Link>
+          <Link
+            href="/profile"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
+          >
+            <IconUser size={18} className="text-t2" /> My Profile
+          </Link>
+          <Link
+            href="/profile"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
+          >
+            <IconTicket size={18} className="text-t2" /> My Claims
+          </Link>
+          <Link
+            href="/profile"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
+          >
+            <IconChartBar size={18} className="text-t2" /> Savings Dashboard
+          </Link>
+
+          <div className="my-2 border-t border-[var(--bd)]" />
+
+          <Link
+            href="/repeat-plus"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold hover:bg-surface2 transition-colors"
+            style={{ color: '#F59E0B' }}
+          >
+            <IconCrown size={18} style={{ color: '#F59E0B' }} /> Upgrade to RepEAT+
+          </Link>
+        </nav>
+
+        {/* Footer */}
+        <div className="px-3 py-4 border-t border-[var(--bd)]">
+          <button
+            onClick={onSignOut}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-brands text-[14px] font-semibold text-t2 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <IconLogout size={16} /> Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── DealCard ─────────────────────────────────────────────────────────────
 function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => void }) {
   const fillPct   = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
@@ -127,13 +248,24 @@ function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => 
           alt={deal.restaurant?.name ?? ''}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        {/* Dark gradient so text is readable */}
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 30%, rgba(0,0,0,0.72) 100%)' }} />
+        {/* Stronger gradient so text is always readable */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.85) 100%)' }} />
 
-        {/* Deal type badge — top left */}
+        {/* Deal type badge — top left (larger, with blur) */}
         {deal.deal_types?.length > 0 && (
           <div className="absolute top-2 left-2">
-            <DealTypeBadge types={deal.deal_types} />
+            <span
+              className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full border capitalize"
+              style={{
+                background: 'rgba(255,255,255,0.18)',
+                backdropFilter: 'blur(8px)',
+                borderColor: 'rgba(255,255,255,0.35)',
+                color: 'white',
+              }}
+            >
+              {deal.deal_types[0]}
+              {deal.deal_types.length > 1 && <span>+{deal.deal_types.length - 1}</span>}
+            </span>
           </div>
         )}
 
@@ -144,12 +276,23 @@ function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => 
           </span>
         )}
 
-        {/* Restaurant name + discount overlaid on bottom */}
+        {/* Restaurant name pill + discount at bottom */}
         <div className="absolute bottom-2.5 left-3 right-3">
-          <p className="text-white/70 text-[11px] truncate leading-none mb-0.5">
-            {deal.restaurant?.name ?? 'Restaurant'}
-          </p>
-          <p className="font-display text-[22px] font-extrabold text-white leading-none drop-shadow-sm">
+          <div className="mb-1 inline-flex">
+            <span
+              className="text-[13px] font-bold text-white truncate max-w-full"
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                backdropFilter: 'blur(4px)',
+                padding: '2px 8px',
+                borderRadius: 100,
+                textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+              }}
+            >
+              {deal.restaurant?.name ?? 'Restaurant'}
+            </span>
+          </div>
+          <p className="font-display text-[22px] font-extrabold text-white leading-none drop-shadow-sm" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}>
             {deal.discount_value ?? '—'}
           </p>
         </div>
@@ -158,9 +301,16 @@ function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => 
       {/* Card body */}
       <div className="p-3.5 flex flex-col flex-1">
         {/* Deal title */}
-        <h3 className="font-body font-bold text-[14px] leading-snug mb-2.5 line-clamp-2 flex-1">
+        <h3 className="font-body font-bold text-[14px] leading-snug mb-1.5 line-clamp-2 flex-1">
           {deal.title}
         </h3>
+
+        {/* Star rating from restaurant */}
+        {(deal.restaurant?.rating ?? 0) > 0 && (
+          <div className="mb-2">
+            <StarRating rating={deal.restaurant!.rating} size="sm" />
+          </div>
+        )}
 
         {/* Progress — unlimited vs capped */}
         {deal.max_claims === null ? (
@@ -416,6 +566,11 @@ function DealModal({
               {claiming ? 'Claiming…' : 'Claim Deal'}
             </button>
           )}
+
+          {/* Google reviews — fetched live, shown below the CTA */}
+          {deal.restaurant?.id && (
+            <ReviewsSection restaurantId={deal.restaurant.id} />
+          )}
         </div>
       </div>
     </Overlay>
@@ -601,6 +756,7 @@ export default function CustomerPage() {
   const [qrCode,        setQrCode]        = useState<string | null>(null);
   const [showLocation,  setShowLocation]  = useState(false);
   const [showSignIn,    setShowSignIn]    = useState(false);
+  const [showDrawer,    setShowDrawer]    = useState(false);
   const [claimError,    setClaimError]    = useState<string | null>(null);
 
   // ── Auth state ──────────────────────────────────────────────
@@ -757,14 +913,37 @@ export default function CustomerPage() {
             <span>{city} · {radius} km</span>
           </button>
 
-          {/* User avatar / sign in */}
-          <button
-            onClick={() => user ? supabase.auth.signOut() : setShowSignIn(true)}
-            className="w-9 h-9 rounded-full bg-brandlt flex items-center justify-center flex-shrink-0 hover:bg-brand/20 transition-colors"
-            title={user ? `Signed in as ${user.email} — click to sign out` : 'Sign in'}
-          >
-            <IconUser size={16} className="text-brand" />
-          </button>
+          {/* Smart avatar — Google photo or initials; opens profile drawer */}
+          {user ? (
+            <button
+              onClick={() => setShowDrawer(true)}
+              className="relative flex-shrink-0 hover:opacity-90 transition-opacity"
+              title="Open profile"
+            >
+              {user.user_metadata?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.user_metadata.avatar_url as string}
+                  alt="Profile"
+                  className="w-9 h-9 rounded-full object-cover border-2 border-[var(--bd)]"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-brand flex items-center justify-center">
+                  <span className="text-white font-bold text-[14px]">
+                    {((user.user_metadata?.full_name ?? user.email ?? 'U') as string).charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowSignIn(true)}
+              className="w-9 h-9 rounded-full bg-brandlt flex items-center justify-center flex-shrink-0 hover:bg-brand/20 transition-colors"
+              title="Sign in"
+            >
+              <IconUser size={16} className="text-brand" />
+            </button>
+          )}
         </div>
 
         {/* Tab switcher */}
@@ -931,6 +1110,38 @@ export default function CustomerPage() {
           onSuccess={(u) => { setUser(u); setShowSignIn(false); }}
         />
       )}
+
+      {/* ── Profile drawer ────────────────────────────────────────── */}
+      {showDrawer && user && (
+        <ProfileDrawer
+          user={user}
+          onClose={() => setShowDrawer(false)}
+          onSignOut={async () => {
+            setShowDrawer(false);
+            await supabase.auth.signOut();
+          }}
+        />
+      )}
+
+      {/* ── Mobile bottom nav ─────────────────────────────────────── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-surface border-t border-[var(--bd)] flex md:hidden">
+        {[
+          { href: '/customer',     icon: '🏠', label: 'Deals'   },
+          { href: '/customer',     icon: '🔍', label: 'Search',  action: () => document.querySelector<HTMLInputElement>('input[type=text]')?.focus() },
+          { href: '/profile',      icon: '🎟️',  label: 'Claims'  },
+          { href: '/profile',      icon: '👤', label: 'Profile' },
+        ].map(({ href, icon, label, action }) => (
+          <Link
+            key={label}
+            href={href}
+            onClick={action}
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 text-t2 hover:text-brand transition-colors"
+          >
+            <span className="text-[20px] leading-none">{icon}</span>
+            <span className="text-[10px] font-semibold">{label}</span>
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }
