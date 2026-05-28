@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -137,6 +137,28 @@ export default function CreatorSignupPage() {
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Instagram handle verification
+  const [igStatus, setIgStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid' | 'unknown'>('idle');
+  const [igFullName, setIgFullName] = useState<string | null>(null);
+  const igDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const raw = igHandle.replace(/^@+/, '').trim();
+    if (raw.length < 2) { setIgStatus('idle'); return; }
+    setIgStatus('checking');
+    if (igDebounce.current) clearTimeout(igDebounce.current);
+    igDebounce.current = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/verify-instagram?handle=${encodeURIComponent(raw)}`);
+        const json = await res.json() as { valid: boolean | null; full_name?: string | null };
+        if (json.valid === true)  { setIgStatus('valid');   setIgFullName(json.full_name ?? null); }
+        else if (json.valid === false) setIgStatus('invalid');
+        else                           setIgStatus('unknown');
+      } catch { setIgStatus('unknown'); }
+    }, 800);
+    return () => { if (igDebounce.current) clearTimeout(igDebounce.current); };
+  }, [igHandle]);
+
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const normaliseHandle = (v: string) => (v && !v.startsWith('@') ? `@${v}` : v);
 
@@ -160,7 +182,7 @@ export default function CreatorSignupPage() {
         password,
         options: {
           data: { full_name: name, role: 'influencer' },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/influencer`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (authErr) {
@@ -174,21 +196,27 @@ export default function CreatorSignupPage() {
       // 2. Create influencer profile row
       if (authData.user) {
         await supabase.from('influencers').upsert({
-          user_id:          authData.user.id,
-          instagram_handle: handle,
-          tiktok_handle:    ttHandle ? normaliseHandle(ttHandle) : null,
-          niche:            niches.join(', ') || null,
-          follower_range:   followerRange || null,
-          primary_platform: platform || null,
-          city:             city || null,
-          bio:              bio || null,
-          rating:           0,
-          total_collabs:    0,
+          user_id:             authData.user.id,
+          instagram_handle:    handle,
+          tiktok_handle:       ttHandle ? normaliseHandle(ttHandle) : null,
+          niche:               niches.join(', ') || null,
+          follower_range:      followerRange || null,
+          primary_platform:    platform || null,
+          city:                city || null,
+          bio:                 bio || null,
+          rating:              0,
+          total_collabs:       0,
+          instagram_verified:  igStatus === 'valid',
         }, { onConflict: 'user_id' });
       }
 
       setLoading(false);
-      router.push('/influencer/verify-email');
+      // If Supabase auto-confirmed (email confirmation disabled) → go straight to portal
+      if (authData.session) {
+        router.push('/influencer');
+      } else {
+        router.push('/influencer/verify-email');
+      }
     })();
   };
 
@@ -265,24 +293,55 @@ export default function CreatorSignupPage() {
                     </div>
                   : null} />
 
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <FloatField id="cr-ig" label="Instagram handle * (@yourusername)" value={igHandle}
                   onChange={(v) => setIgHandle(v.startsWith('@') ? v : v ? `@${v}` : '')}
                   right={<IconBrandInstagram size={18} className="text-pink-500" />}
-                  note="We'll verify this after signup" />
-                {/* IG card preview */}
+                  note="We'll verify this is a real account" />
+                {/* IG verification status */}
                 {igHandle.length > 1 && (
-                  <div className="ml-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-semibold"
-                    style={{ background: 'linear-gradient(135deg, #f58529, #dd2a7b, #8134af)', color: '#fff' }}>
-                    <IconBrandInstagram size={13} />
-                    {igHandle}
+                  <div>
+                    {igStatus === 'checking' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium"
+                        style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#9CA3AF' }}>
+                        <div className="w-3 h-3 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin" />
+                        Checking Instagram...
+                      </div>
+                    )}
+                    {igStatus === 'valid' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold"
+                        style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
+                        <IconCheck size={13} />
+                        Instagram profile found!{igFullName ? ` · ${igFullName}` : ''}
+                      </div>
+                    )}
+                    {igStatus === 'invalid' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold"
+                        style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>
+                        <IconBrandInstagram size={13} />
+                        Could not find this Instagram account
+                      </div>
+                    )}
+                    {igStatus === 'unknown' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium"
+                        style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
+                        <IconBrandInstagram size={13} />
+                        {igHandle} · We&apos;ll verify your profile after signup
+                      </div>
+                    )}
+                    {igStatus === 'idle' && (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-semibold"
+                        style={{ background: 'linear-gradient(135deg, #f58529, #dd2a7b, #8134af)', color: '#fff' }}>
+                        <IconBrandInstagram size={13} />
+                        {igHandle}
+                      </div>
+                    )}
                   </div>
                 )}
+                <FloatField id="cr-tt" label="TikTok handle (optional)" value={ttHandle}
+                  onChange={(v) => setTtHandle(v.startsWith('@') ? v : v ? `@${v}` : '')}
+                  right={<IconBrandTiktok size={18} className="text-gray-700" />} />
               </div>
-
-              <FloatField id="cr-tt" label="TikTok handle (optional)" value={ttHandle}
-                onChange={(v) => setTtHandle(v.startsWith('@') ? v : v ? `@${v}` : '')}
-                right={<IconBrandTiktok size={18} className="text-gray-700" />} />
             </div>
           )}
 

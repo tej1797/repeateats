@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export default function CreatorVerifyEmailPage() {
   const supabase = createClient();
+  const router   = useRouter();
   const [cooldown, setCooldown] = useState(0);
   const [resent,   setResent]   = useState(false);
   const [email,    setEmail]    = useState('');
@@ -14,6 +16,17 @@ export default function CreatorVerifyEmailPage() {
       if (session?.user?.email) setEmail(session.user.email);
     });
   }, [supabase]);
+
+  // Poll every 3 s — auto-redirect when user confirms email
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email_confirmed_at) {
+        router.push('/influencer');
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [supabase, router]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -25,7 +38,7 @@ export default function CreatorVerifyEmailPage() {
     if (!email || cooldown > 0) return;
     await supabase.auth.resend({ type: 'signup', email });
     setResent(true);
-    setCooldown(60);
+    setCooldown(30);
   }, [email, cooldown, supabase]);
 
   return (

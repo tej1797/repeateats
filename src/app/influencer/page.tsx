@@ -144,8 +144,8 @@ export default function InfluencerPage() {
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
       <header className="bg-surface border-b border-[var(--bd)] sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+          <a href="/influencer" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-brands bg-[#FDF4FF] flex items-center justify-center">
               <IconDeviceMobileStar size={18} style={{ color: '#7E22CE' }} />
             </div>
@@ -153,7 +153,7 @@ export default function InfluencerPage() {
               Rep<span className="text-brand">EAT</span>
               <span className="ml-1.5 text-[13px] font-semibold text-t3 tracking-normal">Creator</span>
             </div>
-          </div>
+          </a>
           <div className="flex items-center gap-3">
             <a href="/influencer/profile"
               className="text-[13px] font-semibold transition-colors hover:text-tx"

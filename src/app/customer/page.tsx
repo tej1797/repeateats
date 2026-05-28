@@ -1005,10 +1005,10 @@ export default function CustomerPage() {
 
       {/* ── Sticky nav ────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-surface border-b border-[var(--bd)] shadow-sm">
-        <div className="max-w-[1100px] mx-auto px-5 py-2.5 flex items-center gap-3">
+        <div className="max-w-[1100px] mx-auto px-5 h-16 flex items-center gap-3">
 
           {/* Logo */}
-          <Link href="/" className="font-display text-[22px] font-extrabold tracking-tight leading-none flex-shrink-0">
+          <Link href="/customer" className="font-display text-[22px] font-extrabold tracking-tight leading-none flex-shrink-0">
             Rep<span className="text-brand">EAT</span>
           </Link>
 

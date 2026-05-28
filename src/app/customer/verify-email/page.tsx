@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 // ─── Animated envelope ────────────────────────────────────────────────────────
@@ -37,17 +38,29 @@ function Envelope({ sent }: { sent: boolean }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function VerifyEmailPage() {
   const supabase = createClient();
+  const router   = useRouter();
 
-  const [cooldown,   setCooldown]   = useState(0);   // seconds remaining
-  const [resent,     setResent]     = useState(false);
-  const [email,      setEmail]      = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const [resent,   setResent]   = useState(false);
+  const [email,    setEmail]    = useState('');
 
-  // Try to get the pending email from Supabase session
+  // Get the pending email from session
   useEffect(() => {
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email);
     });
   }, [supabase]);
+
+  // Poll every 3 s — if user has confirmed their email, redirect them to the portal
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email_confirmed_at) {
+        router.push('/customer');
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [supabase, router]);
 
   // Countdown timer
   useEffect(() => {
@@ -60,7 +73,7 @@ export default function VerifyEmailPage() {
     if (!email || cooldown > 0) return;
     await supabase.auth.resend({ type: 'signup', email });
     setResent(true);
-    setCooldown(60);
+    setCooldown(30);
   }, [email, cooldown, supabase]);
 
   return (

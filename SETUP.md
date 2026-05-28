@@ -293,6 +293,29 @@ ALTER TABLE public.collabs
 
 ---
 
+## 9. Supabase Auth Settings (Required)
+
+In **Supabase Dashboard → Authentication → Settings**:
+
+1. **Enable email confirmations** toggle → **ON**
+   (If OFF, users are auto-confirmed and no email is sent — that's also fine for testing)
+
+2. **JWT expiry** → set to `604800` (7 days)
+   This keeps users logged in for 7 days of inactivity instead of the default 1 hour.
+
+3. **Site URL** → `https://repeateats.ca`
+
+4. **Redirect URLs** → add:
+   - `https://repeateats.ca/auth/callback`
+   - `http://localhost:3000/auth/callback`
+
+For production Instagram verification, apply for:
+**Meta for Developers → Instagram Basic Display API**
+URL: developers.facebook.com/apps
+Gives you: verified profile info, follower count, media count.
+
+---
+
 ## Project Structure (after this setup)
 
 ```

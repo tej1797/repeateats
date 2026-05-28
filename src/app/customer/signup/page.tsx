@@ -192,7 +192,7 @@ export default function CustomerSignupPage() {
     // Final submit
     void (async () => {
       setLoading(true);
-      const { error: authErr } = await supabase.auth.signUp({
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -207,7 +207,12 @@ export default function CustomerSignupPage() {
           : authErr.message);
         return;
       }
-      router.push('/customer/verify-email');
+      // Auto-confirm enabled → session exists, go straight to portal
+      if (authData?.session) {
+        router.push('/customer');
+      } else {
+        router.push('/customer/verify-email');
+      }
     })();
   };
 

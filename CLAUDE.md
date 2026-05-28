@@ -135,11 +135,32 @@ npx vercel env add GOOGLE_PLACES_API_KEY
 npx vercel --prod
 ```
 
+## Component Library
+- `src/components/RepEATLogo.tsx` — logo with portal-specific stroke; props: `portal`, `size`, `onClick`
+- `src/components/ReviewsSection.tsx` — Google reviews display
+- `src/components/StarRating.tsx` — reusable star rating
+- `src/app/api/verify-instagram/route.ts` — GET `?handle=` → `{ valid, full_name, followers }`
+
+## Recent Fixes
+- Email verification: both signup pages handle auto-confirm (`data.session` → direct redirect)
+  and email-confirm (`!session` → verify-email page). Verify-email pages poll every 3s and
+  auto-redirect when `email_confirmed_at` is set. Resend countdown reduced to 30s.
+- Instagram verification: `/api/verify-instagram` fetches public IG page; influencer signup shows
+  live status (checking / valid / invalid / unknown) as user types handle (800ms debounce).
+- RepEATLogo component: portal-specific `-webkit-text-stroke` so "Rep" is visible on white cards.
+- Session persistence: `persistSession:true`, `autoRefreshToken:true`, `storageKey:'repeateats-auth'`
+- Logo navigation: customer → /customer, restaurant dashboard → /restaurant, influencer → /influencer
+- Header height: all three portal headers standardized to 64px (h-16)
+
 ## Known Issues & Status
 - [x] Google OAuth always redirecting to /customer — FIXED (rp_portal cookie)
 - [x] Restaurant page infinite spinner — FIXED (getSession() + 5s timeout)
 - [x] Homepage flash after OAuth — FIXED (middleware no-redirect)
 - [x] Same-email multi-portal confusion — FIXED (role determined by DB rows)
+- [x] Verification email flow — FIXED (auto-confirm + polling + 30s countdown)
+- [x] Instagram verification — FIXED (/api/verify-instagram route)
+- [x] Session persistence — FIXED (persistSession + autoRefreshToken)
+- [x] Logo navigation — FIXED (portals link to themselves, not homepage)
 - [ ] Google Places API key not set in Vercel production env
 - [ ] QR codes are text strings, not scannable images (need `qrcode` npm package)
 - [ ] Stripe payments not implemented

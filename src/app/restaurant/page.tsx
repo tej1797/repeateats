@@ -1435,8 +1435,8 @@ function Dashboard({ restaurant, onSignOut, supabase }: {
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Sticky header */}
       <header className="bg-surface border-b border-[var(--bd)] sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+          <a href="/restaurant" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-brands bg-[#ECFDF5] flex items-center justify-center">
               <IconBuildingStore size={18} style={{ color: '#065F46' }} />
             </div>
@@ -1446,7 +1446,7 @@ function Dashboard({ restaurant, onSignOut, supabase }: {
               </div>
               <div className="text-[11px] text-t2 leading-none mt-0.5">{restaurant.name}</div>
             </div>
-          </div>
+          </a>
           <button
             onClick={onSignOut}
             className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors"
