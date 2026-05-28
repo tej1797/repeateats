@@ -1,38 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-function Envelope({ sent }: { sent: boolean }) {
-  return (
-    <div
-      className="relative w-24 h-24 mx-auto mb-6 transition-all duration-500"
-      style={{ transform: sent ? 'scale(1.1)' : 'scale(1)' }}
-    >
-      <div
-        className="w-full h-full rounded-2xl flex items-center justify-center text-5xl"
-        style={{
-          background: sent ? 'linear-gradient(135deg, #FFF7F0, #FFE8D4)' : '#F9FAFB',
-          border: `2px solid ${sent ? '#FFB380' : '#E5E7EB'}`,
-          boxShadow: sent ? '0 0 40px rgba(232,93,4,0.2)' : undefined,
-          transition: 'all 0.5s ease',
-        }}
-      >
-        {sent ? '📨' : '✉️'}
-      </div>
-      {sent && (
-        <div
-          className="absolute inset-0 rounded-2xl animate-ping"
-          style={{ border: '2px solid rgba(232,93,4,0.3)' }}
-        />
-      )}
-    </div>
-  );
-}
-
-function VerifyEmailContent() {
+function RestaurantVerifyEmailContent() {
   const supabase = createClient();
   const router   = useRouter();
   const searchParams = useSearchParams();
@@ -42,24 +14,22 @@ function VerifyEmailContent() {
   const [email,    setEmail]    = useState('');
 
   useEffect(() => {
-    // Try URL param first (passed from signup page, reliable before email is confirmed)
     const emailParam = searchParams.get('email');
     if (emailParam) {
       setEmail(emailParam);
       return;
     }
-    // Fallback: read from session (works if Supabase auto-confirmed)
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email);
     });
   }, [supabase, searchParams]);
 
-  // Poll every 3 s — if user has confirmed their email, redirect them to the portal
+  // Poll every 3 s — redirect once email is confirmed
   useEffect(() => {
     const interval = setInterval(async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email_confirmed_at) {
-        router.push('/customer');
+        router.push('/restaurant');
       }
     }, 3000);
     return () => clearInterval(interval);
@@ -78,6 +48,8 @@ function VerifyEmailContent() {
     setCooldown(30);
   }, [email, cooldown, supabase]);
 
+  const GREEN = '#065F46';
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
@@ -87,7 +59,7 @@ function VerifyEmailContent() {
         className="pointer-events-none absolute"
         style={{
           width: 500, height: 500, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(232,93,4,0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(6,95,70,0.12) 0%, transparent 70%)',
           top: '20%', left: '50%', transform: 'translateX(-50%)',
           filter: 'blur(60px)',
         }}
@@ -95,42 +67,50 @@ function VerifyEmailContent() {
 
       <div
         className="relative w-full max-w-[420px] rounded-2xl p-8 text-center"
-        style={{ background: '#fff', borderTop: '4px solid #E85D04', boxShadow: '0 25px 60px rgba(0,0,0,0.45)' }}
+        style={{ background: '#fff', borderTop: `4px solid ${GREEN}`, boxShadow: '0 25px 60px rgba(0,0,0,0.45)' }}
       >
         <div className="font-display text-[24px] font-extrabold tracking-tight leading-none mb-6">
           Rep<span style={{ color: '#E85D04' }}>EAT</span>
         </div>
 
-        <Envelope sent={resent} />
+        {/* Envelope */}
+        <div className="relative w-24 h-24 mx-auto mb-6">
+          <div
+            className="w-full h-full rounded-2xl flex items-center justify-center text-5xl transition-all duration-500"
+            style={{
+              background: resent ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)' : '#F9FAFB',
+              border: `2px solid ${resent ? '#6EE7B7' : '#E5E7EB'}`,
+              boxShadow: resent ? '0 0 40px rgba(6,95,70,0.2)' : undefined,
+            }}
+          >
+            {resent ? '📨' : '✉️'}
+          </div>
+          {resent && (
+            <div
+              className="absolute inset-0 rounded-2xl animate-ping"
+              style={{ border: `2px solid rgba(6,95,70,0.3)` }}
+            />
+          )}
+        </div>
 
-        <h1 className="text-[22px] font-extrabold text-gray-900 mb-2">
-          Check your inbox
-        </h1>
-        <p className="text-[14px] text-gray-500 leading-relaxed mb-1">
-          We sent a verification link to
-        </p>
-        {email && (
-          <p className="text-[15px] font-semibold text-gray-800 mb-4">{email}</p>
-        )}
+        <h1 className="text-[22px] font-extrabold text-gray-900 mb-2">Check your inbox</h1>
+        <p className="text-[14px] text-gray-500 mb-1">We sent a verification link to</p>
+        {email && <p className="text-[15px] font-semibold text-gray-800 mb-4">{email}</p>}
         <p className="text-[13px] text-gray-400 mb-6">
-          Click the link in the email to activate your account and start claiming deals.
+          Click the link to activate your restaurant account and set up your listing.
         </p>
 
         <button
           onClick={handleResend}
           disabled={cooldown > 0 || !email}
-          className="w-full h-12 rounded-xl font-bold text-[15px] flex items-center justify-center transition-all duration-200 disabled:cursor-not-allowed"
+          className="w-full h-12 rounded-xl font-bold text-[15px] flex items-center justify-center transition-all disabled:cursor-not-allowed"
           style={{
-            background: cooldown > 0 ? '#F9FAFB' : resent ? '#ECFDF5' : '#E85D04',
-            color: cooldown > 0 ? '#9CA3AF' : resent ? '#16a34a' : '#fff',
+            background: cooldown > 0 ? '#F9FAFB' : resent ? '#ECFDF5' : GREEN,
+            color: cooldown > 0 ? '#9CA3AF' : resent ? GREEN : '#fff',
             border: cooldown > 0 || resent ? '1.5px solid #E5E7EB' : 'none',
           }}
         >
-          {cooldown > 0
-            ? `Resend in ${cooldown}s`
-            : resent
-            ? 'Email sent! ✓'
-            : 'Resend verification email'}
+          {cooldown > 0 ? `Resend in ${cooldown}s` : resent ? 'Email sent! ✓' : 'Resend verification email'}
         </button>
 
         <div
@@ -140,37 +120,29 @@ function VerifyEmailContent() {
           <p className="text-[12px] font-semibold text-gray-500 mb-2">Can&apos;t find the email?</p>
           {[
             'Check your spam or junk folder',
-            'Make sure you used the right email address',
-            'Wait a minute — it can take a few seconds',
+            'Make sure you entered the right email',
+            'It can take a minute to arrive',
           ].map((tip) => (
             <p key={tip} className="text-[12px] text-gray-400 flex items-start gap-2">
-              <span style={{ color: '#E85D04' }}>•</span> {tip}
+              <span style={{ color: GREEN }}>•</span> {tip}
             </p>
           ))}
         </div>
 
         <div className="mt-5 flex items-center justify-center gap-4 text-[13px]" style={{ color: '#9CA3AF' }}>
-          <Link href="/customer/login" className="hover:underline hover:text-gray-600 transition-colors">
-            Sign in
-          </Link>
+          <a href="/restaurant" className="hover:underline hover:text-gray-600 transition-colors">Sign in</a>
           <span>·</span>
-          <Link href="/customer/signup" className="hover:underline hover:text-gray-600 transition-colors">
-            Try a different email
-          </Link>
-          <span>·</span>
-          <Link href="/" className="hover:underline hover:text-gray-600 transition-colors">
-            Home
-          </Link>
+          <a href="/" className="hover:underline hover:text-gray-600 transition-colors">Home</a>
         </div>
       </div>
     </div>
   );
 }
 
-export default function VerifyEmailPage() {
+export default function RestaurantVerifyEmailPage() {
   return (
     <Suspense>
-      <VerifyEmailContent />
+      <RestaurantVerifyEmailContent />
     </Suspense>
   );
 }

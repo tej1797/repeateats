@@ -215,7 +215,7 @@ export default function CreatorSignupPage() {
       if (authData.session) {
         router.push('/influencer');
       } else {
-        router.push('/influencer/verify-email');
+        router.push(`/influencer/verify-email?email=${encodeURIComponent(email)}`);
       }
     })();
   };

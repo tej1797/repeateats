@@ -1,21 +1,30 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export default function CreatorVerifyEmailPage() {
+function CreatorVerifyEmailContent() {
   const supabase = createClient();
   const router   = useRouter();
+  const searchParams = useSearchParams();
+
   const [cooldown, setCooldown] = useState(0);
   const [resent,   setResent]   = useState(false);
   const [email,    setEmail]    = useState('');
 
   useEffect(() => {
+    // Try URL param first (passed from signup page, reliable before email is confirmed)
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setEmail(emailParam);
+      return;
+    }
+    // Fallback: read from session (works if Supabase auto-confirmed)
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) setEmail(session.user.email);
     });
-  }, [supabase]);
+  }, [supabase, searchParams]);
 
   // Poll every 3 s — auto-redirect when user confirms email
   useEffect(() => {
@@ -112,5 +121,13 @@ export default function CreatorVerifyEmailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CreatorVerifyEmailPage() {
+  return (
+    <Suspense>
+      <CreatorVerifyEmailContent />
+    </Suspense>
   );
 }

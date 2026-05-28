@@ -462,10 +462,12 @@ function friendlyRestaurantError(msg: string) {
 function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [confirm,  setConfirm]  = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [btnState, setBtnState] = useState<'idle'|'loading'|'success'>('idle');
   const [error,    setError]    = useState('');
   const [showPw,   setShowPw]   = useState(false);
+  const [showConf, setShowConf] = useState(false);
   const [cursor,   setCursor]   = useState({ x: 200, y: 200 });
   const leftRef = useRef<HTMLDivElement>(null);
 
@@ -482,14 +484,36 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSignUp && password !== confirm) {
+      setError("Passwords don't match");
+      return;
+    }
     setBtnState('loading'); setError('');
-    const fn = isSignUp
-      ? supabase.auth.signUp({ email, password })
-      : supabase.auth.signInWithPassword({ email, password });
-    const { error: authErr } = await fn;
-    if (authErr) { setBtnState('idle'); setError(friendlyRestaurantError(authErr.message)); return; }
-    setBtnState('success');
-    // Success → onAuthStateChange in the parent handles view transition
+
+    if (isSignUp) {
+      const { data, error: authErr } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { role: 'restaurant' },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (authErr) { setBtnState('idle'); setError(friendlyRestaurantError(authErr.message)); return; }
+      setBtnState('success');
+      // If Supabase auto-confirmed the email, session exists → onAuthStateChange handles it
+      // Otherwise redirect to verify-email page
+      if (!data.session) {
+        setTimeout(() => {
+          window.location.href = `/restaurant/verify-email?email=${encodeURIComponent(email)}`;
+        }, 600);
+      }
+    } else {
+      const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+      if (authErr) { setBtnState('idle'); setError(friendlyRestaurantError(authErr.message)); return; }
+      setBtnState('success');
+      // Success → onAuthStateChange in the parent handles view transition
+    }
   };
 
   const handleGoogle = async () => {
@@ -574,14 +598,30 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
                 {showPw ? <IconX size={17} /> : <IconSearch size={17} />}
               </button>
             </div>
+            {isSignUp && (
+              <div className="relative">
+                <input type={showConf ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm password" required
+                  className="w-full h-12 pl-4 pr-12 rounded-xl text-[15px] outline-none transition-all"
+                  style={{ border: '1.5px solid #E5E7EB', background: '#FAFAFA' }}
+                  onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(6,95,70,0.1)`; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.boxShadow = 'none'; }}
+                />
+                <button type="button" onClick={() => setShowConf((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showConf ? <IconX size={17} /> : <IconSearch size={17} />}
+                </button>
+              </div>
+            )}
+            {confirm.length > 0 && confirm !== password && (
+              <p className="text-[12px] text-red-500 ml-1">Passwords don&apos;t match</p>
+            )}
             {error && <div className="px-4 py-3 rounded-xl text-[13px]" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>{error}</div>}
-            <button type="submit" disabled={btnState !== 'idle'}
-              className="w-full h-12 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 transition-all"
+            <button type="submit" disabled={btnState !== 'idle' || (isSignUp && (password !== confirm || password.length < 6))}
+              className="w-full h-12 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 transition-all disabled:opacity-60"
               style={{ background: btnState === 'success' ? '#16a34a' : GREEN }}>
               {btnState === 'loading' && <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
               {btnState === 'idle' && (isSignUp ? 'Create free account' : 'Sign in')}
-              {btnState === 'loading' && 'Signing you in...'}
-              {btnState === 'success' && 'Welcome! 🎉'}
+              {btnState === 'loading' && (isSignUp ? 'Creating account...' : 'Signing you in...')}
+              {btnState === 'success' && (isSignUp ? 'Account created! Check email ✉️' : 'Welcome! 🎉')}
             </button>
           </form>
 
