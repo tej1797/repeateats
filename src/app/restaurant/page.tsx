@@ -517,15 +517,9 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
-    // Set rp_portal cookie BEFORE the OAuth redirect so the callback knows where to go
-    await fetch('/api/auth/set-portal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ portal: 'restaurant' }),
-    });
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback/restaurant` },
     });
   };
 

@@ -799,7 +799,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/customer` },
+      options: { redirectTo: `${window.location.origin}/auth/callback/customer` },
     });
   };
 

@@ -166,14 +166,9 @@ export default function CustomerLoginPage() {
   };
 
   const handleGoogle = async () => {
-    await fetch('/api/auth/set-portal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ portal: 'customer' }),
-    });
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback/customer` },
     });
   };
 

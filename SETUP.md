@@ -305,9 +305,15 @@ In **Supabase Dashboard → Authentication → Settings**:
 
 3. **Site URL** → `https://repeateats.ca`
 
-4. **Redirect URLs** → add:
+4. **Redirect URLs** → add all of these:
    - `https://repeateats.ca/auth/callback`
+   - `https://repeateats.ca/auth/callback/customer`
+   - `https://repeateats.ca/auth/callback/restaurant`
+   - `https://repeateats.ca/auth/callback/influencer`
    - `http://localhost:3000/auth/callback`
+   - `http://localhost:3000/auth/callback/customer`
+   - `http://localhost:3000/auth/callback/restaurant`
+   - `http://localhost:3000/auth/callback/influencer`
 
 For production Instagram verification, apply for:
 **Meta for Developers → Instagram Basic Display API**
