@@ -166,9 +166,15 @@ export default function CustomerLoginPage() {
   };
 
   const handleGoogle = async () => {
+    // Store intended portal in a cookie BEFORE the OAuth redirect
+    await fetch('/api/auth/set-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal: 'customer' }),
+    });
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/customer` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
 

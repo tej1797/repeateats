@@ -113,11 +113,12 @@ interface WizardData {
 
 // Shape returned by /api/google-places
 interface PlaceSuggestion {
-  name: string; address: string; phone: string;
-  website: string; hours: string; rating: number; types: string[];
+  name: string; address: string; phone: string | null;
+  website: string | null; hours: string | null; rating: number | null;
+  types: string[]; place_id: string; source?: 'google' | 'database';
 }
 
-type ViewState = 'auth' | 'onboarding' | 'dashboard';
+type ViewState = 'loading' | 'auth' | 'onboarding' | 'dashboard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ export default function RestaurantPage() {
   // Single Supabase client instance for the lifetime of this page
   const supabase = useRef(createClient()).current;
 
-  const [view,        setView]       = useState<ViewState>('auth');
+  const [view,        setView]       = useState<ViewState>('loading');
   const [user,        setUser]       = useState<SupabaseUser | null>(null);
   const [restaurant,  setRestaurant] = useState<Restaurant | null>(null);
   const [step,        setStep]       = useState(1);
@@ -163,7 +164,7 @@ export default function RestaurantPage() {
   useEffect(() => {
     // Check existing session immediately (handles page refresh while logged in)
     void supabase.auth.getUser().then(async ({ data: { user: u } }) => {
-      if (!u) return;
+      if (!u) { setView('auth'); return; }
       setUser(u);
       await resolveRestaurant(u.id);
     });
@@ -296,6 +297,14 @@ export default function RestaurantPage() {
   }, [supabase]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  if (view === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0D0D0D' }}>
+        <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+      </div>
+    );
+  }
+
   if (view === 'auth') {
     return <AuthView supabase={supabase} />;
   }
@@ -458,9 +467,14 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
+    await fetch('/api/auth/set-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal: 'restaurant' }),
+    });
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/restaurant` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
 
@@ -561,45 +575,64 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
 function Step1Places({
   wizard, patch,
 }: { wizard: WizardData; patch: (p: Partial<WizardData>) => void }) {
-  const [query,    setQuery]    = useState(wizard.name);
-  const [results,  setResults]  = useState<PlaceSuggestion[]>([]);
+  const [query,     setQuery]     = useState(wizard.name);
+  const [results,   setResults]   = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState(!!wizard.name);
+  const [selected,  setSelected]  = useState(!!wizard.name);
+  const [source,    setSource]    = useState<'google' | 'database' | null>(null);
+  const [open,      setOpen]      = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef     = useRef<HTMLDivElement>(null);
 
-  // Debounce — fire the Places search 500 ms after the user stops typing
+  // Close dropdown when clicking outside
   useEffect(() => {
-    if (!query.trim() || selected) { setResults([]); return; }
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Debounce — fire search 300 ms after the user stops typing
+  useEffect(() => {
+    if (!query.trim() || selected) { setResults([]); setOpen(false); return; }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res  = await fetch(`/api/google-places?q=${encodeURIComponent(query)}`);
-        const json = await res.json() as { places?: PlaceSuggestion[] };
-        setResults(json.places ?? []);
-      } catch { setResults([]); }
+        const res  = await fetch(`/api/google-places?query=${encodeURIComponent(query)}`);
+        const json = await res.json() as { data?: PlaceSuggestion[] };
+        const list = json.data ?? [];
+        setResults(list);
+        setOpen(list.length > 0);
+      } catch { setResults([]); setOpen(false); }
       finally  { setSearching(false); }
-    }, 500);
+    }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, selected]);
 
   const handleSelect = (place: PlaceSuggestion) => {
-    // Try to match a known Ontario city in the address string
-    const matched = ONTARIO_CITIES.find((c) => place.address.includes(c));
-    // Fallback: second comma-segment of the address often contains the city
+    const matched     = ONTARIO_CITIES.find((c) => place.address.includes(c));
     const fallbackCity = place.address.split(',')[1]?.trim() ?? 'Toronto';
     patch({
-      name: place.name, address: place.address,
-      city: matched ?? fallbackCity,
-      phone: place.phone, website: place.website, placeRating: place.rating,
+      name:        place.name,
+      address:     place.address,
+      city:        matched ?? fallbackCity,
+      phone:       place.phone    ?? '',
+      website:     place.website  ?? '',
+      placeRating: place.rating   ?? 0,
     });
     setQuery(place.name);
     setResults([]);
+    setOpen(false);
     setSelected(true);
+    setSource(place.source ?? 'google');
   };
 
   const handleClear = () => {
-    setQuery(''); setSelected(false);
+    setQuery(''); setSelected(false); setSource(null);
     patch({ name: '', address: '', phone: '', website: '', placeRating: 0 });
   };
 
@@ -607,59 +640,77 @@ function Step1Places({
     <div>
       <h2 className="font-display text-xl font-bold mb-1">Find your restaurant</h2>
       <p className="text-t2 text-sm mb-5">
-        Search by name — we&apos;ll pull in your Google Business info automatically.
+        Search by name — we&apos;ll pull in your business info automatically.
       </p>
 
-      {/* Search box */}
-      <div className="relative mb-4">
-        <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3 pointer-events-none" />
+      {/* Search box + dropdown */}
+      <div className="relative mb-4" ref={wrapRef}>
+        <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3 pointer-events-none z-10" />
         <input
           type="text"
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setSelected(false); }}
-          placeholder="e.g. Pai Northern Thai Kitchen, Toronto"
+          onChange={(e) => { setQuery(e.target.value); setSelected(false); setSource(null); }}
+          onFocus={() => { if (results.length > 0) setOpen(true); }}
+          placeholder="e.g. Karahi Boys, Mississauga"
           className="w-full h-11 pl-9 pr-10 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all"
         />
         {searching && (
-          <IconLoader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-t3 animate-spin" />
+          <IconLoader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-t3 animate-spin z-10" />
         )}
         {!searching && (query || selected) && (
-          <button onClick={handleClear} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-t3 hover:text-tx">
+          <button onClick={handleClear} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10">
             <IconX size={16} />
           </button>
         )}
+
+        {/* Dropdown */}
+        {open && results.length > 0 && (
+          <ul className="absolute top-full left-0 right-0 mt-1 border border-[var(--bd2)] rounded-brands overflow-hidden shadow-brand z-50 bg-surface">
+            {results.map((r, i) => (
+              <li key={`${r.place_id ?? r.name}-${i}`}>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(r); }}
+                  className="w-full text-left px-4 py-3 hover:bg-surface2 transition-colors border-b border-[var(--bd)] last:border-0"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm text-tx">{r.name}</span>
+                    {r.source === 'database' ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 flex-shrink-0">In RepEAT</span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 flex-shrink-0">Google Maps</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-t2 mt-0.5 truncate">{r.address}</div>
+                  {r.rating != null && r.rating > 0 && (
+                    <div className="text-xs text-t3 mt-0.5">
+                      <IconStar size={11} className="inline mr-0.5 text-yellow-500" />
+                      {r.rating}
+                    </div>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Suggestions dropdown */}
-      {results.length > 0 && (
-        <ul className="border border-[var(--bd2)] rounded-brands overflow-hidden shadow-brand mb-4">
-          {results.map((r, i) => (
-            <li key={`${r.name}-${i}`}>
-              <button
-                onClick={() => handleSelect(r)}
-                className="w-full text-left px-4 py-3 hover:bg-surface2 transition-colors border-b border-[var(--bd)] last:border-0"
-              >
-                <div className="font-semibold text-sm text-tx">{r.name}</div>
-                <div className="text-xs text-t2 mt-0.5">{r.address}</div>
-                {r.rating > 0 && (
-                  <div className="text-xs text-t3 mt-0.5">
-                    <IconStar size={11} className="inline mr-0.5 text-yellow-500" />
-                    {r.rating}
-                  </div>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {/* Source banner after selection */}
+      {selected && source && (
+        <div className={`inline-flex items-center gap-1.5 text-xs rounded-brands px-3 py-1.5 mb-3 ${
+          source === 'google'
+            ? 'text-green-700 bg-green-50 border border-green-200'
+            : 'text-blue-700 bg-blue-50 border border-blue-200'
+        }`}>
+          <IconCheck size={13} />
+          {source === 'google'
+            ? 'Data fetched from Google Maps — edit any field below'
+            : 'Found in RepEAT database — edit any field below'}
+        </div>
       )}
 
       {/* Editable fields shown after a place is selected */}
       {selected && (
-        <div className="space-y-3 pt-1">
-          <div className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 rounded-brands px-3 py-1.5 mb-1">
-            <IconCheck size={13} /> Business info imported — edit any field below
-          </div>
-
+        <div className="space-y-3">
           <InputField label="Restaurant name" value={wizard.name}
             onChange={(v) => patch({ name: v })} />
           <InputField
@@ -689,13 +740,13 @@ function Step1Places({
         </div>
       )}
 
-      {/* Skip / manual entry option */}
+      {/* Manual entry / not finding restaurant */}
       {!selected && (
         <p className="text-center text-[13px] text-t3 mt-4">
-          Not on Google?{' '}
+          Not finding your restaurant?{' '}
           <button
-            onClick={() => { patch({ name: query || 'My Restaurant' }); setSelected(true); }}
-            className="text-brand font-semibold"
+            onClick={() => { patch({ name: query || 'My Restaurant' }); setSelected(true); setSource(null); }}
+            className="text-brand font-semibold hover:underline"
           >
             Enter details manually →
           </button>

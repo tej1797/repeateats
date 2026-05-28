@@ -303,9 +303,14 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
+    await fetch('/api/auth/set-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal: 'influencer' }),
+    });
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/influencer` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
 

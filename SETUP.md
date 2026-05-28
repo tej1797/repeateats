@@ -80,6 +80,30 @@ The `/api/google-places` route auto-fills restaurant info during onboarding.
 
 The key is server-only (no `NEXT_PUBLIC_` prefix) — it never reaches the browser.
 
+**Note:** The search works without an API key — it falls back to a built-in Ontario restaurant
+database. Add the key only when you need live Google Maps data.
+
+### Adding the Key to Vercel (CLI method)
+
+If the Vercel dashboard login is giving trouble, use the CLI instead:
+
+```bash
+# 1. Install Vercel CLI
+npm i -g vercel
+
+# 2. Login (choose GitHub)
+npx vercel login
+
+# 3. Link this project
+npx vercel link
+
+# 4. Add the environment variable (paste key when prompted, select all environments)
+npx vercel env add GOOGLE_PLACES_API_KEY
+
+# 5. Redeploy with the new env var
+npx vercel --prod
+```
+
 ---
 
 ## 5. Connect Your Supabase Project

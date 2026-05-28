@@ -177,5 +177,6 @@ export interface PlaceResult {
   rating: number | null;
   types: string[];
   place_id: string;
+  source?: 'google' | 'database';
 }
 export type GooglePlacesResponse = ApiResponse<PlaceResult[]>;

@@ -6,9 +6,18 @@ import type { NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  const cookieStore = cookies()
+
+  // Read which portal the user was signing into (set by /api/auth/set-portal before OAuth)
+  const intendedPortal = cookieStore.get('intended_portal')?.value
+  const portalMap: Record<string, string> = {
+    restaurant: '/restaurant',
+    influencer:  '/influencer',
+    customer:    '/customer',
+  }
+  const destination = portalMap[intendedPortal ?? ''] ?? '/customer'
 
   if (code) {
-    const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -23,8 +32,7 @@ export async function GET(request: NextRequest) {
                 cookieStore.set(name, value, options)
               )
             } catch {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing sessions.
+              // Called from a Server Component — safe to ignore
             }
           },
         },
@@ -34,15 +42,15 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // 'next' param lets each portal redirect to the right page after OAuth
-      const next = searchParams.get('next') ?? '/customer'
-      return NextResponse.redirect(`${origin}${next}`)
+      // Clear the intended portal cookie then redirect
+      const response = NextResponse.redirect(`${origin}${destination}`)
+      response.cookies.delete('intended_portal')
+      return response
     }
 
-    console.error('exchangeCodeForSession error:', error.message)
+    console.error('OAuth exchangeCodeForSession error:', error.message)
   }
 
-  // Preserve the 'next' param so the login page knows where to redirect after manual sign-in
-  const next = searchParams.get('next') ?? ''
-  return NextResponse.redirect(`${origin}/customer/login?error=auth${next ? `&next=${next}` : ''}`)
+  // On error, send back to the correct portal's login page
+  return NextResponse.redirect(`${origin}${destination}?error=auth`)
 }
