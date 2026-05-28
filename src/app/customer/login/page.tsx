@@ -166,7 +166,6 @@ export default function CustomerLoginPage() {
   };
 
   const handleGoogle = async () => {
-    // Store intended portal in a cookie BEFORE the OAuth redirect
     await fetch('/api/auth/set-portal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

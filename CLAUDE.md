@@ -1,0 +1,154 @@
+# RepEAT — Project Memory for Claude Code
+
+## What This Project Is
+Restaurant deals marketplace for Ontario, Canada.
+Live at: https://repeateats.ca
+GitHub: https://github.com/tej1797/repeateats
+Owner: Tejas Khatri (tejaskhatri007@gmail.com)
+
+## Three Portals
+- `/customer` — browse and claim restaurant deals (all signed-in users)
+- `/restaurant` — restaurant owners post deals, manage profile
+- `/influencer` — creators find collabs, earn from restaurants
+
+## Tech Stack
+- **Frontend:** Next.js 14 App Router, TypeScript, Tailwind CSS
+- **Backend:** Supabase (PostgreSQL + Auth + Realtime + Storage)
+- **Hosting:** Vercel (auto-deploy from GitHub main branch)
+- **Payments:** Stripe (planned, not yet implemented)
+- **Domain:** repeateats.ca (Porkbun DNS → Vercel)
+
+## Key File Locations
+- `src/app/page.tsx` — landing page
+- `src/app/restaurant/page.tsx` — restaurant portal (auth + 5-step onboarding wizard + dashboard)
+- `src/app/influencer/page.tsx` — influencer portal (auth + collab feed + negotiate modal + chat)
+- `src/app/customer/page.tsx` — customer portal (deal feed + claim QR + auth modal)
+- `src/app/customer/login/page.tsx` — customer login page
+- `src/app/customer/signup/page.tsx` — customer 3-step signup
+- `src/app/influencer/signup/page.tsx` — creator 3-step onboarding
+- `src/app/influencer/profile/page.tsx` — creator profile + earnings + recharts
+- `src/app/auth/callback/route.ts` — OAuth callback, reads rp_portal cookie → redirects
+- `src/app/api/auth/set-portal/route.ts` — sets rp_portal cookie before OAuth
+- `src/middleware.ts` — session refresh ONLY, no redirects
+- `src/lib/supabase/client.ts` — browser Supabase client
+- `src/lib/supabase/server.ts` — server Supabase client
+- `src/types/index.ts` — DB table interfaces
+- `supabase/schema.sql` — run first in Supabase SQL Editor
+- `supabase/seed.sql` — run second (12 restaurants, 15 deals, 7 collabs)
+- `SETUP.md` — full setup instructions
+
+## Database Tables (Supabase)
+- `users` — id, email, name, city, radius_km, role, portal
+- `restaurants` — id, owner_id, name, cuisine, category, city, address, phone, website, hours (jsonb), is_live, rating, google_place_id, cover_url, open_to_collabs
+- `deals` — id, restaurant_id, title, emoji, discount_type, discount_value, deal_types[], available_days[], scope, max_claims, current_claims, is_coming, is_active, valid_from, valid_until
+- `claims` — id, deal_id, user_id, qr_code, status, redeemed_at
+- `influencers` — id, user_id, display_name, avatar_url, instagram_handle, tiktok_handle, niche, follower_range, primary_platform, city, bio, avg_rating, etransfer_email, paypal_email, preferred_payment
+- `collabs` — id, restaurant_id, influencer_id, offer_amount_min, offer_amount_max, creator_rate, status, deliverables, brief, deadline, draft_content_url, final_post_url, payment_deposited_at, payment_released_at, notes
+- `messages` — id, collab_id, sender_id, text, created_at
+- `notifications` — id, user_id, type, read, created_at
+
+## API Routes
+- `GET/POST /api/restaurants` — list with filters, create
+- `GET/PATCH /api/restaurants/[id]` — detail + update
+- `GET/POST /api/deals` — list with filters, create
+- `GET/PATCH /api/deals/[id]` — detail + update
+- `POST /api/claims` — claim a deal (returns QR code)
+- `POST /api/claims/[qrCode]/redeem` — redeem at restaurant
+- `GET/POST /api/collabs` — list open collabs, create
+- `GET/PATCH /api/collabs/[id]` — detail + influencer apply
+- `GET/POST /api/messages` — thread by collab_id, send
+- `GET /api/google-places` — search restaurants; falls back to static Ontario DB if no API key
+- `GET/PATCH /api/profile` — customer profile + claims
+- `GET/PATCH /api/creator/profile` — influencer profile + collab stats + earnings
+- `POST /api/auth/set-portal` — set rp_portal cookie before OAuth
+
+## Brand / Design
+- **Orange:** `#E85D04` (brand), `#FF7A30` (hover)
+- **Green (restaurant):** `#065F46`
+- **Purple (influencer):** `#7E22CE`
+- **Background:** `#F8F7F4` (light pages), `#0A0A0A` (dark auth pages)
+- **Fonts:** Syne 700/800 (display/logo), Plus Jakarta Sans (body)
+- **Logo:** "Rep" + "EAT" in orange
+
+## Auth Flow (CRITICAL — do not break this)
+1. User visits `/restaurant`, `/influencer`, or `/customer`
+2. Page runs `supabase.auth.getSession()` (cookie-based, fast, no network)
+3. If no session → show login form
+4. User clicks "Continue with Google":
+   - `POST /api/auth/set-portal` sets `rp_portal=restaurant` cookie (5 min TTL)
+   - `supabase.auth.signInWithOAuth({ redirectTo: origin + '/auth/callback' })`
+5. Google OAuth flow completes
+6. Supabase redirects to `/auth/callback?code=...`
+7. Callback reads `rp_portal` cookie → exchanges code for session → redirects to correct portal
+8. Portal page detects `SIGNED_IN` via `onAuthStateChange` → checks DB → shows dashboard/onboard
+9. For email/password: direct `router.push('/portal')` after `signInWithPassword` succeeds
+
+## Same-Email Multi-Portal (role-based)
+One Supabase user can be a customer AND restaurant owner AND influencer with the same email.
+- **Restaurant portal:** checks `restaurants.owner_id = user.id` → dashboard if found, onboarding if not
+- **Influencer portal:** checks `influencers.user_id = user.id` → feed if found, onboarding if not
+- **Customer portal:** always shows deal feed (everyone is a customer)
+
+## Middleware
+Session refresh ONLY — no redirects anywhere. Each portal handles its own auth state.
+
+## Portal Auth Pattern (use this for ALL portals)
+```tsx
+useEffect(() => {
+  let mounted = true;
+  const init = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession(); // fast, no network
+      if (!mounted) return;
+      if (!session?.user) { setView('login'); return; }
+      // ... check DB for user's rows
+    } catch (err) {
+      console.error('init error:', err);
+      if (mounted) setView('login');
+    }
+  };
+  void init();
+  const timeout = setTimeout(() => {
+    if (mounted) setView(v => v === 'loading' ? 'login' : v);
+  }, 5000); // safety fallback
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // handle SIGNED_IN / SIGNED_OUT
+  });
+  return () => { mounted = false; clearTimeout(timeout); subscription.unsubscribe(); };
+}, [supabase]);
+```
+
+## Environment Variables
+```
+NEXT_PUBLIC_SUPABASE_URL=https://...supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+NEXT_PUBLIC_SITE_URL=https://repeateats.ca
+GOOGLE_PLACES_API_KEY=AIza...  (optional — has static Ontario DB fallback)
+```
+
+## Adding Google Places API Key to Vercel
+```bash
+npx vercel login   # choose GitHub
+npx vercel link
+npx vercel env add GOOGLE_PLACES_API_KEY
+npx vercel --prod
+```
+
+## Known Issues & Status
+- [x] Google OAuth always redirecting to /customer — FIXED (rp_portal cookie)
+- [x] Restaurant page infinite spinner — FIXED (getSession() + 5s timeout)
+- [x] Homepage flash after OAuth — FIXED (middleware no-redirect)
+- [x] Same-email multi-portal confusion — FIXED (role determined by DB rows)
+- [ ] Google Places API key not set in Vercel production env
+- [ ] QR codes are text strings, not scannable images (need `qrcode` npm package)
+- [ ] Stripe payments not implemented
+- [ ] Push notifications not implemented
+- [ ] RepEAT+ subscription page exists but not functional
+
+## Dev Commands
+```bash
+npm run dev      # start dev server → localhost:3000
+npm run build    # production build (must be 0 errors before deploy)
+git push origin main  # auto-deploys to Vercel
+```

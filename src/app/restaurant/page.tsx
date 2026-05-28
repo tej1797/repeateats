@@ -162,19 +162,56 @@ export default function RestaurantPage() {
 
   // ── Auth listener — runs once on mount ────────────────────────────────────
   useEffect(() => {
-    // Check existing session immediately (handles page refresh while logged in)
-    void supabase.auth.getUser().then(async ({ data: { user: u } }) => {
-      if (!u) { setView('auth'); return; }
-      setUser(u);
-      await resolveRestaurant(u.id);
-    });
+    let mounted = true;
+
+    const init = async () => {
+      try {
+        // getSession reads cookies synchronously — no network request, won't hang
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (!session?.user) { setView('auth'); return; }
+        setUser(session.user);
+        const { data: rest } = await supabase
+          .from('restaurants')
+          .select('*')
+          .eq('owner_id', session.user.id)
+          .maybeSingle();
+        if (!mounted) return;
+        if (rest) {
+          setRestaurant(rest as Restaurant);
+          setView('dashboard');
+        } else {
+          setView('onboarding');
+        }
+      } catch (err) {
+        console.error('[RestaurantPage] init error:', err);
+        if (mounted) setView('auth');
+      }
+    };
+
+    void init();
+
+    // Safety timeout — if still loading after 5 s, fall back to login form
+    const timeout = setTimeout(() => {
+      if (mounted) setView((v) => v === 'loading' ? 'auth' : v);
+    }, 5000);
 
     // Also subscribe for SIGNED_IN / SIGNED_OUT events (handles OAuth callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user);
-          await resolveRestaurant(session.user.id);
+          try {
+            const { data: rest } = await supabase
+              .from('restaurants')
+              .select('*')
+              .eq('owner_id', session.user.id)
+              .maybeSingle();
+            if (!mounted) return;
+            if (rest) { setRestaurant(rest as Restaurant); setView('dashboard'); }
+            else { setView('onboarding'); }
+          } catch { if (mounted) setView('onboarding'); }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setRestaurant(null);
@@ -182,25 +219,14 @@ export default function RestaurantPage() {
         }
       }
     );
-    return () => subscription.unsubscribe();
-  // resolveRestaurant is stable (defined outside effect), safe to omit from deps
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
-
-  // Check if this user already has a restaurant → dashboard, otherwise onboarding
-  async function resolveRestaurant(uid: string) {
-    const { data: rest } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('owner_id', uid)
-      .maybeSingle();
-    if (rest) {
-      setRestaurant(rest as Restaurant);
-      setView('dashboard');
-    } else {
-      setView('onboarding');
-    }
-  }
 
   // ── Publish (Step 5 submit) ───────────────────────────────────────────────
   const handlePublish = useCallback(async () => {
@@ -467,6 +493,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
+    // Set rp_portal cookie BEFORE the OAuth redirect so the callback knows where to go
     await fetch('/api/auth/set-portal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

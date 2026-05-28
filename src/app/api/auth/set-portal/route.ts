@@ -1,6 +1,7 @@
 // POST /api/auth/set-portal
 // Stores the intended portal in a short-lived cookie BEFORE the OAuth redirect.
-// The auth/callback route reads this cookie to redirect the user to the right portal.
+// Named rp_portal; httpOnly:false so the value isn't secret (just a routing hint).
+// auth/callback reads this to redirect to the right portal after OAuth completes.
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
@@ -15,11 +16,11 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('intended_portal', portal, {
-    httpOnly: true,
+  response.cookies.set('rp_portal', portal, {
+    httpOnly: false,                                          // not a secret — just a routing hint
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge:   600, // 10 minutes — enough to complete OAuth flow
+    maxAge:   300,                                            // 5 minutes — enough for OAuth flow
     path:     '/',
   })
   return response

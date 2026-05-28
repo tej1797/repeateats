@@ -43,7 +43,7 @@ const OFFER_CHIPS = [50, 100, 150, 200, 300];
 export default function InfluencerPage() {
   const supabase = useRef(createClient()).current;
 
-  const [view,        setView]       = useState<'auth' | 'feed'>('auth');
+  const [view,        setView]       = useState<'loading' | 'auth' | 'feed'>('loading');
   const [user,        setUser]       = useState<SupabaseUser | null>(null);
   const [influencer,  setInfluencer] = useState<Influencer | null>(null);
 
@@ -58,19 +58,36 @@ export default function InfluencerPage() {
 
   // ── Auth listener ────────────────────────────────────────────────────────
   useEffect(() => {
-    void supabase.auth.getUser().then(async ({ data: { user: u } }) => {
-      if (!u) return;
-      setUser(u);
-      await loadInfluencer(u.id);
-      setView('feed');
-    });
+    let mounted = true;
+
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (!session?.user) { setView('auth'); return; }
+        setUser(session.user);
+        await loadInfluencer(session.user.id);
+        if (mounted) setView('feed');
+      } catch (err) {
+        console.error('[InfluencerPage] init error:', err);
+        if (mounted) setView('auth');
+      }
+    };
+
+    void init();
+
+    // Safety timeout
+    const timeout = setTimeout(() => {
+      if (mounted) setView((v) => v === 'loading' ? 'auth' : v);
+    }, 5000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user);
           await loadInfluencer(session.user.id);
-          setView('feed');
+          if (mounted) setView('feed');
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setInfluencer(null);
@@ -78,7 +95,11 @@ export default function InfluencerPage() {
         }
       }
     );
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
@@ -106,6 +127,17 @@ export default function InfluencerPage() {
   }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  if (view === 'loading') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0A0A0A' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, border: '3px solid rgba(126,34,206,0.2)', borderTop: '3px solid #7E22CE', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <p style={{ color: '#666', fontSize: 13 }}>Loading creator portal...</p>
+        </div>
+      </div>
+    );
+  }
   if (view === 'auth') return <AuthView supabase={supabase} />;
 
   return (
@@ -313,6 +345,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
+
 
   return (
     <div className="min-h-screen flex" style={{ background: '#0D0D0D' }}>

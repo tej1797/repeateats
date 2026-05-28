@@ -8,14 +8,14 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const cookieStore = cookies()
 
-  // Read which portal the user was signing into (set by /api/auth/set-portal before OAuth)
-  const intendedPortal = cookieStore.get('intended_portal')?.value
-  const portalMap: Record<string, string> = {
+  // Read which portal the user intended (set by /api/auth/set-portal before OAuth started)
+  const portal = cookieStore.get('rp_portal')?.value
+  const destinations: Record<string, string> = {
     restaurant: '/restaurant',
     influencer:  '/influencer',
     customer:    '/customer',
   }
-  const destination = portalMap[intendedPortal ?? ''] ?? '/customer'
+  const destination = destinations[portal ?? ''] ?? '/customer'
 
   if (code) {
     const supabase = createServerClient(
@@ -42,15 +42,14 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Clear the intended portal cookie then redirect
       const response = NextResponse.redirect(`${origin}${destination}`)
-      response.cookies.delete('intended_portal')
+      response.cookies.delete('rp_portal')
       return response
     }
 
-    console.error('OAuth exchangeCodeForSession error:', error.message)
+    console.error('OAuth error:', error.message)
   }
 
-  // On error, send back to the correct portal's login page
+  // On failure, redirect to the correct portal's login
   return NextResponse.redirect(`${origin}${destination}?error=auth`)
 }
