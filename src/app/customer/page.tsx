@@ -887,24 +887,48 @@ export default function CustomerPage() {
   const router   = useRouter();
 
   useEffect(() => {
-    // Check current session on mount — redirect to login if not signed in
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        router.replace('/customer/login');
-      } else {
-        setUser(data.user);
-        setAuthChecked(true);
-      }
-    });
-    // Listen for auth changes (sign out → redirect back to login)
+    let mounted = true;
+    let redirectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleSession = (user: User) => {
+      if (!mounted) return;
+      if (redirectTimer) { clearTimeout(redirectTimer); redirectTimer = null; }
+      setUser(user);
+      setAuthChecked(true);
+    };
+
+    // onAuthStateChange is primary — fires INITIAL_SESSION and SIGNED_IN reliably
+    // after the cookie from the OAuth callback has propagated
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
+      if (!mounted) return;
+      if (session?.user) {
+        handleSession(session.user);
+      } else if (event === 'SIGNED_OUT') {
         router.replace('/customer/login');
+      }
+      // INITIAL_SESSION with no user: wait for the 2s timer below
+    });
+
+    // Quick cookie check — instant if session already set (e.g. email/password login)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
+        handleSession(session.user);
       } else {
-        setUser(session.user);
+        // No session yet — give onAuthStateChange 2s to fire before redirecting.
+        // This covers the race condition where the OAuth callback cookie hasn't
+        // propagated to the browser Supabase client yet.
+        redirectTimer = setTimeout(() => {
+          if (mounted) router.replace('/customer/login');
+        }, 2000);
       }
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      mounted = false;
+      if (redirectTimer) clearTimeout(redirectTimer);
+      subscription.unsubscribe();
+    };
   }, [supabase, router]);
 
   // ── Live claim counts via Supabase Realtime ──────────────────

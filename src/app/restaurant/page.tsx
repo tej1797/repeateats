@@ -164,28 +164,30 @@ export default function RestaurantPage() {
   useEffect(() => {
     let mounted = true;
 
-    const init = async () => {
+    const resolveSession = async (userId: string) => {
+      setUser({ id: userId } as SupabaseUser);
       try {
-        // getSession reads cookies synchronously — no network request, won't hang
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        if (!session?.user) { setView('auth'); return; }
-        setUser(session.user);
         const { data: rest } = await supabase
           .from('restaurants')
           .select('*')
-          .eq('owner_id', session.user.id)
+          .eq('owner_id', userId)
           .maybeSingle();
         if (!mounted) return;
-        if (rest) {
-          setRestaurant(rest as Restaurant);
-          setView('dashboard');
-        } else {
-          setView('onboarding');
-        }
+        if (rest) { setRestaurant(rest as Restaurant); setView('dashboard'); }
+        else { setView('onboarding'); }
+      } catch { if (mounted) setView('onboarding'); }
+    };
+
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        // If session found immediately (email/password login or warm cookie), proceed.
+        // If not, do NOT set 'auth' — let onAuthStateChange + timeout handle the race.
+        if (session?.user) await resolveSession(session.user.id);
       } catch (err) {
         console.error('[RestaurantPage] init error:', err);
-        if (mounted) setView('auth');
+        // Don't change view — let the timeout fall back to 'auth'
       }
     };
 
@@ -196,22 +198,14 @@ export default function RestaurantPage() {
       if (mounted) setView((v) => v === 'loading' ? 'auth' : v);
     }, 5000);
 
-    // Also subscribe for SIGNED_IN / SIGNED_OUT events (handles OAuth callback)
+    // onAuthStateChange fires INITIAL_SESSION (on load) + SIGNED_IN + SIGNED_OUT
+    // INITIAL_SESSION fires after the client detects the cookie — this is the reliable
+    // signal after an OAuth callback where getSession() may race the cookie propagation
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
-        if (event === 'SIGNED_IN' && session?.user) {
-          setUser(session.user);
-          try {
-            const { data: rest } = await supabase
-              .from('restaurants')
-              .select('*')
-              .eq('owner_id', session.user.id)
-              .maybeSingle();
-            if (!mounted) return;
-            if (rest) { setRestaurant(rest as Restaurant); setView('dashboard'); }
-            else { setView('onboarding'); }
-          } catch { if (mounted) setView('onboarding'); }
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+          await resolveSession(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setRestaurant(null);

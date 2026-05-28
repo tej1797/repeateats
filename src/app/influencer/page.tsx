@@ -60,17 +60,24 @@ export default function InfluencerPage() {
   useEffect(() => {
     let mounted = true;
 
+    const resolveSession = async (userId: string) => {
+      await loadInfluencer(userId);
+      if (mounted) setView('feed');
+    };
+
     const init = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!mounted) return;
-        if (!session?.user) { setView('auth'); return; }
-        setUser(session.user);
-        await loadInfluencer(session.user.id);
-        if (mounted) setView('feed');
+        // If session found immediately (email/password login or warm cookie), proceed.
+        // If not, do NOT set 'auth' — let onAuthStateChange + timeout handle the race.
+        if (session?.user) {
+          setUser(session.user);
+          await resolveSession(session.user.id);
+        }
       } catch (err) {
         console.error('[InfluencerPage] init error:', err);
-        if (mounted) setView('auth');
+        // Don't change view — let the timeout fall back to 'auth'
       }
     };
 
@@ -81,13 +88,14 @@ export default function InfluencerPage() {
       if (mounted) setView((v) => v === 'loading' ? 'auth' : v);
     }, 5000);
 
+    // onAuthStateChange fires INITIAL_SESSION (on load) + SIGNED_IN + SIGNED_OUT
+    // INITIAL_SESSION is the reliable signal after OAuth callback cookie propagation
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
-        if (event === 'SIGNED_IN' && session?.user) {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
           setUser(session.user);
-          await loadInfluencer(session.user.id);
-          if (mounted) setView('feed');
+          await resolveSession(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setInfluencer(null);
