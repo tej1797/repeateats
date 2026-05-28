@@ -196,7 +196,7 @@ export default function CustomerSignupPage() {
         email,
         password,
         options: {
-          data: { full_name: name, city, favourite_cuisine: cuisine },
+          data: { full_name: name, city, favourite_cuisine: cuisine, role: 'customer' },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });

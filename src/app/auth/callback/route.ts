@@ -34,11 +34,15 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      return NextResponse.redirect(`${origin}/customer`)
+      // 'next' param lets each portal redirect to the right page after OAuth
+      const next = searchParams.get('next') ?? '/customer'
+      return NextResponse.redirect(`${origin}${next}`)
     }
 
     console.error('exchangeCodeForSession error:', error.message)
   }
 
-  return NextResponse.redirect(`${origin}/customer/login?error=auth`)
+  // Preserve the 'next' param so the login page knows where to redirect after manual sign-in
+  const next = searchParams.get('next') ?? ''
+  return NextResponse.redirect(`${origin}/customer/login?error=auth${next ? `&next=${next}` : ''}`)
 }

@@ -7,6 +7,52 @@ import type { PlaceResult } from '@/types/api';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+
+  // ── Mode 2: ?fetch=details&place_id=ChIJ… ─────────────────────────────
+  // Returns reviews + rating for a known place_id (used by ReviewsSection).
+  if (searchParams.get('fetch') === 'details') {
+    const placeId = searchParams.get('place_id');
+    if (!placeId) {
+      return NextResponse.json({ error: 'place_id param is required' }, { status: 400 });
+    }
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Google Places API key not configured' }, { status: 503 });
+    }
+    try {
+      const detailUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
+      detailUrl.searchParams.set('place_id', placeId);
+      detailUrl.searchParams.set('fields', 'place_id,name,rating,user_ratings_total,reviews,photos');
+      detailUrl.searchParams.set('key', apiKey);
+
+      const res  = await fetch(detailUrl.toString(), { cache: 'no-store' });
+      const data = await res.json() as {
+        status: string;
+        result?: {
+          place_id: string;
+          name: string;
+          rating?: number;
+          user_ratings_total?: number;
+          reviews?: Array<{
+            author_name: string;
+            rating: number;
+            text: string;
+            relative_time_description: string;
+            profile_photo_url?: string;
+          }>;
+        };
+      };
+      if (data.status !== 'OK' || !data.result) {
+        return NextResponse.json({ data: null });
+      }
+      return NextResponse.json({ data: data.result });
+    } catch (err) {
+      console.error('[google-places/details]', err);
+      return NextResponse.json({ error: 'Failed to fetch place details' }, { status: 502 });
+    }
+  }
+
+  // ── Mode 1 (default): ?query=Restaurant+Name — text search ────────────
   const query = searchParams.get('query');
 
   if (!query) {

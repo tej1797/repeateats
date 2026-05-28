@@ -322,3 +322,152 @@ VALUES
  120, 250, '1 Reel + carousel', '8K+ followers',
  'Family feast content. Warm family dining experience, vibrant colours, multiple dishes. Weekend content focus.',
  'open');
+
+
+-- ─── Google Reviews (run AFTER adding google_* columns) ─────────────────
+-- Representative demo reviews. Replace with real data once GOOGLE_PLACES_API_KEY
+-- is configured -- the app will auto-refresh every 24 hours from the live API.
+
+-- Nirvana Restaurant (Brampton, Indian) 4.7
+UPDATE public.restaurants SET
+  google_rating = 4.7, google_review_count = 312,
+  google_reviews = '[
+    {"author_name": "Priya Sharma", "rating": 5, "text": "Best butter chicken in Brampton! The spices are perfectly balanced and the naan is made fresh to order. We come here almost every weekend now.", "relative_time_description": "2 months ago"},
+    {"author_name": "Gurpreet Singh", "rating": 5, "text": "Authentic North Indian food just like home. The lamb karahi is outstanding — rich, flavorful, perfectly spiced. Service is warm and the price is very reasonable.", "relative_time_description": "3 months ago"},
+    {"author_name": "Aisha Mohammed", "rating": 4, "text": "Really enjoyed the tandoor dishes. Seekh kebabs were tender and the dal makhani was excellent. Can get busy on weekends but the food is worth the wait.", "relative_time_description": "1 month ago"},
+    {"author_name": "David Kim", "rating": 5, "text": "Took my whole family here and everyone loved it. The paneer makhani with garlic naan is unbeatable. Will definitely be back.", "relative_time_description": "5 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0001-0000-0000-000000000000';
+
+-- Mughal Mahal (Mississauga, Indian) 4.5
+UPDATE public.restaurants SET
+  google_rating = 4.5, google_review_count = 187,
+  google_reviews = '[
+    {"author_name": "Meera Patel", "rating": 5, "text": "The biryani here is incredible. Rich, fragrant, with perfectly cooked basmati. The free naan deal with a main is an amazing value. Always my first choice in Mississauga.", "relative_time_description": "1 month ago"},
+    {"author_name": "Harpreet Bains", "rating": 4, "text": "Authentic Mughlai flavours — the kebab platter is the best in the GTA. Seating can be tight but the food more than makes up for it.", "relative_time_description": "2 months ago"},
+    {"author_name": "Sarah Mitchell", "rating": 5, "text": "Came for lunch on a Tuesday and was blown away. The dal makhani and naan combo is pure comfort food. Staff were incredibly friendly.", "relative_time_description": "4 months ago"},
+    {"author_name": "Omar Farooq", "rating": 4, "text": "Great authentic food. The nihari is a weekend special and it is absolutely phenomenal. A little spicy but in the best possible way.", "relative_time_description": "6 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0002-0000-0000-000000000000';
+
+-- Real Fruit Bubble Tea (Mississauga) 4.3
+UPDATE public.restaurants SET
+  google_rating = 4.3, google_review_count = 241,
+  google_reviews = '[
+    {"author_name": "Jessica Wong", "rating": 5, "text": "Best bubble tea in Mississauga, hands down. The taro milk tea with fresh taro is unreal. Love that they use real fruit instead of syrups.", "relative_time_description": "3 weeks ago"},
+    {"author_name": "Tyler Chen", "rating": 4, "text": "Super fresh drinks. The mango smoothie is basically mango juice with a straw. Buy 2 get 1 free deal makes it ridiculously good value.", "relative_time_description": "2 months ago"},
+    {"author_name": "Natalie Park", "rating": 4, "text": "Love the customization options. I got the strawberry milk tea with 50% sugar and it was perfect. Staff are always friendly.", "relative_time_description": "1 month ago"},
+    {"author_name": "Ravi Kumar", "rating": 5, "text": "Genuine real-fruit drinks that taste amazing. The lychee series is seasonal but worth hunting for. My go-to spot after work.", "relative_time_description": "5 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0003-0000-0000-000000000000';
+
+-- India''s Taste (Toronto, Indian) 4.4
+UPDATE public.restaurants SET
+  google_rating = 4.4, google_review_count = 156,
+  google_reviews = '[
+    {"author_name": "Sunita Verma", "rating": 5, "text": "The $12 lunch thali is the best deal in East York. Dal, sabzi, rice, roti, salad, dessert -- absolutely packed with flavour. Cannot beat the value.", "relative_time_description": "1 month ago"},
+    {"author_name": "Michael Torres", "rating": 4, "text": "Discovered this place through a friend and now it is a weekly ritual. The butter chicken is rich and comforting. Staff treat you like family.", "relative_time_description": "2 months ago"},
+    {"author_name": "Parminder Gill", "rating": 5, "text": "Authentic home-style Indian cooking. The daal tadka reminds me of my mum''s kitchen. Generous portions and very reasonable pricing.", "relative_time_description": "3 months ago"},
+    {"author_name": "Jennifer Walsh", "rating": 4, "text": "Great neighbourhood gem. The biryani on the weekends is exceptional. Parking can be tricky on Lawrence but the food is 100% worth it.", "relative_time_description": "4 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0004-0000-0000-000000000000';
+
+-- Dhaba Express (Mississauga, Indian) 4.2
+UPDATE public.restaurants SET
+  google_rating = 4.2, google_review_count = 98,
+  google_reviews = '[
+    {"author_name": "Amrit Dhaliwal", "rating": 5, "text": "No-frills, honest dhaba food that hits every time. The Monday deal is absolutely insane value -- 20% off everything. I always come here on Mondays now.", "relative_time_description": "3 weeks ago"},
+    {"author_name": "Preethi Nair", "rating": 4, "text": "The rajma chawal is outstanding and the parathas are made fresh. Very casual atmosphere but the food quality is genuinely great.", "relative_time_description": "2 months ago"},
+    {"author_name": "Brandon Lee", "rating": 4, "text": "Tried the chole bhature here on a friend''s recommendation. Massive portions, great flavour, very affordable. Solid neighbourhood spot.", "relative_time_description": "4 months ago"},
+    {"author_name": "Kavita Menon", "rating": 4, "text": "Authentic taste that takes me back to Punjab. The lassi is excellent and the dal makhani is slow-cooked to perfection.", "relative_time_description": "5 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0005-0000-0000-000000000000';
+
+-- Spice Route (Mississauga, Indian) 4.6
+UPDATE public.restaurants SET
+  google_rating = 4.6, google_review_count = 203,
+  google_reviews = '[
+    {"author_name": "Anjali Kapoor", "rating": 5, "text": "The Friday Family Feast for 4 is an absolute steal at $49. Two curries, biryani, naan, raita -- you leave completely satisfied. Ambiance is lovely too.", "relative_time_description": "2 months ago"},
+    {"author_name": "Chris Nguyen", "rating": 5, "text": "Elevated Indian dining done right. The lamb rogan josh is exceptional. Feels like a special occasion every time, but the prices are very fair.", "relative_time_description": "1 month ago"},
+    {"author_name": "Deepa Subramaniam", "rating": 4, "text": "Beautiful plating and complex flavours. The mango lassi is thick and refreshing. Perfect date night restaurant in Mississauga.", "relative_time_description": "3 months ago"},
+    {"author_name": "Mark Bouchard", "rating": 5, "text": "Went for the Family Feast and could not believe the quality and quantity for $49. The biryani alone is worth the visit. Highly recommend.", "relative_time_description": "6 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0006-0000-0000-000000000000';
+
+-- Chili''s Grill & Bar (Mississauga) 4.1
+UPDATE public.restaurants SET
+  google_rating = 4.1, google_review_count = 420,
+  google_reviews = '[
+    {"author_name": "Jake Morrison", "rating": 4, "text": "The happy hour 2-for-1 deal is unbeatable for the Square One area. Margaritas are solid and the nachos are massive. Great spot for after-work drinks.", "relative_time_description": "1 month ago"},
+    {"author_name": "Stephanie Ramos", "rating": 5, "text": "Came for the cocktail deal and stayed for three rounds. Friendly bartenders, great atmosphere. The ribs are also surprisingly good.", "relative_time_description": "2 months ago"},
+    {"author_name": "Brendan O''Neill", "rating": 4, "text": "Classic Chili''s quality with a solid happy hour. The Old Timer burger is my go-to. Gets loud on Friday evenings but that adds to the energy.", "relative_time_description": "3 months ago"},
+    {"author_name": "Lisa Fernandez", "rating": 4, "text": "We grabbed the 2-for-1 cocktails after work -- amazing value and they were delicious. Service was attentive even when it got busy.", "relative_time_description": "4 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0007-0000-0000-000000000000';
+
+-- Charcoal Steak House (Kitchener, Steakhouse) 4.6
+UPDATE public.restaurants SET
+  google_rating = 4.6, google_review_count = 289,
+  google_reviews = '[
+    {"author_name": "Robert MacLean", "rating": 5, "text": "KW''s finest steakhouse and it has been for decades. The Beef Wellington is a masterpiece -- perfectly cooked with beautiful pastry. Worth every penny.", "relative_time_description": "1 month ago"},
+    {"author_name": "Cynthia Foster", "rating": 5, "text": "Celebrating our anniversary here has become a tradition. Impeccable service, beautiful atmosphere, and the ribeye is the best in the region.", "relative_time_description": "2 months ago"},
+    {"author_name": "Alan Kowalski", "rating": 4, "text": "The dry-aged sirloin was outstanding. Sides are generous and the wine list is excellent. A bit pricey but it is a special occasion restaurant.", "relative_time_description": "3 months ago"},
+    {"author_name": "Diana Schulz", "rating": 5, "text": "Absolute institution in Kitchener. The Sunday brunch is spectacular but the weeknight dinners are what legends are made of. Perfect service.", "relative_time_description": "5 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0008-0000-0000-000000000000';
+
+-- The Bauer Kitchen (Waterloo, Canadian) 4.5
+UPDATE public.restaurants SET
+  google_rating = 4.5, google_review_count = 178,
+  google_reviews = '[
+    {"author_name": "Emily Hartman", "rating": 5, "text": "The farm-to-table philosophy really shows in every dish. The roasted beet salad and the pan-seared trout were outstanding. Gorgeous historic space too.", "relative_time_description": "3 weeks ago"},
+    {"author_name": "Mathieu Gauthier", "rating": 5, "text": "Best restaurant in Waterloo full stop. The seasonal menu is always creative and the cocktail program is excellent. A must-visit for any foodie.", "relative_time_description": "2 months ago"},
+    {"author_name": "Sophie Williams", "rating": 4, "text": "Lovely spot in a beautiful old building. The brunch is excellent -- eggs benny with house-cured salmon was phenomenal. Worth the weekend wait.", "relative_time_description": "1 month ago"},
+    {"author_name": "Tomasz Wierzbicki", "rating": 4, "text": "Incredible atmosphere and thoughtful Canadian cuisine. The charcuterie board is an event in itself. Great date night or special occasion spot.", "relative_time_description": "4 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0009-0000-0000-000000000000';
+
+-- Lancaster Smokehouse (Kitchener, BBQ) 4.6
+UPDATE public.restaurants SET
+  google_rating = 4.6, google_review_count = 334,
+  google_reviews = '[
+    {"author_name": "Travis Okafor", "rating": 5, "text": "The brisket here is a religious experience. Smoky bark, juicy interior, perfect smoke ring. The weekend lineup is worth every minute of the wait.", "relative_time_description": "2 months ago"},
+    {"author_name": "Kelsey Brown", "rating": 5, "text": "Best BBQ in KW and it is not even close. The 3-meat platter is enormous and every protein is cooked to perfection. The house-made pickles are a bonus.", "relative_time_description": "1 month ago"},
+    {"author_name": "Murray Tremblay", "rating": 4, "text": "The pulled pork sandwich is incredible -- the meat practically falls apart. Sides are solid too. Get there early or expect to wait on weekends.", "relative_time_description": "3 months ago"},
+    {"author_name": "Aaron Diaz", "rating": 5, "text": "Drove 40 minutes just for Lancaster''s ribs and it was completely worth it. Fall-off-the-bone tender with the best dry rub I''ve ever had. Already planning my return.", "relative_time_description": "6 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0010-0000-0000-000000000000';
+
+-- PUBLIC Kitchen & Bar (Kitchener) 4.6
+UPDATE public.restaurants SET
+  google_rating = 4.6, google_review_count = 214,
+  google_reviews = '[
+    {"author_name": "Natasha Brennan", "rating": 5, "text": "Buck-a-Shuck Wednesday is something special. Fresh oysters at a dollar each with excellent cocktails in a beautiful space. An absolute Kitchener institution.", "relative_time_description": "1 month ago"},
+    {"author_name": "Derek Lam", "rating": 5, "text": "Incredible cocktail program and the food is equally impressive. The duck confit is phenomenal. Beautiful renovation of the space -- always buzzing.", "relative_time_description": "2 months ago"},
+    {"author_name": "Isabelle Martin", "rating": 4, "text": "Took out-of-town guests here and they were completely wowed. The seafood dishes are exceptional and the service is polished without being stuffy.", "relative_time_description": "3 months ago"},
+    {"author_name": "Greg Hannigan", "rating": 5, "text": "The best upscale casual restaurant in downtown Kitchener. The tasting menu on special occasions is absolutely worth it. Superb wine and cocktail list.", "relative_time_description": "5 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0011-0000-0000-000000000000';
+
+-- Del''s Italian Kitchen (KW, Italian) 4.6
+UPDATE public.restaurants SET
+  google_rating = 4.6, google_review_count = 162,
+  google_reviews = '[
+    {"author_name": "Francesca Romano", "rating": 5, "text": "The handmade pasta is extraordinary -- you can taste the difference immediately. The candlelit atmosphere makes it the perfect date night spot in KW.", "relative_time_description": "2 months ago"},
+    {"author_name": "Marco Ferretti", "rating": 5, "text": "As an Italian, I can say this is genuine, soulful Italian cooking. The cacio e pepe is impeccable. The tiramisu is the best outside of Italy.", "relative_time_description": "1 month ago"},
+    {"author_name": "Hannah Schmidt", "rating": 4, "text": "Romantic atmosphere and delicious food. The pappardelle bolognese is rich and comforting. Excellent wine list with great Italian varietals.", "relative_time_description": "3 months ago"},
+    {"author_name": "Paul Arsenault", "rating": 5, "text": "Proposed to my partner here and the staff made the entire evening magical. The food is world-class -- the osso buco is unforgettable. Thank you Del''s!", "relative_time_description": "4 months ago"}
+  ]'::jsonb,
+  last_synced_at = NOW()
+WHERE id = '11111111-0012-0000-0000-000000000000';

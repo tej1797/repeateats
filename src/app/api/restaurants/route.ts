@@ -75,5 +75,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Background: fetch Google reviews for the new restaurant (non-blocking)
+  if (process.env.GOOGLE_PLACES_API_KEY && data?.id) {
+    import('@/lib/google-places')
+      .then(({ syncRestaurantReviews }) =>
+        syncRestaurantReviews(data.id, data.name, data.city).catch(console.error)
+      )
+      .catch(console.error);
+  }
+
   return NextResponse.json({ data }, { status: 201 });
 }

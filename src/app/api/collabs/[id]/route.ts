@@ -42,11 +42,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Fetch collab to verify participation (restaurant owner or matched influencer)
+  // Fetch collab with enough info to check participation
   const { data: collab } = await supabase
     .from('collabs')
     .select(`
-      id,
+      id, status, influencer_id,
       restaurant:restaurants ( owner_id ),
       influencer:influencers ( user_id )
     `)
@@ -57,9 +57,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const restaurantOwner = (collab.restaurant as unknown as { owner_id: string } | null)?.owner_id;
-  const influencerUser  = (collab.influencer  as unknown as { user_id:  string } | null)?.user_id;
-  const isParticipant   = restaurantOwner === user.id || influencerUser === user.id;
+  const restaurantOwner  = (collab.restaurant as unknown as { owner_id: string } | null)?.owner_id;
+  const influencerUser   = (collab.influencer  as unknown as { user_id:  string } | null)?.user_id;
+  // Allow if user is restaurant owner, matched influencer, OR any auth user applying to an open collab
+  const isOpenForApply   = collab.status === 'open' && !collab.influencer_id;
+  const isParticipant    = restaurantOwner === user.id || influencerUser === user.id || isOpenForApply;
 
   if (!isParticipant) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -72,9 +74,33 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
+  // When an influencer applies, resolve their auth uid → influencers.id
+  // (NegotiateModal sends user.id but collabs.influencer_id references influencers.id)
+  const patchData = { ...body } as Record<string, unknown>;
+  if (isOpenForApply && 'influencer_id' in patchData) {
+    const { data: infRow } = await supabase
+      .from('influencers')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (infRow) {
+      patchData.influencer_id = infRow.id;
+    } else {
+      // Auto-create a minimal influencer record so the user can participate
+      const { data: newInf, error: infErr } = await supabase
+        .from('influencers')
+        .insert({ user_id: user.id, rating: 0, total_collabs: 0 })
+        .select('id')
+        .single();
+      if (infErr) return NextResponse.json({ error: 'Could not create influencer profile' }, { status: 500 });
+      patchData.influencer_id = newInf.id;
+    }
+  }
+
   const { data, error } = await supabase
     .from('collabs')
-    .update(body)
+    .update(patchData)
     .eq('id', params.id)
     .select()
     .single();

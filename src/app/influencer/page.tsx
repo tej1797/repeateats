@@ -122,12 +122,19 @@ export default function InfluencerPage() {
               <span className="ml-1.5 text-[13px] font-semibold text-t3 tracking-normal">Creator</span>
             </div>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-[13px] text-t2 hover:text-tx transition-colors"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            <a href="/influencer/profile"
+              className="text-[13px] font-semibold transition-colors hover:text-tx"
+              style={{ color: '#7E22CE' }}>
+              My profile
+            </a>
+            <button
+              onClick={handleSignOut}
+              className="text-[13px] text-t2 hover:text-tx transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -265,7 +272,6 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error,    setError]    = useState('');
   const [btnState, setBtnState] = useState<'idle' | 'loading' | 'success'>('idle');
 
@@ -287,10 +293,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBtnState('loading'); setError('');
-    const fn = isSignUp
-      ? supabase.auth.signUp({ email, password })
-      : supabase.auth.signInWithPassword({ email, password });
-    const { error: authErr } = await fn;
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
     if (authErr) {
       setBtnState('idle');
       setError(friendlyCreatorError(authErr.message));
@@ -302,7 +305,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=/influencer` },
     });
   };
 
@@ -401,7 +404,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
               Rep<span style={{ color: '#E85D04' }}>EAT</span>
             </div>
             <p className="text-[14px]" style={{ color: '#6B7280' }}>
-              Creator portal · {isSignUp ? 'Join to earn from collabs' : 'Sign in to browse collabs'}
+              Creator portal · Sign in to browse collabs
             </p>
           </div>
 
@@ -456,22 +459,18 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
               {btnState === 'loading' && (
                 <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
               )}
-              {btnState === 'idle'    && (isSignUp ? 'Create account' : 'Sign in')}
-              {btnState === 'loading' && (isSignUp ? 'Creating account…' : 'Signing you in…')}
-              {btnState === 'success' && (isSignUp ? 'Account created! 🎉' : 'Welcome back! 🎉')}
+              {btnState === 'idle'    && 'Sign in'}
+              {btnState === 'loading' && 'Signing you in…'}
+              {btnState === 'success' && 'Welcome back! 🎉'}
             </button>
           </form>
 
-          {/* Toggle sign up / sign in */}
+          {/* Toggle / signup */}
           <p className="text-center text-[13px] mt-4" style={{ color: '#6B7280' }}>
-            {isSignUp ? 'Already have an account?' : 'No account yet?'}{' '}
-            <button
-              onClick={() => { setIsSignUp(!isSignUp); setError(''); setBtnState('idle'); }}
-              className="font-semibold hover:underline"
-              style={{ color: '#7E22CE' }}
-            >
-              {isSignUp ? 'Sign in →' : 'Join for free →'}
-            </button>
+            No account yet?{' '}
+            <a href="/influencer/signup" className="font-semibold hover:underline" style={{ color: '#7E22CE' }}>
+              Create creator profile →
+            </a>
           </p>
         </div>
       </div>
@@ -858,6 +857,36 @@ function NegotiateModal({
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Transaction flow — shown once collab is accepted */}
+          {applied && (
+            <div className="mb-5 rounded-xl overflow-hidden border border-purple-100">
+              <div className="bg-purple-50 px-4 py-3">
+                <p className="text-[12px] font-bold text-purple-700 uppercase tracking-wide">How this collab works</p>
+              </div>
+              <div className="divide-y divide-purple-50">
+                {[
+                  { n: 1, title: 'Restaurant deposits payment', desc: `Restaurant pays into secure RepEAT escrow` },
+                  { n: 2, title: 'You create the content', desc: 'Create content as per the brief agreed' },
+                  { n: 3, title: 'Submit draft for approval', desc: 'Send your draft reel/post before publishing' },
+                  { n: 4, title: 'Restaurant approves (48 hrs)', desc: 'Auto-approved if no response in 48 hours' },
+                  { n: 5, title: 'You post the content', desc: 'Publish to Instagram/TikTok as agreed' },
+                  { n: 6, title: 'Payment released to you', desc: 'RepEAT releases funds minus 2% platform fee' },
+                ].map((s) => (
+                  <div key={s.n} className="flex items-start gap-3 px-4 py-3">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-0.5"
+                      style={{ background: '#7E22CE', color: '#fff' }}>
+                      {s.n}
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-semibold text-gray-800">{s.title}</p>
+                      <p className="text-[12px] text-gray-500">{s.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

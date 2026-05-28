@@ -405,109 +405,148 @@ function StepIndicator({ current }: { current: number }) {
 
 // ─── AuthView ─────────────────────────────────────────────────────────────────
 
+function GoogleSVG() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden>
+      <path d="M17.64 9.2c0-.637-.057-1.25-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+function friendlyRestaurantError(msg: string) {
+  if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials'))
+    return "Hmm, that's not right 🤔 Check your email and password";
+  if (msg.includes('User already registered')) return "That email is taken — sign in instead?";
+  if (msg.includes('rate limit') || msg.includes('too many')) return "Whoa, slow down! Try in 30 seconds";
+  return msg;
+}
+
 function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const [btnState, setBtnState] = useState<'idle'|'loading'|'success'>('idle');
   const [error,    setError]    = useState('');
+  const [showPw,   setShowPw]   = useState(false);
+  const [cursor,   setCursor]   = useState({ x: 200, y: 200 });
+  const leftRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = leftRef.current;
+    if (!el) return;
+    const fn = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect();
+      setCursor({ x: e.clientX - r.left, y: e.clientY - r.top });
+    };
+    el.addEventListener('mousemove', fn);
+    return () => el.removeEventListener('mousemove', fn);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true); setError('');
+    setBtnState('loading'); setError('');
     const fn = isSignUp
       ? supabase.auth.signUp({ email, password })
       : supabase.auth.signInWithPassword({ email, password });
     const { error: authErr } = await fn;
-    setLoading(false);
-    if (authErr) setError(authErr.message);
+    if (authErr) { setBtnState('idle'); setError(friendlyRestaurantError(authErr.message)); return; }
+    setBtnState('success');
     // Success → onAuthStateChange in the parent handles view transition
   };
 
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=/restaurant` },
     });
   };
 
-  return (
-    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-6">
-      <div className="w-full max-w-sm">
-        <a
-          href="/"
-          className="inline-flex items-center gap-1.5 text-[14px] text-t2 hover:text-brand mb-6 transition-colors"
-        >
-          <IconArrowLeft size={16} /> Back to home
-        </a>
+  const GREEN = '#065F46';
 
-        <div className="bg-surface rounded-brand shadow-brand p-7">
-          {/* Brand header */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-brands bg-[#ECFDF5] flex items-center justify-center">
-              <IconBuildingStore size={24} style={{ color: '#065F46' }} />
-            </div>
-            <div>
-              <div className="font-display text-[22px] font-extrabold tracking-tight leading-none">
-                Rep<span className="text-brand">EAT</span>
+  return (
+    <div className="min-h-screen flex" style={{ background: '#0D0D0D' }}>
+      {/* Left panel */}
+      <div
+        ref={leftRef}
+        className="hidden lg:flex w-[40%] flex-col justify-between p-12 relative overflow-hidden"
+        style={{ background: '#0a1a12' }}
+      >
+        <div className="pointer-events-none absolute inset-0"
+          style={{ background: `radial-gradient(500px circle at ${cursor.x}px ${cursor.y}px, rgba(6,95,70,0.2), transparent 50%)` }} />
+        <a href="/" className="text-[13px] z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>← Back to home</a>
+        <div className="z-10">
+          <div className="w-16 h-16 rounded-2xl mb-5 flex items-center justify-center" style={{ background: 'rgba(6,95,70,0.3)', border: '1px solid rgba(6,95,70,0.5)' }}>
+            <IconBuildingStore size={32} style={{ color: '#34d399' }} />
+          </div>
+          <p className="font-display text-[26px] font-extrabold text-white leading-tight mb-4">
+            Free forever.<br/>No commission.<br/>Go live in minutes.
+          </p>
+          <div className="flex flex-col gap-2">
+            {['50+ restaurants onboard', '168 deals claimed this week', '$0 monthly fee — always'].map((t) => (
+              <div key={t} className="flex items-center gap-2 px-4 py-2 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+                <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.8)' }}>{t}</span>
               </div>
-              <p className="text-[12px] text-t2">Restaurant Portal · Ontario</p>
+            ))}
+          </div>
+        </div>
+        <div style={{ height: 40 }} />
+      </div>
+
+      {/* Right panel */}
+      <div className="flex-1 flex items-center justify-center p-6" style={{ background: '#0D0D0D' }}>
+        <div className="w-full max-w-[420px] rounded-2xl p-8" style={{ background: '#fff', borderTop: `4px solid ${GREEN}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+          <div className="mb-6">
+            <div className="font-display text-[28px] font-extrabold tracking-tight leading-none mb-1">
+              Rep<span style={{ color: '#E85D04' }}>EAT</span>
             </div>
+            <p className="text-[14px]" style={{ color: '#6B7280' }}>Restaurant Portal · {isSignUp ? 'Create your free account' : 'Sign in to manage deals'}</p>
           </div>
 
-          <p className="text-sm text-t2 mb-5">
-            {isSignUp
-              ? 'Create a free account to list your restaurant.'
-              : 'Sign in to manage your deals and collabs.'}
-          </p>
+          <button onClick={handleGoogle} className="w-full h-12 rounded-xl flex items-center justify-center gap-3 font-semibold text-[14px] mb-4 transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ background: '#fff', border: '1.5px solid #E5E7EB', color: '#111' }}>
+            <GoogleSVG /> Continue with Google
+          </button>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px" style={{ background: '#E5E7EB' }} />
+            <span className="text-[12px]" style={{ color: '#9CA3AF' }}>or with email</span>
+            <div className="flex-1 h-px" style={{ background: '#E5E7EB' }} />
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 mb-4">
-            <div>
-              <label className="block text-[13px] font-semibold text-t2 mb-1">Email</label>
-              <input
-                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="owner@restaurant.com" required
-                className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[#065F46] focus:ring-2 focus:ring-[#065F46]/10 transition-all"
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="owner@restaurant.com" required
+              className="w-full h-12 px-4 rounded-xl text-[15px] outline-none transition-all"
+              style={{ border: '1.5px solid #E5E7EB', background: '#FAFAFA' }}
+              onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(6,95,70,0.1)`; }}
+              onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.boxShadow = 'none'; }}
+            />
+            <div className="relative">
+              <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required
+                className="w-full h-12 pl-4 pr-12 rounded-xl text-[15px] outline-none transition-all"
+                style={{ border: '1.5px solid #E5E7EB', background: '#FAFAFA' }}
+                onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(6,95,70,0.1)`; }}
+                onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.boxShadow = 'none'; }}
               />
+              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPw ? <IconX size={17} /> : <IconSearch size={17} />}
+              </button>
             </div>
-            <div>
-              <label className="block text-[13px] font-semibold text-t2 mb-1">Password</label>
-              <input
-                type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" required
-                className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[#065F46] focus:ring-2 focus:ring-[#065F46]/10 transition-all"
-              />
-            </div>
-            {error && (
-              <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2">{error}</p>
-            )}
-            <button
-              type="submit" disabled={loading}
-              className="w-full h-11 bg-[#065F46] hover:bg-[#047857] disabled:opacity-60 text-white font-semibold rounded-brands transition-colors"
-            >
-              {loading ? 'Loading…' : isSignUp ? 'Create account' : 'Sign in'}
+            {error && <div className="px-4 py-3 rounded-xl text-[13px]" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>{error}</div>}
+            <button type="submit" disabled={btnState !== 'idle'}
+              className="w-full h-12 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 transition-all"
+              style={{ background: btnState === 'success' ? '#16a34a' : GREEN }}>
+              {btnState === 'loading' && <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
+              {btnState === 'idle' && (isSignUp ? 'Create free account' : 'Sign in')}
+              {btnState === 'loading' && 'Signing you in...'}
+              {btnState === 'success' && 'Welcome! 🎉'}
             </button>
           </form>
 
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex-1 h-px bg-[var(--bd)]" />
-            <span className="text-[12px] text-t3">or</span>
-            <div className="flex-1 h-px bg-[var(--bd)]" />
-          </div>
-
-          <button
-            onClick={handleGoogle}
-            className="w-full h-11 border border-[var(--bd2)] rounded-brands font-semibold text-[14px] text-tx hover:border-[#065F46] hover:text-[#065F46] transition-all flex items-center justify-center gap-2"
-          >
-            <span className="text-[16px]">G</span> Continue with Google
-          </button>
-
-          <p className="text-center text-[13px] text-t2 mt-4">
-            {isSignUp ? 'Already have an account?' : 'No account yet?'}{' '}
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-brand font-semibold"
-            >
+          <p className="text-center text-[13px] mt-4" style={{ color: '#6B7280' }}>
+            {isSignUp ? 'Already have an account? ' : 'No account yet? '}
+            <button onClick={() => setIsSignUp(!isSignUp)} className="font-semibold" style={{ color: GREEN }}>
               {isSignUp ? 'Sign in →' : 'Create one free →'}
             </button>
           </p>

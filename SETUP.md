@@ -174,6 +174,101 @@ curl "http://localhost:3000/api/google-places?query=Karahi+Boys+Mississauga"
 
 ---
 
+## 7. Supabase Email Template (Verification)
+
+Customise the sign-up verification email so it matches the RepEAT brand.
+
+1. Supabase Dashboard → **Authentication** → **Email Templates**
+2. Select **Confirm signup**
+3. Set **Subject** to:
+   ```
+   Verify your RepEAT account 🍽️
+   ```
+4. Replace the **HTML body** with:
+
+```html
+<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;background:#0A0A0A;color:#F0F0F0;border-radius:16px;">
+  <h1 style="font-size:36px;font-weight:800;letter-spacing:-2px;margin-bottom:8px;">
+    Rep<span style="color:#E85D04">EAT</span>
+  </h1>
+  <p style="color:#AAA;margin-bottom:24px;font-size:16px;line-height:1.6;">
+    You're one step away from saving big on local restaurant deals across Ontario 🇨🇦
+  </p>
+  <a href="{{ .ConfirmationURL }}"
+    style="display:inline-block;background:#E85D04;color:white;padding:14px 32px;border-radius:8px;font-weight:700;font-size:16px;text-decoration:none;">
+    Verify my email →
+  </a>
+  <p style="color:#666;font-size:12px;margin-top:32px;line-height:1.6;">
+    Didn't sign up? You can safely ignore this email.<br>
+    <strong style="color:#E85D04">repeateats.ca</strong> · Ontario, Canada 🇨🇦
+  </p>
+</div>
+```
+
+5. Click **Save**
+
+---
+
+## 8. SQL: Creator & RLS Fixes
+
+Run in Supabase **SQL Editor** after the initial schema:
+
+```sql
+-- Role-based portal column on users
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS portal text DEFAULT 'customer';
+
+-- Fix collabs RLS — allow authenticated users to PATCH open collabs
+ALTER TABLE public.collabs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "collabs_update" ON public.collabs;
+CREATE POLICY "collabs_update" ON public.collabs
+  FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+-- Fix messages RLS
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "messages_insert" ON public.messages;
+CREATE POLICY "messages_insert" ON public.messages
+  FOR INSERT WITH CHECK (auth.uid() = sender_id);
+DROP POLICY IF EXISTS "messages_select" ON public.messages;
+CREATE POLICY "messages_select" ON public.messages
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+-- Creator payment + profile fields
+ALTER TABLE public.influencers
+  ADD COLUMN IF NOT EXISTS etransfer_email text,
+  ADD COLUMN IF NOT EXISTS paypal_email text,
+  ADD COLUMN IF NOT EXISTS bank_transit text,
+  ADD COLUMN IF NOT EXISTS bank_institution text,
+  ADD COLUMN IF NOT EXISTS bank_account_masked text,
+  ADD COLUMN IF NOT EXISTS preferred_payment text DEFAULT 'etransfer',
+  ADD COLUMN IF NOT EXISTS total_earned_cents integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS escrow_balance_cents integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS completed_collabs integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS instagram_handle text,
+  ADD COLUMN IF NOT EXISTS tiktok_handle text,
+  ADD COLUMN IF NOT EXISTS primary_platform text,
+  ADD COLUMN IF NOT EXISTS follower_range text,
+  ADD COLUMN IF NOT EXISTS avg_rating numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS city text,
+  ADD COLUMN IF NOT EXISTS bio text,
+  ADD COLUMN IF NOT EXISTS display_name text,
+  ADD COLUMN IF NOT EXISTS avatar_url text;
+
+-- Collab content submission fields
+ALTER TABLE public.collabs
+  ADD COLUMN IF NOT EXISTS draft_content_url text,
+  ADD COLUMN IF NOT EXISTS final_post_url text,
+  ADD COLUMN IF NOT EXISTS content_submitted_at timestamptz,
+  ADD COLUMN IF NOT EXISTS content_approved_at timestamptz,
+  ADD COLUMN IF NOT EXISTS payment_deposited_at timestamptz,
+  ADD COLUMN IF NOT EXISTS payment_released_at timestamptz,
+  ADD COLUMN IF NOT EXISTS deadline timestamptz,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS creator_rate integer;
+```
+
+---
+
 ## Project Structure (after this setup)
 
 ```

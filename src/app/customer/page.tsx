@@ -31,20 +31,44 @@ type FilterType = 'all' | DealType;
 
 // ─── Constants ────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id: 'all',       emoji: '🍽️', label: 'All',        bg: 'bg-[#FFF3EC]' },
-  { id: 'indian',    emoji: '🍛', label: 'Indian',      bg: 'bg-[#FFF7ED]' },
-  { id: 'italian',   emoji: '🍝', label: 'Italian',     bg: 'bg-[#FFF1F0]' },
-  { id: 'bbq',       emoji: '🥩', label: 'BBQ',         bg: 'bg-[#FEF3C7]' },
-  { id: 'bar',       emoji: '🍺', label: 'Bar & Grill', bg: 'bg-[#EFF6FF]' },
-  { id: 'canadian',  emoji: '🍁', label: 'Canadian',    bg: 'bg-[#F0FDF4]' },
-  { id: 'burgers',   emoji: '🍔', label: 'Burgers',     bg: 'bg-[#FFF7ED]' },
-  { id: 'chinese',   emoji: '🥢', label: 'Chinese',     bg: 'bg-[#F0FDF4]' },
-  { id: 'sushi',     emoji: '🍣', label: 'Sushi',       bg: 'bg-[#EFF6FF]' },
-  { id: 'pizza',     emoji: '🍕', label: 'Pizza',       bg: 'bg-[#FFF1F0]' },
-  { id: 'desserts',  emoji: '🧁', label: 'Desserts',    bg: 'bg-[#FDF4FF]' },
-  { id: 'vegan',     emoji: '🥗', label: 'Vegan',       bg: 'bg-[#F0FDF4]' },
-  { id: 'bubbletea', emoji: '🧋', label: 'Bubble Tea',  bg: 'bg-[#FDF4FF]' },
+  { id: 'all',       label: 'All',        color: '#E85D04', img: null },
+  { id: 'indian',    label: 'Indian',     color: '#C2410C', img: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200&q=70' },
+  { id: 'italian',   label: 'Italian',    color: '#B45309', img: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&q=70' },
+  { id: 'bbq',       label: 'BBQ',        color: '#92400E', img: 'https://images.unsplash.com/photo-1558030006-450675393462?w=200&q=70' },
+  { id: 'bar',       label: 'Bar & Grill',color: '#1E40AF', img: 'https://images.unsplash.com/photo-1536935338788-846bb9981813?w=200&q=70' },
+  { id: 'canadian',  label: 'Canadian',   color: '#065F46', img: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=200&q=70' },
+  { id: 'burgers',   label: 'Burgers',    color: '#9A3412', img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&q=70' },
+  { id: 'chinese',   label: 'Chinese',    color: '#991B1B', img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=200&q=70' },
+  { id: 'sushi',     label: 'Sushi',      color: '#1E3A5F', img: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=200&q=70' },
+  { id: 'pizza',     label: 'Pizza',      color: '#9D174D', img: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&q=70' },
+  { id: 'desserts',  label: 'Desserts',   color: '#6B21A8', img: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&q=70' },
+  { id: 'vegan',     label: 'Vegan',      color: '#166534', img: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&q=70' },
+  { id: 'bubbletea', label: 'Bubble Tea', color: '#701A75', img: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=200&q=70' },
+  { id: 'seafood',   label: 'Seafood',    color: '#0E4D6E', img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&q=70' },
 ];
+
+// ─── Confetti burst on cuisine selection ──────────────────────────────────
+function fireConfetti(color: string, originX: number, originY: number) {
+  if (typeof window === 'undefined') return;
+  // Respect reduced-motion preference
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < 20; i++) {
+    const el = document.createElement('div');
+    const size = 4 + Math.random() * 7;
+    el.style.cssText = `position:fixed;left:${originX}px;top:${originY}px;width:${size}px;height:${size}px;border-radius:${Math.random() > 0.4 ? '50%' : '2px'};background:${color};pointer-events:none;z-index:9999;`;
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 35 + Math.random() * 75;
+    el.animate(
+      [
+        { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 },
+        { transform: `translate(${Math.cos(angle)*dist}px,${Math.sin(angle)*dist}px) scale(0) rotate(${Math.random()*720}deg)`, opacity: 0 },
+      ],
+      { duration: 550 + Math.random() * 200, easing: 'ease-out', fill: 'forwards' }
+    );
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 800);
+  }
+}
 
 const CITIES = [
   'GTA Area', 'Mississauga', 'Brampton', 'Toronto',
@@ -73,6 +97,102 @@ const CATEGORY_IMAGES: Record<string, string> = {
   desserts:  'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&q=80',
   default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
 };
+
+// ─── CuisineRow — photo-pill horizontal scroller ──────────────────────────
+function CuisineRow({ category, onChange }: { category: string; onChange: (id: string) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft,  setCanLeft]  = useState(false);
+  const [canRight, setCanRight] = useState(true);
+
+  const updateArrows = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 10);
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative group mb-5">
+      {/* Left arrow (desktop only) */}
+      {canLeft && (
+        <button
+          onClick={() => scroll('left')}
+          className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-surface shadow-brand border border-[var(--bd)] items-center justify-center text-t2 hover:text-brand transition-all opacity-0 group-hover:opacity-100 -translate-x-1/2"
+          aria-label="Scroll left"
+        >
+          ‹
+        </button>
+      )}
+
+      {/* Pill row */}
+      <div
+        ref={scrollRef}
+        onScroll={updateArrows}
+        className="flex gap-2.5 overflow-x-auto scrollbar-none pb-1"
+      >
+        {CATEGORIES.map((cat, i) => {
+          const active = category === cat.id;
+          return (
+            <button
+              key={cat.id}
+              onClick={(e) => {
+                onChange(cat.id);
+                fireConfetti(cat.color, e.clientX, e.clientY);
+              }}
+              className="flex-shrink-0 relative overflow-hidden transition-all duration-200 hover:scale-105"
+              style={{
+                height: 56,
+                minWidth: 100,
+                borderRadius: 100,
+                border: active ? `2px solid #E85D04` : '1px solid rgba(0,0,0,0.12)',
+                boxShadow: active ? '0 0 0 3px rgba(232,93,4,0.18)' : undefined,
+                animationDelay: `${i * 50}ms`,
+                animation: 'fadeUpIn 0.4s ease both',
+              }}
+            >
+              {/* Photo background */}
+              {cat.img ? (
+                <div
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${cat.img})` }}
+                />
+              ) : (
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #E85D04, #FF9A4D)' }} />
+              )}
+              {/* Dark overlay */}
+              <div
+                className="absolute inset-0 transition-opacity duration-200"
+                style={{ background: 'rgba(0,0,0,0.52)', opacity: active ? 0.35 : 1 }}
+              />
+              {/* Label */}
+              <span
+                className="relative z-10 font-bold text-white whitespace-nowrap px-5"
+                style={{ fontSize: 13, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+              >
+                {cat.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Right arrow (desktop only) */}
+      {canRight && (
+        <button
+          onClick={() => scroll('right')}
+          className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-surface shadow-brand border border-[var(--bd)] items-center justify-center text-t2 hover:text-brand transition-all opacity-0 group-hover:opacity-100 translate-x-1/2"
+          aria-label="Scroll right"
+        >
+          ›
+        </button>
+      )}
+    </div>
+  );
+}
 
 // ─── SkeletonCard ─────────────────────────────────────────────────────────
 function SkeletonCard() {
@@ -679,7 +799,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=/customer` },
     });
   };
 
@@ -967,25 +1087,8 @@ export default function CustomerPage() {
       {/* ── Main content ──────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-5 py-5 pb-20">
 
-        {/* Category icon row — horizontal scroll */}
-        <div className="flex gap-2.5 overflow-x-auto scrollbar-none pb-1 mb-5">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setCategory(cat.id)}
-              className={`flex flex-col items-center gap-1.5 flex-shrink-0 transition-transform hover:scale-105 ${category === cat.id ? 'scale-105' : ''}`}
-            >
-              <div className={`w-[66px] h-[66px] rounded-2xl flex items-center justify-center text-[28px] border-[2.5px] transition-all ${cat.bg} ${
-                category === cat.id ? 'border-brand ring-2 ring-brand/15' : 'border-transparent'
-              }`}>
-                {cat.emoji}
-              </div>
-              <span className={`text-[12px] font-semibold whitespace-nowrap ${category === cat.id ? 'text-brand' : 'text-t2'}`}>
-                {cat.label}
-              </span>
-            </button>
-          ))}
-        </div>
+        {/* Cuisine pills — photo backgrounds, horizontal scroll */}
+        <CuisineRow category={category} onChange={setCategory} />
 
         {/* Filter chips — deal type */}
         <div className="flex gap-2 flex-wrap mb-5">
