@@ -211,7 +211,7 @@ export default function CustomerSignupPage() {
       if (authData?.session) {
         router.push('/customer');
       } else {
-        router.push('/customer/verify-email');
+        router.push(`/customer/verify-email?email=${encodeURIComponent(email)}`);
       }
     })();
   };

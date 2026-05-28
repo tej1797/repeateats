@@ -36,10 +36,10 @@ export async function GET(request: NextRequest) {
     const followerMatch  = html.match(/"edge_followed_by":\{"count":(\d+)\}/)
     const privateMatch   = html.match(/"is_private":(true|false)/)
 
-    // If the page rendered but contains no profile JSON it might be a soft 404
-    const looksValid = html.includes('instagram.com') && (
-      fullNameMatch || html.includes('"ProfilePage"') || html.includes('username')
-    )
+    // Require actual profile data — Instagram returns 200 even for non-existent accounts
+    // (they render a "page not available" page). Generic strings like 'username' appear
+    // on error pages too, so only trust actual structured profile JSON.
+    const looksValid = fullNameMatch !== null || followerMatch !== null || html.includes('"ProfilePage"')
 
     if (!looksValid) {
       return NextResponse.json({ valid: false, handle })
