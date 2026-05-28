@@ -335,9 +335,10 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
+    document.cookie = 'rp_portal=influencer;path=/;max-age=600;SameSite=Lax'
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback/influencer` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
 

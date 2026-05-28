@@ -1,9 +1,6 @@
-// Fallback callback — redirects to /customer
-// Portal-specific callbacks are at /auth/callback/customer|restaurant|influencer
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -28,8 +25,17 @@ export async function GET(request: NextRequest) {
     )
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}/customer`)
+      const portal = cookieStore.get('rp_portal')?.value
+      const dest = portal === 'restaurant' ? '/restaurant'
+                 : portal === 'influencer' ? '/influencer'
+                 : '/customer'
+      const res = NextResponse.redirect(`${origin}${dest}`)
+      res.cookies.delete('rp_portal')
+      return res
     }
+    console.error('exchangeCodeForSession failed:', error)
   }
-  return NextResponse.redirect(`${origin}/customer/login?error=auth`)
+
+  // Fallback
+  return NextResponse.redirect(`${origin}/customer`)
 }
