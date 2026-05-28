@@ -1,0 +1,159 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+
+// ─── Animated envelope ────────────────────────────────────────────────────────
+function Envelope({ sent }: { sent: boolean }) {
+  return (
+    <div
+      className="relative w-24 h-24 mx-auto mb-6 transition-all duration-500"
+      style={{ transform: sent ? 'scale(1.1)' : 'scale(1)' }}
+    >
+      {/* Envelope body */}
+      <div
+        className="w-full h-full rounded-2xl flex items-center justify-center text-5xl"
+        style={{
+          background: sent ? 'linear-gradient(135deg, #FFF7F0, #FFE8D4)' : '#F9FAFB',
+          border: `2px solid ${sent ? '#FFB380' : '#E5E7EB'}`,
+          boxShadow: sent ? '0 0 40px rgba(232,93,4,0.2)' : undefined,
+          transition: 'all 0.5s ease',
+        }}
+      >
+        {sent ? '📨' : '✉️'}
+      </div>
+      {/* Pulse ring when sent */}
+      {sent && (
+        <div
+          className="absolute inset-0 rounded-2xl animate-ping"
+          style={{ border: '2px solid rgba(232,93,4,0.3)' }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+export default function VerifyEmailPage() {
+  const supabase = createClient();
+
+  const [cooldown,   setCooldown]   = useState(0);   // seconds remaining
+  const [resent,     setResent]     = useState(false);
+  const [email,      setEmail]      = useState('');
+
+  // Try to get the pending email from Supabase session
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) setEmail(session.user.email);
+    });
+  }, [supabase]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const handleResend = useCallback(async () => {
+    if (!email || cooldown > 0) return;
+    await supabase.auth.resend({ type: 'signup', email });
+    setResent(true);
+    setCooldown(60);
+  }, [email, cooldown, supabase]);
+
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
+      style={{ background: '#0D0D0D' }}
+    >
+      {/* Background glow */}
+      <div
+        className="pointer-events-none absolute"
+        style={{
+          width: 500, height: 500, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(232,93,4,0.08) 0%, transparent 70%)',
+          top: '20%', left: '50%', transform: 'translateX(-50%)',
+          filter: 'blur(60px)',
+        }}
+      />
+
+      {/* Card */}
+      <div
+        className="relative w-full max-w-[420px] rounded-2xl p-8 text-center"
+        style={{ background: '#fff', borderTop: '4px solid #E85D04', boxShadow: '0 25px 60px rgba(0,0,0,0.45)' }}
+      >
+        {/* Logo */}
+        <div className="font-display text-[24px] font-extrabold tracking-tight leading-none mb-6">
+          Rep<span style={{ color: '#E85D04' }}>EAT</span>
+        </div>
+
+        <Envelope sent={resent} />
+
+        <h1 className="text-[22px] font-extrabold text-gray-900 mb-2">
+          Check your inbox
+        </h1>
+        <p className="text-[14px] text-gray-500 leading-relaxed mb-1">
+          We sent a verification link to
+        </p>
+        {email && (
+          <p className="text-[15px] font-semibold text-gray-800 mb-4">{email}</p>
+        )}
+        <p className="text-[13px] text-gray-400 mb-6">
+          Click the link in the email to activate your account and start claiming deals.
+        </p>
+
+        {/* Resend button */}
+        <button
+          onClick={handleResend}
+          disabled={cooldown > 0 || !email}
+          className="w-full h-12 rounded-xl font-bold text-[15px] flex items-center justify-center transition-all duration-200 disabled:cursor-not-allowed"
+          style={{
+            background: cooldown > 0 ? '#F9FAFB' : resent ? '#ECFDF5' : '#E85D04',
+            color: cooldown > 0 ? '#9CA3AF' : resent ? '#16a34a' : '#fff',
+            border: cooldown > 0 || resent ? '1.5px solid #E5E7EB' : 'none',
+          }}
+        >
+          {cooldown > 0
+            ? `Resend in ${cooldown}s`
+            : resent
+            ? 'Email sent! ✓'
+            : 'Resend verification email'}
+        </button>
+
+        {/* Tips */}
+        <div
+          className="mt-5 rounded-xl p-4 text-left space-y-1.5"
+          style={{ background: '#F9FAFB', border: '1px solid #F3F4F6' }}
+        >
+          <p className="text-[12px] font-semibold text-gray-500 mb-2">Can&apos;t find the email?</p>
+          {[
+            'Check your spam or junk folder',
+            'Make sure you used the right email address',
+            'Wait a minute — it can take a few seconds',
+          ].map((tip) => (
+            <p key={tip} className="text-[12px] text-gray-400 flex items-start gap-2">
+              <span style={{ color: '#E85D04' }}>•</span> {tip}
+            </p>
+          ))}
+        </div>
+
+        {/* Links */}
+        <div className="mt-5 flex items-center justify-center gap-4 text-[13px]" style={{ color: '#9CA3AF' }}>
+          <Link href="/customer/login" className="hover:underline hover:text-gray-600 transition-colors">
+            Sign in
+          </Link>
+          <span>·</span>
+          <Link href="/customer/signup" className="hover:underline hover:text-gray-600 transition-colors">
+            Try a different email
+          </Link>
+          <span>·</span>
+          <Link href="/" className="hover:underline hover:text-gray-600 transition-colors">
+            Home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

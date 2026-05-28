@@ -11,7 +11,6 @@ import type { Influencer, CollabWithDetails } from '@/types';
 import { useCollabs } from '@/hooks/useCollabs';
 import { useMessages } from '@/hooks/useMessages';
 import {
-  IconArrowLeft,
   IconX,
   IconSend,
   IconLoader2,
@@ -169,24 +168,135 @@ export default function InfluencerPage() {
   );
 }
 
+// ─── Google SVG ───────────────────────────────────────────────────────────────
+function GoogleSVG() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+      <path d="M17.64 9.2c0-.637-.057-1.25-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+// ─── Friendly error messages ──────────────────────────────────────────────────
+function friendlyCreatorError(msg: string): string {
+  if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials'))
+    return "Hmm, those credentials don't match 🤔 Try again";
+  if (msg.includes('Email not confirmed'))
+    return "Check your inbox — we sent you a verification link";
+  if (msg.includes('User already registered') || msg.includes('already registered'))
+    return "That email is taken — sign in instead?";
+  if (msg.includes('rate limit') || msg.includes('too many') || msg.includes('Too many'))
+    return "Slow down! Try again in 30 seconds 🐢";
+  if (msg.includes('Password should'))
+    return "Password needs at least 6 characters";
+  return msg;
+}
+
+// ─── Floating label input ─────────────────────────────────────────────────────
+function CreatorFloatField({
+  id, label, type = 'text', value, onChange, right,
+}: {
+  id: string; label: string; type?: string; value: string;
+  onChange: (v: string) => void; right?: React.ReactNode;
+}) {
+  const [focused, setFocused] = useState(false);
+  const up = focused || value.length > 0;
+  return (
+    <div className="relative">
+      <label
+        htmlFor={id}
+        className="absolute left-4 pointer-events-none transition-all duration-150"
+        style={{
+          top:       up ? 8  : '50%',
+          transform: up ? 'none' : 'translateY(-50%)',
+          fontSize:  up ? 11 : 15,
+          fontWeight: up ? 600 : 400,
+          color:     focused ? '#7E22CE' : '#9CA3AF',
+        }}
+      >
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        autoComplete={type === 'password' ? 'current-password' : 'email'}
+        required
+        className="w-full rounded-xl bg-white text-[#111] text-[15px] outline-none transition-all"
+        style={{
+          height: 56,
+          paddingTop: 20,
+          paddingBottom: 8,
+          paddingLeft: 16,
+          paddingRight: right ? 44 : 16,
+          border: focused ? '2px solid #7E22CE' : '1.5px solid #E5E7EB',
+          boxShadow: focused ? '0 0 0 3px rgba(126,34,206,0.1)' : undefined,
+        }}
+      />
+      {right && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">{right}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Stat pill (left panel) ───────────────────────────────────────────────────
+function CreatorStatPill({ text }: { text: string }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-4 py-2 rounded-full"
+      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
+    >
+      <span className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+      <span className="text-[13px] font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>{text}</span>
+    </div>
+  );
+}
+
 // ─── AuthView ─────────────────────────────────────────────────────────────────
 
 function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [showPw,   setShowPw]   = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const [btnState, setBtnState] = useState<'idle' | 'loading' | 'success'>('idle');
+
+  // Cursor glow on left panel
+  const leftRef = useRef<HTMLDivElement>(null);
+  const [cursor, setCursor] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const el = leftRef.current;
+    if (!el) return;
+    const fn = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect();
+      setCursor({ x: e.clientX - r.left, y: e.clientY - r.top });
+    };
+    el.addEventListener('mousemove', fn);
+    return () => el.removeEventListener('mousemove', fn);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true); setError('');
+    setBtnState('loading'); setError('');
     const fn = isSignUp
       ? supabase.auth.signUp({ email, password })
       : supabase.auth.signInWithPassword({ email, password });
     const { error: authErr } = await fn;
-    setLoading(false);
-    if (authErr) setError(authErr.message);
+    if (authErr) {
+      setBtnState('idle');
+      setError(friendlyCreatorError(authErr.message));
+      return;
+    }
+    setBtnState('success');
   };
 
   const handleGoogle = async () => {
@@ -197,79 +307,169 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-6">
-      <div className="w-full max-w-sm">
-        <a
-          href="/"
-          className="inline-flex items-center gap-1.5 text-[14px] text-t2 hover:text-brand mb-6 transition-colors"
-        >
-          <IconArrowLeft size={16} /> Back to home
+    <div className="min-h-screen flex" style={{ background: '#0D0D0D' }}>
+
+      {/* ── Left panel ─────────────────────────────────────────────── */}
+      <div
+        ref={leftRef}
+        className="hidden lg:flex w-[40%] flex-col justify-between p-12 relative overflow-hidden"
+        style={{ background: '#0e0a1a' }}
+      >
+        {/* Cursor glow */}
+        <div
+          className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+          style={{
+            background: `radial-gradient(500px circle at ${cursor.x}px ${cursor.y}px, rgba(126,34,206,0.15), transparent 50%)`,
+          }}
+        />
+
+        {/* Ambient orb */}
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            width: 380, height: 380, borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(126,34,206,0.18) 0%, transparent 70%)',
+            top: '20%', left: '-10%',
+            filter: 'blur(40px)',
+          }}
+        />
+
+        {/* Back link */}
+        <a href="/" className="inline-flex items-center gap-2 text-[13px] font-medium z-10"
+          style={{ color: 'rgba(255,255,255,0.4)' }}>
+          ← Back to home
         </a>
 
-        <div className="bg-surface rounded-brand shadow-brand p-7">
-          {/* Brand header */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-brands bg-[#FDF4FF] flex items-center justify-center">
-              <IconDeviceMobileStar size={26} style={{ color: '#7E22CE' }} />
-            </div>
-            <div>
-              <div className="font-display text-[22px] font-extrabold tracking-tight leading-none">
-                Rep<span className="text-brand">EAT</span>
-              </div>
-              <p className="text-[12px] text-t2">Creator Portal · Ontario</p>
-            </div>
+        {/* Center content */}
+        <div className="flex-1 flex flex-col items-center justify-center z-10 text-center gap-6">
+          {/* Icon */}
+          <div
+            className="w-20 h-20 rounded-2xl flex items-center justify-center"
+            style={{ background: 'rgba(126,34,206,0.2)', border: '1px solid rgba(126,34,206,0.3)' }}
+          >
+            <IconDeviceMobileStar size={38} style={{ color: '#A855F7' }} />
           </div>
 
-          <p className="text-sm text-t2 mb-5">
-            {isSignUp
-              ? 'Join to find restaurant collabs and earn on every deal.'
-              : 'Sign in to browse collab opportunities near you.'}
-          </p>
+          <div>
+            <p className="font-display text-[28px] font-extrabold text-white leading-tight mb-2">
+              Monetise your<br />food content
+            </p>
+            <p className="text-[14px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              Connect with Ontario restaurants.<br />Get paid to create.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 mb-4">
-            <div>
-              <label className="block text-[13px] font-semibold text-t2 mb-1">Email</label>
-              <input
-                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@creator.com" required
-                className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[#7E22CE] focus:ring-2 focus:ring-[#7E22CE]/10 transition-all"
-              />
+          {/* Collab cards */}
+          <div className="space-y-3 w-full max-w-[220px]">
+            {[
+              { rest: 'Nirvana Restaurant', pay: '$250', type: '2 Reels + Story' },
+              { rest: 'Charcoal Steak House', pay: '$180', type: '1 TikTok' },
+              { rest: 'Real Fruit Bubble Tea', pay: '$120', type: 'Instagram post' },
+            ].map((c) => (
+              <div
+                key={c.rest}
+                className="bg-white/5 rounded-xl p-3 text-left"
+                style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[12px] font-bold text-white truncate">{c.rest}</p>
+                  <span className="text-[13px] font-extrabold text-purple-400">{c.pay}</span>
+                </div>
+                <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.45)' }}>{c.type}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom stats */}
+        <div className="z-10 space-y-2">
+          <CreatorStatPill text="7 collabs available now" />
+          <CreatorStatPill text="Avg $200–$350 per collab" />
+          <CreatorStatPill text="2% platform fee only" />
+        </div>
+      </div>
+
+      {/* ── Right panel ────────────────────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center p-6" style={{ background: '#0D0D0D' }}>
+        <div
+          className="w-full max-w-[440px] rounded-2xl p-8 relative"
+          style={{ background: '#fff', borderTop: '4px solid #7E22CE', boxShadow: '0 25px 60px rgba(0,0,0,0.4)' }}
+        >
+          {/* Logo */}
+          <div className="mb-6">
+            <div className="font-display text-[32px] font-extrabold tracking-tight leading-none mb-1">
+              Rep<span style={{ color: '#E85D04' }}>EAT</span>
             </div>
-            <div>
-              <label className="block text-[13px] font-semibold text-t2 mb-1">Password</label>
-              <input
-                type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" required
-                className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[#7E22CE] focus:ring-2 focus:ring-[#7E22CE]/10 transition-all"
-              />
-            </div>
-            {error && (
-              <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2">{error}</p>
-            )}
+            <p className="text-[14px]" style={{ color: '#6B7280' }}>
+              Creator portal · {isSignUp ? 'Join to earn from collabs' : 'Sign in to browse collabs'}
+            </p>
+          </div>
+
+          {/* Google button */}
+          <div className="mb-5">
             <button
-              type="submit" disabled={loading}
-              className="w-full h-11 bg-[#7E22CE] hover:bg-[#6B21A8] disabled:opacity-60 text-white font-semibold rounded-brands transition-colors"
+              onClick={handleGoogle}
+              className="w-full h-12 rounded-xl flex items-center justify-center gap-3 font-semibold text-[14px] transition-all hover:-translate-y-0.5 hover:shadow-md"
+              style={{ background: '#fff', border: '1.5px solid #E5E7EB', color: '#111' }}
             >
-              {loading ? 'Loading…' : isSignUp ? 'Create account' : 'Sign in'}
+              <GoogleSVG /> Continue with Google
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px" style={{ background: '#E5E7EB' }} />
+            <span className="text-[12px] font-medium" style={{ color: '#9CA3AF' }}>or sign in with email</span>
+            <div className="flex-1 h-px" style={{ background: '#E5E7EB' }} />
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <CreatorFloatField
+              id="inf-email" label="Email address" type="email"
+              value={email} onChange={setEmail}
+            />
+            <CreatorFloatField
+              id="inf-password" label="Password" type={showPw ? 'text' : 'password'}
+              value={password} onChange={setPassword}
+              right={
+                <button type="button" onClick={() => setShowPw((v) => !v)} className="text-gray-400 hover:text-gray-600 transition-colors text-[12px] font-semibold">
+                  {showPw ? 'Hide' : 'Show'}
+                </button>
+              }
+            />
+
+            {error && (
+              <div className="px-4 py-3 rounded-xl text-[13px] font-medium" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={btnState !== 'idle'}
+              className="w-full h-12 rounded-xl text-white font-bold text-[15px] flex items-center justify-center gap-2 transition-all duration-300 disabled:cursor-not-allowed"
+              style={{
+                background: btnState === 'success' ? '#16a34a' : '#7E22CE',
+              }}
+            >
+              {btnState === 'loading' && (
+                <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              )}
+              {btnState === 'idle'    && (isSignUp ? 'Create account' : 'Sign in')}
+              {btnState === 'loading' && (isSignUp ? 'Creating account…' : 'Signing you in…')}
+              {btnState === 'success' && (isSignUp ? 'Account created! 🎉' : 'Welcome back! 🎉')}
             </button>
           </form>
 
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex-1 h-px bg-[var(--bd)]" />
-            <span className="text-[12px] text-t3">or</span>
-            <div className="flex-1 h-px bg-[var(--bd)]" />
-          </div>
-
-          <button
-            onClick={handleGoogle}
-            className="w-full h-11 border border-[var(--bd2)] rounded-brands font-semibold text-[14px] text-tx hover:border-[#7E22CE] hover:text-[#7E22CE] transition-all flex items-center justify-center gap-2"
-          >
-            <span className="text-[16px]">G</span> Continue with Google
-          </button>
-
-          <p className="text-center text-[13px] text-t2 mt-4">
-            {isSignUp ? 'Already have an account?' : 'No account?'}{' '}
-            <button onClick={() => setIsSignUp(!isSignUp)} className="font-semibold" style={{ color: '#7E22CE' }}>
+          {/* Toggle sign up / sign in */}
+          <p className="text-center text-[13px] mt-4" style={{ color: '#6B7280' }}>
+            {isSignUp ? 'Already have an account?' : 'No account yet?'}{' '}
+            <button
+              onClick={() => { setIsSignUp(!isSignUp); setError(''); setBtnState('idle'); }}
+              className="font-semibold hover:underline"
+              style={{ color: '#7E22CE' }}
+            >
               {isSignUp ? 'Sign in →' : 'Join for free →'}
             </button>
           </p>
