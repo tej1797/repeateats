@@ -15,11 +15,15 @@ import {
   IconCrown, IconTicket, IconChartBar, IconLogout, IconCheck,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
-import StarRating from '@/components/StarRating';
 import ReviewsSection from '@/components/ReviewsSection';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
+import SharedDealCard from '@/components/deals/DealCard';
+import CuisinePills from '@/components/deals/CuisinePills';
+import Skeleton from '@/components/ui/Skeleton';
+import MobileNav from '@/components/layout/MobileNav';
+import { DealTypeBadge } from '@/components/ui/Badge';
 import { type Icon as TablerIcon } from '@tabler/icons-react';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
 import type { DealType } from '@/types/index';
@@ -28,47 +32,6 @@ import type { User } from '@supabase/supabase-js';
 // ─── Local types ──────────────────────────────────────────────────────────
 type Tab        = 'active' | 'coming' | 'all';
 type FilterType = 'all' | DealType;
-
-// ─── Constants ────────────────────────────────────────────────────────────
-const CATEGORIES = [
-  { id: 'all',       label: 'All',        color: '#E85D04', img: null },
-  { id: 'indian',    label: 'Indian',     color: '#C2410C', img: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200&q=70' },
-  { id: 'italian',   label: 'Italian',    color: '#B45309', img: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&q=70' },
-  { id: 'bbq',       label: 'BBQ',        color: '#92400E', img: 'https://images.unsplash.com/photo-1558030006-450675393462?w=200&q=70' },
-  { id: 'bar',       label: 'Bar & Grill',color: '#1E40AF', img: 'https://images.unsplash.com/photo-1536935338788-846bb9981813?w=200&q=70' },
-  { id: 'canadian',  label: 'Canadian',   color: '#065F46', img: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=200&q=70' },
-  { id: 'burgers',   label: 'Burgers',    color: '#9A3412', img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&q=70' },
-  { id: 'chinese',   label: 'Chinese',    color: '#991B1B', img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=200&q=70' },
-  { id: 'sushi',     label: 'Sushi',      color: '#1E3A5F', img: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=200&q=70' },
-  { id: 'pizza',     label: 'Pizza',      color: '#9D174D', img: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&q=70' },
-  { id: 'desserts',  label: 'Desserts',   color: '#6B21A8', img: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&q=70' },
-  { id: 'vegan',     label: 'Vegan',      color: '#166534', img: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&q=70' },
-  { id: 'bubbletea', label: 'Bubble Tea', color: '#701A75', img: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=200&q=70' },
-  { id: 'seafood',   label: 'Seafood',    color: '#0E4D6E', img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&q=70' },
-];
-
-// ─── Confetti burst on cuisine selection ──────────────────────────────────
-function fireConfetti(color: string, originX: number, originY: number) {
-  if (typeof window === 'undefined') return;
-  // Respect reduced-motion preference
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  for (let i = 0; i < 20; i++) {
-    const el = document.createElement('div');
-    const size = 4 + Math.random() * 7;
-    el.style.cssText = `position:fixed;left:${originX}px;top:${originY}px;width:${size}px;height:${size}px;border-radius:${Math.random() > 0.4 ? '50%' : '2px'};background:${color};pointer-events:none;z-index:9999;`;
-    const angle = Math.random() * Math.PI * 2;
-    const dist  = 35 + Math.random() * 75;
-    el.animate(
-      [
-        { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 },
-        { transform: `translate(${Math.cos(angle)*dist}px,${Math.sin(angle)*dist}px) scale(0) rotate(${Math.random()*720}deg)`, opacity: 0 },
-      ],
-      { duration: 550 + Math.random() * 200, easing: 'ease-out', fill: 'forwards' }
-    );
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 800);
-  }
-}
 
 const CITIES = [
   'GTA Area', 'Mississauga', 'Brampton', 'Toronto',
@@ -83,148 +46,9 @@ const TYPE_FILTERS: { id: FilterType; label: string; Icon?: TablerIcon }[] = [
   { id: 'delivery', label: 'Delivery',  Icon: IconTruck },
 ];
 
-// ─── Category → Unsplash food image map ───────────────────────────────────
-const CATEGORY_IMAGES: Record<string, string> = {
-  indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&q=80',
-  bbq:       'https://images.unsplash.com/photo-1558030006-450675393462?w=400&q=80',
-  italian:   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&q=80',
-  bar:       'https://images.unsplash.com/photo-1575444758702-4a6b9222336e?w=400&q=80',
-  canadian:  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=80',
-  bubbletea: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=400&q=80',
-  pizza:     'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80',
-  burgers:   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
-  sushi:     'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80',
-  desserts:  'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&q=80',
-  default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
-};
+// CuisineRow replaced by shared CuisinePills component
 
-// ─── CuisineRow — photo-pill horizontal scroller ──────────────────────────
-function CuisineRow({ category, onChange }: { category: string; onChange: (id: string) => void }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canLeft,  setCanLeft]  = useState(false);
-  const [canRight, setCanRight] = useState(true);
-
-  const updateArrows = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanLeft(el.scrollLeft > 10);
-    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
-  };
-
-  const scroll = (dir: 'left' | 'right') => {
-    scrollRef.current?.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
-  };
-
-  return (
-    <div className="relative group mb-5">
-      {/* Left arrow (desktop only) */}
-      {canLeft && (
-        <button
-          onClick={() => scroll('left')}
-          className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-surface shadow-brand border border-[var(--bd)] items-center justify-center text-t2 hover:text-brand transition-all opacity-0 group-hover:opacity-100 -translate-x-1/2"
-          aria-label="Scroll left"
-        >
-          ‹
-        </button>
-      )}
-
-      {/* Pill row */}
-      <div
-        ref={scrollRef}
-        onScroll={updateArrows}
-        className="flex gap-2.5 overflow-x-auto scrollbar-none pb-1"
-      >
-        {CATEGORIES.map((cat, i) => {
-          const active = category === cat.id;
-          return (
-            <button
-              key={cat.id}
-              onClick={(e) => {
-                onChange(cat.id);
-                fireConfetti(cat.color, e.clientX, e.clientY);
-              }}
-              className="flex-shrink-0 relative overflow-hidden transition-all duration-200 hover:scale-105"
-              style={{
-                height: 56,
-                minWidth: 100,
-                borderRadius: 100,
-                border: active ? `2px solid #E85D04` : '1px solid rgba(0,0,0,0.12)',
-                boxShadow: active ? '0 0 0 3px rgba(232,93,4,0.18)' : undefined,
-                animationDelay: `${i * 50}ms`,
-                animation: 'fadeUpIn 0.4s ease both',
-              }}
-            >
-              {/* Photo background */}
-              {cat.img ? (
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{ backgroundImage: `url(${cat.img})` }}
-                />
-              ) : (
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #E85D04, #FF9A4D)' }} />
-              )}
-              {/* Dark overlay */}
-              <div
-                className="absolute inset-0 transition-opacity duration-200"
-                style={{ background: 'rgba(0,0,0,0.52)', opacity: active ? 0.35 : 1 }}
-              />
-              {/* Label */}
-              <span
-                className="relative z-10 font-bold text-white whitespace-nowrap px-5"
-                style={{ fontSize: 13, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
-              >
-                {cat.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Right arrow (desktop only) */}
-      {canRight && (
-        <button
-          onClick={() => scroll('right')}
-          className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-surface shadow-brand border border-[var(--bd)] items-center justify-center text-t2 hover:text-brand transition-all opacity-0 group-hover:opacity-100 translate-x-1/2"
-          aria-label="Scroll right"
-        >
-          ›
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── SkeletonCard ─────────────────────────────────────────────────────────
-function SkeletonCard() {
-  return (
-    <div className="bg-surface rounded-brand shadow-brand overflow-hidden animate-pulse border border-[var(--bd)]">
-      <div className="h-28 bg-surface2" />
-      <div className="p-4 space-y-3">
-        <div className="h-3 w-14 bg-surface2 rounded-full" />
-        <div className="h-4 w-3/4 bg-surface2 rounded-full" />
-        <div className="h-7 w-1/2 bg-surface2 rounded-full" />
-        <div className="h-2 bg-surface2 rounded-full" />
-        <div className="h-3 w-1/3 bg-surface2 rounded-full" />
-      </div>
-    </div>
-  );
-}
-
-// ─── DealTypeBadge ────────────────────────────────────────────────────────
-function DealTypeBadge({ types }: { types: string[] }) {
-  const first = types[0] ?? 'dine-in';
-  const styles: Record<string, string> = {
-    'dine-in':  'bg-blue-50 text-blue-700 border-blue-200',
-    'pickup':   'bg-green-50 text-green-700 border-green-200',
-    'delivery': 'bg-orange-50 text-orange-800 border-orange-200',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${styles[first] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-      {first}
-      {types.length > 1 && <span>+{types.length - 1}</span>}
-    </span>
-  );
-}
+// SkeletonCard and DealTypeBadge replaced by shared components (Skeleton, Badge)
 
 // ─── ProfileDrawer ────────────────────────────────────────────────────────
 // Slide-out sidebar (inspired by Uber Eats) — opens when user taps avatar.
@@ -344,130 +168,10 @@ function ProfileDrawer({
   );
 }
 
-// ─── DealCard ─────────────────────────────────────────────────────────────
+// ─── DealCard — thin local wrapper → shared component ─────────────────────
 function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => void }) {
-  const fillPct   = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
-  const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
-  const isUrgent  = spotsLeft !== null && spotsLeft > 0 && spotsLeft <= 5;
-  const isSoldOut = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
-  const imgSrc    = CATEGORY_IMAGES[deal.restaurant?.category ?? ''] ?? CATEGORY_IMAGES.default;
-
-  return (
-    <div
-      className="bg-surface rounded-brand shadow-brand cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-brand2 overflow-hidden border border-[var(--bd)] flex flex-col group"
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onClick()}
-    >
-      {/* Food photo header with gradient overlay */}
-      <div className="relative h-[140px] overflow-hidden flex-shrink-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imgSrc}
-          alt={deal.restaurant?.name ?? ''}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
-        {/* Stronger gradient so text is always readable */}
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.85) 100%)' }} />
-
-        {/* Deal type badge — top left (larger, with blur) */}
-        {deal.deal_types?.length > 0 && (
-          <div className="absolute top-2 left-2">
-            <span
-              className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full border capitalize"
-              style={{
-                background: 'rgba(255,255,255,0.18)',
-                backdropFilter: 'blur(8px)',
-                borderColor: 'rgba(255,255,255,0.35)',
-                color: 'white',
-              }}
-            >
-              {deal.deal_types[0]}
-              {deal.deal_types.length > 1 && <span>+{deal.deal_types.length - 1}</span>}
-            </span>
-          </div>
-        )}
-
-        {/* Coming soon — top right */}
-        {deal.is_coming && (
-          <span className="absolute top-2 right-2 bg-white/90 text-[10px] font-bold px-2 py-0.5 rounded-full text-t2 border border-[var(--bd)]">
-            Coming soon
-          </span>
-        )}
-
-        {/* Restaurant name pill + discount at bottom */}
-        <div className="absolute bottom-2.5 left-3 right-3">
-          <div className="mb-1 inline-flex">
-            <span
-              className="text-[13px] font-bold text-white truncate max-w-full"
-              style={{
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(4px)',
-                padding: '2px 8px',
-                borderRadius: 100,
-                textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-              }}
-            >
-              {deal.restaurant?.name ?? 'Restaurant'}
-            </span>
-          </div>
-          <p className="font-display text-[22px] font-extrabold text-white leading-none drop-shadow-sm" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}>
-            {deal.discount_value ?? '—'}
-          </p>
-        </div>
-      </div>
-
-      {/* Card body */}
-      <div className="p-3.5 flex flex-col flex-1">
-        {/* Deal title */}
-        <h3 className="font-body font-bold text-[14px] leading-snug mb-1.5 line-clamp-2 flex-1">
-          {deal.title}
-        </h3>
-
-        {/* Star rating from restaurant */}
-        {(deal.restaurant?.rating ?? 0) > 0 && (
-          <div className="mb-2">
-            <StarRating rating={deal.restaurant!.rating} size="sm" />
-          </div>
-        )}
-
-        {/* Progress — unlimited vs capped */}
-        {deal.max_claims === null ? (
-          <div className="flex items-center gap-1.5 text-[11px] text-green-600 font-semibold mb-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-            Unlimited · {deal.current_claims} claimed
-          </div>
-        ) : (
-          <div className="mb-2">
-            {isUrgent && (
-              <p className="text-[11px] font-bold text-red-500 mb-1 animate-bounce">
-                Only {spotsLeft} left!
-              </p>
-            )}
-            <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${isUrgent || isSoldOut ? 'bg-red-500' : 'bg-brand'}`}
-                style={{ width: `${fillPct}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[11px] text-t3 mt-1">
-              <span>{deal.current_claims} claimed</span>
-              <span>{isSoldOut ? 'Sold out' : `${spotsLeft} left`}</span>
-            </div>
-          </div>
-        )}
-
-        {/* City */}
-        <p className="text-[11px] text-t3 truncate mt-auto">
-          📍 {deal.restaurant?.city ?? ''}
-          {deal.available_days?.[0] !== 'all' && (
-            <span className="ml-1">· {deal.available_days.join(', ')}</span>
-          )}
-        </p>
-      </div>
-    </div>
-  );
+  // Delegate to the shared DealCard component
+  return <SharedDealCard deal={deal} onClick={onClick} />;
 }
 
 // ─── RestaurantCard (shown in "All Restaurants" tab) ─────────────────────
@@ -1134,7 +838,7 @@ export default function CustomerPage() {
       <main className="max-w-[1100px] mx-auto px-5 py-5 pb-20">
 
         {/* Cuisine pills — photo backgrounds, horizontal scroll */}
-        <CuisineRow category={category} onChange={setCategory} />
+        <CuisinePills selected={category} onChange={setCategory} className="mb-5" />
 
         {/* Filter chips — deal type */}
         <div className="flex gap-2 flex-wrap mb-5">
@@ -1188,7 +892,7 @@ export default function CustomerPage() {
             {/* Loading skeletons */}
             {loading && (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-                {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} variant="dealCard" />)}
               </div>
             )}
 
@@ -1276,24 +980,7 @@ export default function CustomerPage() {
       )}
 
       {/* ── Mobile bottom nav ─────────────────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-surface border-t border-[var(--bd)] flex md:hidden">
-        {[
-          { href: '/customer',     icon: '🏠', label: 'Deals'   },
-          { href: '/customer',     icon: '🔍', label: 'Search',  action: () => document.querySelector<HTMLInputElement>('input[type=text]')?.focus() },
-          { href: '/profile',      icon: '🎟️',  label: 'Claims'  },
-          { href: '/profile',      icon: '👤', label: 'Profile' },
-        ].map(({ href, icon, label, action }) => (
-          <Link
-            key={label}
-            href={href}
-            onClick={action}
-            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 text-t2 hover:text-brand transition-colors"
-          >
-            <span className="text-[20px] leading-none">{icon}</span>
-            <span className="text-[10px] font-semibold">{label}</span>
-          </Link>
-        ))}
-      </nav>
+      <MobileNav portal="customer" />
     </div>
   );
 }

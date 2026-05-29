@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Syne } from "next/font/google";
 import "./globals.css";
+import ClientProviders from "@/components/ClientProviders";
 
 // Body font: Plus Jakarta Sans (weights used in the HTML prototype)
 const plusJakarta = Plus_Jakarta_Sans({
@@ -32,7 +33,9 @@ export default function RootLayout({
   return (
     // Attach font CSS variables to <html> so globals.css can use them
     <html lang="en" className={`${plusJakarta.variable} ${syne.variable}`}>
-      <body>{children}</body>
+      <body>
+        <ClientProviders>{children}</ClientProviders>
+      </body>
     </html>
   );
 }
