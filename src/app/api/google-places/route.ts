@@ -204,7 +204,8 @@ export async function GET(request: NextRequest) {
           })
         );
 
-        return NextResponse.json({ data: detailed });
+        // Return both `data` and `results` keys for compatibility
+        return NextResponse.json({ data: detailed, results: detailed });
       }
     } catch (err) {
       console.error('[google-places/google-api]', err);
@@ -232,5 +233,6 @@ export async function GET(request: NextRequest) {
     source:   'database' as const,
   }));
 
-  return NextResponse.json({ data: results });
+  // Return both `data` and `results` keys for compatibility
+  return NextResponse.json({ data: results, results });
 }

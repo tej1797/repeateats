@@ -12,7 +12,7 @@ import {
   IconSearch, IconMapPin, IconX, IconCircleCheck,
   IconInfoCircle, IconUser, IconBuildingStore, IconShoppingBag,
   IconTruck, IconRefresh, IconDownload,
-  IconCrown, IconTicket, IconChartBar, IconLogout,
+  IconCrown, IconTicket, IconChartBar, IconLogout, IconCheck,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import StarRating from '@/components/StarRating';
@@ -573,7 +573,7 @@ function LocationModal({
 
 // ─── DealModal ────────────────────────────────────────────────────────────
 function DealModal({
-  deal, user, onClose, onClaim, claiming, claimError,
+  deal, user, onClose, onClaim, claiming, claimError, alreadyClaimed, existingQrCode, onViewExisting,
 }: {
   deal: DealWithRestaurant;
   user: User | null;
@@ -581,6 +581,9 @@ function DealModal({
   onClaim: () => void;
   claiming: boolean;
   claimError: string | null;
+  alreadyClaimed?: boolean;
+  existingQrCode?: string;
+  onViewExisting?: (code: string) => void;
 }) {
   const fillPct   = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
   const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
@@ -677,6 +680,13 @@ function DealModal({
             >
               Sign in to claim this deal
             </Link>
+          ) : alreadyClaimed && existingQrCode ? (
+            <button
+              onClick={() => onViewExisting?.(existingQrCode)}
+              className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-brands transition-colors text-[15px] flex items-center justify-center gap-2"
+            >
+              <IconCheck size={18} /> Already claimed — View QR Code
+            </button>
           ) : (
             <button
               onClick={onClaim}
@@ -878,8 +888,10 @@ export default function CustomerPage() {
   const [claimError,    setClaimError]    = useState<string | null>(null);
 
   // ── Auth state ──────────────────────────────────────────────
-  const [user,        setUser]        = useState<User | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [user,         setUser]         = useState<User | null>(null);
+  const [authChecked,  setAuthChecked]  = useState(false);
+  // deal_id → qr_code for deals the user has already claimed
+  const [userClaimMap, setUserClaimMap] = useState<Record<string, string>>({});
   const supabase = useRef(createClient()).current;
   const router   = useRouter();
 
@@ -926,6 +938,22 @@ export default function CustomerPage() {
       subscription.unsubscribe();
     };
   }, [supabase, router]);
+
+  // ── Fetch user's existing claims to detect duplicates ────────
+  useEffect(() => {
+    if (!authChecked || !user) return;
+    fetch('/api/claims')
+      .then((r) => r.json())
+      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string }> }) => {
+        if (!data) return;
+        const map: Record<string, string> = {};
+        for (const c of data) {
+          if (c.status === 'claimed' && c.deal_id) map[c.deal_id] = c.qr_code;
+        }
+        setUserClaimMap(map);
+      })
+      .catch(() => {}); // non-critical — silently ignore
+  }, [authChecked, user]);
 
   // ── Live claim counts via Supabase Realtime ──────────────────
   // Overrides deal.current_claims so progress bars update for all watchers.
@@ -995,11 +1023,8 @@ export default function CustomerPage() {
     setClaimError(null);
     const code = await claimDeal(activeDeal.id);
     if (code) {
-      const title = activeDeal.title;
-      setActiveDeal(null);
-      setQrCode(code);
-      // store title for QR modal
-      setActiveDeal({ ...activeDeal, title } as DealWithRestaurant);
+      // Track this claim so the button shows "View QR" if they open it again
+      setUserClaimMap((prev) => ({ ...prev, [activeDeal.id]: code }));
       setQrCode(code);
     } else {
       setClaimError('Could not claim this deal. Please try again.');
@@ -1217,6 +1242,9 @@ export default function CustomerPage() {
           onClaim={handleClaim}
           claiming={claiming}
           claimError={claimError}
+          alreadyClaimed={!!userClaimMap[activeDeal.id]}
+          existingQrCode={userClaimMap[activeDeal.id]}
+          onViewExisting={(code) => setQrCode(code)}
         />
       )}
 

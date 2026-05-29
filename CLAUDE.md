@@ -155,23 +155,45 @@ npx vercel --prod
 - Header height: all three portal headers standardized to 64px (h-16)
 
 ## Known Issues & Status
-- [x] Google OAuth always redirecting to /customer — FIXED (rp_portal cookie)
+- [x] Google OAuth always redirecting to /customer — FIXED (rp_portal localStorage)
 - [x] Restaurant page infinite spinner — FIXED (getSession() + 5s timeout)
 - [x] Homepage flash after OAuth — FIXED (middleware no-redirect)
 - [x] Same-email multi-portal confusion — FIXED (role determined by DB rows)
 - [x] Verification email flow — FIXED (auto-confirm + polling + 30s countdown)
 - [x] Instagram verification — FIXED (/api/verify-instagram route)
-- [x] Session persistence — FIXED (persistSession + autoRefreshToken)
+- [x] Session persistence — FIXED (persistSession + autoRefreshToken + storageKey)
 - [x] Logo navigation — FIXED (portals link to themselves, not homepage)
-- [ ] Google Places API key not set in Vercel production env
-- [ ] QR codes are text strings, not scannable images (need `qrcode` npm package)
+- [x] Restaurant publish error "Cannot read properties of id" — FIXED (fresh getUser + dual key parse)
+- [x] "Already claimed" 409 errors — FIXED (show "View QR Code" button if already claimed)
+- [x] Google Places test returning no results — FIXED (API returns both `data` and `results` keys)
+- [ ] Google Places API key not set in Vercel production env (use static Ontario DB fallback for now)
+- [ ] QR codes are scannable via `react-qrcode-logo` — already implemented in QrModal
 - [ ] Stripe payments not implemented
 - [ ] Push notifications not implemented
 - [ ] RepEAT+ subscription page exists but not functional
+
+## V2 Architecture
+- Design system: `src/lib/constants.ts` — BRAND, CUISINES, ONTARIO_CITIES
+- Utility functions: `src/lib/utils.ts` — formatCurrency, generateQRCode, etc.
+- Database types: `src/types/database.ts` — raw DB row shapes (UserRow, RestaurantRow, etc.)
+- UI types: `src/types/index.ts` — enriched/joined shapes used in components
+- Shared components: `src/components/`
+- Portal-specific: `src/app/{portal}/`
+- API routes: `src/app/api/`
+- Hooks: `src/hooks/`
+- Smoke tests: `src/tests/smoke-test.ts`
+
+## Cross-Platform Notes
+- Mobile app (React Native + Expo) will share the same Supabase project
+- ALL database changes must be backward compatible
+- API routes serve both web and mobile
+- Auth works across platforms (same JWT, same Supabase project)
+- Realtime events shared between web and mobile
 
 ## Dev Commands
 ```bash
 npm run dev      # start dev server → localhost:3000
 npm run build    # production build (must be 0 errors before deploy)
+npx tsx src/tests/smoke-test.ts  # run smoke tests against production
 git push origin main  # auto-deploys to Vercel
 ```

@@ -361,82 +361,114 @@ repeateats/
 
 ## Required RLS Policies
 
-If you see "permission denied" errors, run these in Supabase → SQL Editor:
+If you see "permission denied" errors, run these in Supabase → SQL Editor.
+These use DROP IF EXISTS + CREATE to safely replace any existing conflicting policies.
+
+### Restaurants
 
 ```sql
--- Allow restaurant owners to read/update their own restaurant
-CREATE POLICY "restaurant owners can manage own restaurant"
-  ON restaurants FOR ALL
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
+DROP POLICY IF EXISTS "restaurants_insert" ON public.restaurants;
+CREATE POLICY "restaurants_insert" ON public.restaurants
+  FOR INSERT WITH CHECK (auth.uid() = owner_id);
 
--- Allow authenticated users to read all live restaurants
-CREATE POLICY "anyone can read live restaurants"
-  ON restaurants FOR SELECT
-  USING (is_live = true OR owner_id = auth.uid());
+DROP POLICY IF EXISTS "restaurants_select_all" ON public.restaurants;
+CREATE POLICY "restaurants_select_all" ON public.restaurants
+  FOR SELECT USING (is_live = true OR auth.uid() = owner_id);
 
--- Allow restaurant owners to manage deals for their restaurants
-CREATE POLICY "restaurant owners can manage own deals"
-  ON deals FOR ALL
-  USING (restaurant_id IN (
-    SELECT id FROM restaurants WHERE owner_id = auth.uid()
-  ))
-  WITH CHECK (restaurant_id IN (
-    SELECT id FROM restaurants WHERE owner_id = auth.uid()
-  ));
+DROP POLICY IF EXISTS "restaurants_update_owner" ON public.restaurants;
+CREATE POLICY "restaurants_update_owner" ON public.restaurants
+  FOR UPDATE USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
 
--- Allow authenticated users to read active deals
-CREATE POLICY "anyone can read active deals"
-  ON deals FOR SELECT
-  USING (is_active = true OR restaurant_id IN (
-    SELECT id FROM restaurants WHERE owner_id = auth.uid()
-  ));
+DROP POLICY IF EXISTS "restaurants_delete_owner" ON public.restaurants;
+CREATE POLICY "restaurants_delete_owner" ON public.restaurants
+  FOR DELETE USING (auth.uid() = owner_id);
+```
 
--- Allow users to manage their own claims
-CREATE POLICY "users can manage own claims"
-  ON claims FOR ALL
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
+### Deals
 
--- Allow influencers to manage their own profile
-CREATE POLICY "influencers can manage own profile"
-  ON influencers FOR ALL
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-
--- Allow anyone to read influencer profiles
-CREATE POLICY "anyone can read influencer profiles"
-  ON influencers FOR SELECT
-  USING (true);
-
--- Allow authenticated users to read/write collabs they're part of
-CREATE POLICY "collab participants can access collabs"
-  ON collabs FOR ALL
-  USING (
-    influencer_id IN (SELECT id FROM influencers WHERE user_id = auth.uid())
+```sql
+DROP POLICY IF EXISTS "deals_select_active" ON public.deals;
+CREATE POLICY "deals_select_active" ON public.deals
+  FOR SELECT USING (
+    is_active = true OR is_coming = true
     OR restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
   );
 
--- Allow users to read/send messages in their collabs
-CREATE POLICY "collab participants can access messages"
-  ON messages FOR ALL
-  USING (
-    collab_id IN (
-      SELECT id FROM collabs WHERE
-        influencer_id IN (SELECT id FROM influencers WHERE user_id = auth.uid())
-        OR restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
-    )
+DROP POLICY IF EXISTS "deals_insert_owner" ON public.deals;
+CREATE POLICY "deals_insert_owner" ON public.deals
+  FOR INSERT WITH CHECK (
+    restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
   );
 
--- Allow users to manage their own notifications
-CREATE POLICY "users can manage own notifications"
-  ON notifications FOR ALL
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "deals_update_owner" ON public.deals;
+CREATE POLICY "deals_update_owner" ON public.deals
+  FOR UPDATE USING (
+    restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
+  );
+```
 
--- Allow users to read/update their own profile
-CREATE POLICY "users can manage own profile"
-  ON users FOR ALL
-  USING (id = auth.uid())
-  WITH CHECK (id = auth.uid());
+### Claims
+
+```sql
+DROP POLICY IF EXISTS "claims_insert_auth" ON public.claims;
+CREATE POLICY "claims_insert_auth" ON public.claims
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "claims_select_own" ON public.claims;
+CREATE POLICY "claims_select_own" ON public.claims
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "claims_update_own" ON public.claims;
+CREATE POLICY "claims_update_own" ON public.claims
+  FOR UPDATE USING (auth.uid() = user_id);
+```
+
+### Collabs (fix "Forbidden" errors for creators)
+
+```sql
+DROP POLICY IF EXISTS "collabs_select_auth" ON public.collabs;
+CREATE POLICY "collabs_select_auth" ON public.collabs
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "collabs_update_any" ON public.collabs;
+CREATE POLICY "collabs_update_any" ON public.collabs
+  FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "collabs_insert_owner" ON public.collabs;
+CREATE POLICY "collabs_insert_owner" ON public.collabs
+  FOR INSERT WITH CHECK (
+    restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
+  );
+```
+
+### Messages (fix "Forbidden" errors in chat)
+
+```sql
+DROP POLICY IF EXISTS "messages_insert_auth" ON public.messages;
+CREATE POLICY "messages_insert_auth" ON public.messages
+  FOR INSERT WITH CHECK (auth.uid() = sender_id);
+
+DROP POLICY IF EXISTS "messages_select_auth" ON public.messages;
+CREATE POLICY "messages_select_auth" ON public.messages
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+```
+
+### Influencers, Users, Notifications
+
+```sql
+DROP POLICY IF EXISTS "influencers_manage_own" ON public.influencers;
+CREATE POLICY "influencers_manage_own" ON public.influencers
+  FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "influencers_select_all" ON public.influencers;
+CREATE POLICY "influencers_select_all" ON public.influencers
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "users_manage_own" ON public.users;
+CREATE POLICY "users_manage_own" ON public.users
+  FOR ALL USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+
+DROP POLICY IF EXISTS "notifications_manage_own" ON public.notifications;
+CREATE POLICY "notifications_manage_own" ON public.notifications
+  FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 ```

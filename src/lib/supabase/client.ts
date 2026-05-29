@@ -10,7 +10,8 @@ export function createClient() {
       auth: {
         persistSession:     true,
         autoRefreshToken:   true,
-        detectSessionInUrl: true, // auto-detects ?code= and exchanges it
+        detectSessionInUrl: true,
+        storageKey:         'repeateats-auth',
       },
     }
   )

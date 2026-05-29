@@ -229,12 +229,20 @@ export default function RestaurantPage() {
     setPublishError('');
 
     try {
+      // Fresh auth check — session may have expired since page load
+      const { data: { user: freshUser }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !freshUser) {
+        setPublishError('Your session has expired. Please sign in again.');
+        setView('auth');
+        return;
+      }
+
       // 1. Create restaurant record via API route
       const res = await fetch('/api/restaurants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          owner_id:        user.id,
+          owner_id:        freshUser.id,
           name:            wizard.name,
           cuisine:         wizard.cuisine,
           category:        CUISINE_TO_CATEGORY[wizard.cuisine] ?? 'other',
@@ -261,8 +269,13 @@ export default function RestaurantPage() {
           is_live:          false, // flipped to true below after photo upload
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const json = await res.json() as { data?: Restaurant; restaurant?: Restaurant };
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('[handlePublish] API error:', errText);
+        throw new Error(errText || 'Server error creating restaurant');
+      }
+      const json = await res.json() as { data?: Restaurant; restaurant?: Restaurant; error?: string };
+      if (json.error) throw new Error(json.error);
       const newRest = json.data ?? json.restaurant;
       if (!newRest?.id) throw new Error('Failed to create restaurant — no ID returned');
 
@@ -308,7 +321,11 @@ export default function RestaurantPage() {
       setRestaurant(finalRest as Restaurant);
       setView('dashboard');
     } catch (err) {
-      setPublishError(err instanceof Error ? err.message : 'Something went wrong.');
+      console.error('[handlePublish] failed:', err);
+      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      setPublishError(msg.includes('permission denied') || msg.includes('RLS')
+        ? 'Permission error — please sign out and sign back in, then try again.'
+        : msg);
     } finally {
       setPublishing(false);
     }
