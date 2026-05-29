@@ -166,7 +166,7 @@ export default function CustomerLoginPage() {
   };
 
   const handleGoogle = async () => {
-    document.cookie = 'rp_portal=customer;path=/;max-age=600;SameSite=Lax'
+    localStorage.setItem('rp_portal', 'customer')
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },

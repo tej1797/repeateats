@@ -29,7 +29,8 @@
       "Bash(head -40 grep -n \"set-portal\\\\|signInWithOAuth\\\\|router.push\\\\|redirectTo\" /Users/tejas/Documents/repeateats/src/app/customer/login/page.tsx)",
       "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/influencer/page.tsx)",
       "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/customer/page.tsx)",
-      "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/customer/login/page.tsx)"
+      "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/customer/login/page.tsx)",
+      "Bash(head -30 grep -n \"getSession\\\\|getUser\\\\|onAuthStateChange\\\\|setView\\\\|mounted\\\\|setTimeout\\\\|router.push\\\\|''''login''''\\\\|''''loading''''\\\\|''''auth''''\" /Users/tejas/Documents/repeateats/src/app/influencer/page.tsx)"
     ]
   }
 }

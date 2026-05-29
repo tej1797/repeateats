@@ -4,7 +4,7 @@
 // Client component needed for Intersection Observer count-up + scroll effects.
 
 import { useState, useEffect, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -128,15 +128,14 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
 // this silently forwards it to the correct route handler.
 
 function OAuthRedirectCatcher() {
-  const router       = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
     const code  = searchParams.get('code');
     const error = searchParams.get('error');
-    if (code)  { router.replace(`/auth/callback?code=${code}`);  return; }
-    if (error) { router.replace(`/customer/login?error=${error}`); }
-  }, [searchParams, router]);
+    if (code)  { window.location.href = `/auth/callback?code=${code}`; return; }
+    if (error) { window.location.href = `/customer/login?error=${error}`; }
+  }, [searchParams]);
 
   return null;
 }

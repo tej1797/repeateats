@@ -25,17 +25,12 @@ export async function GET(request: NextRequest) {
     )
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      const portal = cookieStore.get('rp_portal')?.value
-      const dest = portal === 'restaurant' ? '/restaurant'
-                 : portal === 'influencer' ? '/influencer'
-                 : '/customer'
-      const res = NextResponse.redirect(`${origin}${dest}`)
-      res.cookies.delete('rp_portal')
-      return res
+      // /auth/router is a client component that reads localStorage('rp_portal')
+      // and redirects to the correct portal
+      return NextResponse.redirect(`${origin}/auth/router`)
     }
-    console.error('exchangeCodeForSession failed:', error)
+    console.error('Auth error:', error.message)
   }
 
-  // Fallback
-  return NextResponse.redirect(`${origin}/customer`)
+  return NextResponse.redirect(`${origin}/customer/login?error=auth`)
 }
