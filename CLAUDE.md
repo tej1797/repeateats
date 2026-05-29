@@ -60,7 +60,6 @@ Owner: Tejas Khatri (tejaskhatri007@gmail.com)
 - `GET /api/google-places` — search restaurants; falls back to static Ontario DB if no API key
 - `GET/PATCH /api/profile` — customer profile + claims
 - `GET/PATCH /api/creator/profile` — influencer profile + collab stats + earnings
-- `POST /api/auth/set-portal` — set rp_portal cookie before OAuth
 
 ## Brand / Design
 - **Orange:** `#E85D04` (brand), `#FF7A30` (hover)
@@ -70,18 +69,21 @@ Owner: Tejas Khatri (tejaskhatri007@gmail.com)
 - **Fonts:** Syne 700/800 (display/logo), Plus Jakarta Sans (body)
 - **Logo:** "Rep" + "EAT" in orange
 
-## Auth Flow (CRITICAL — do not break this)
-1. User visits `/restaurant`, `/influencer`, or `/customer`
-2. Page runs `supabase.auth.getSession()` (cookie-based, fast, no network)
-3. If no session → show login form
-4. User clicks "Continue with Google":
-   - `POST /api/auth/set-portal` sets `rp_portal=restaurant` cookie (5 min TTL)
-   - `supabase.auth.signInWithOAuth({ redirectTo: origin + '/auth/callback' })`
-5. Google OAuth flow completes
-6. Supabase redirects to `/auth/callback?code=...`
-7. Callback reads `rp_portal` cookie → exchanges code for session → redirects to correct portal
-8. Portal page detects `SIGNED_IN` via `onAuthStateChange` → checks DB → shows dashboard/onboard
-9. For email/password: direct `router.push('/portal')` after `signInWithPassword` succeeds
+## Auth Flow (FINAL — client-side only, PKCE compatible)
+1. User clicks "Continue with Google" on any portal
+2. `localStorage.setItem('rp_portal', 'restaurant')` — survives redirect chain
+3. `supabase.auth.signInWithOAuth({ provider: 'google' })` — no redirectTo needed
+4. Google → Supabase → redirects to Site URL (repeateats.ca/?code=xxx)
+5. Homepage `useEffect` detects `?code=` in `window.location.search`
+6. Client-side: `supabase.auth.exchangeCodeForSession(code)` — PKCE verifier is on this domain
+7. On success: reads `localStorage('rp_portal')`, clears it, cleans URL
+8. `router.replace('/restaurant')` — navigates to correct portal
+9. Portal `onAuthStateChange` fires `INITIAL_SESSION` / `SIGNED_IN` → shows content
+10. For email/password: `signInWithPassword` → `onAuthStateChange` handles view transition
+
+Why this works: PKCE verifier cookie is set by Supabase on repeateats.ca when OAuth starts.
+Code exchange runs on repeateats.ca (homepage). Same domain = verifier always available.
+localStorage is NOT affected by cross-site redirects. No server-side callback needed.
 
 ## Same-Email Multi-Portal (role-based)
 One Supabase user can be a customer AND restaurant owner AND influencer with the same email.

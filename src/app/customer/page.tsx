@@ -798,10 +798,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
   const handleGoogle = async () => {
     localStorage.setItem('rp_portal', 'customer')
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
   return (
@@ -915,12 +912,11 @@ export default function CustomerPage() {
       if (session?.user) {
         handleSession(session.user);
       } else {
-        // No session yet — give onAuthStateChange 2s to fire before redirecting.
-        // This covers the race condition where the OAuth callback cookie hasn't
-        // propagated to the browser Supabase client yet.
+        // No session yet — give onAuthStateChange 3s to fire before redirecting.
+        // Covers the race condition after OAuth exchange on the homepage.
         redirectTimer = setTimeout(() => {
           if (mounted) router.replace('/customer/login');
-        }, 2000);
+        }, 3000);
       }
     });
 

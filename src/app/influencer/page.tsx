@@ -83,10 +83,10 @@ export default function InfluencerPage() {
 
     void init();
 
-    // Safety timeout
+    // Safety timeout — 3s before showing login form
     const timeout = setTimeout(() => {
       if (mounted) setView((v) => v === 'loading' ? 'auth' : v);
-    }, 5000);
+    }, 3000);
 
     // onAuthStateChange fires INITIAL_SESSION (on load) + SIGNED_IN + SIGNED_OUT
     // INITIAL_SESSION is the reliable signal after OAuth callback cookie propagation
@@ -344,10 +344,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
 
   const handleGoogle = async () => {
     localStorage.setItem('rp_portal', 'influencer')
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
 

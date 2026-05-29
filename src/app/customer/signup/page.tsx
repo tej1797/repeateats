@@ -180,10 +180,7 @@ export default function CustomerSignupPage() {
 
   const handleGoogle = async () => {
     localStorage.setItem('rp_portal', 'customer')
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
   const handleNext = () => {

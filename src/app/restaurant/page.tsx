@@ -193,10 +193,10 @@ export default function RestaurantPage() {
 
     void init();
 
-    // Safety timeout — if still loading after 5 s, fall back to login form
+    // Safety timeout — if still loading after 3 s, fall back to login form
     const timeout = setTimeout(() => {
       if (mounted) setView((v) => v === 'loading' ? 'auth' : v);
-    }, 5000);
+    }, 3000);
 
     // onAuthStateChange fires INITIAL_SESSION (on load) + SIGNED_IN + SIGNED_OUT
     // INITIAL_SESSION fires after the client detects the cookie — this is the reliable
@@ -512,10 +512,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
 
   const handleGoogle = async () => {
     localStorage.setItem('rp_portal', 'restaurant')
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
   const GREEN = '#065F46';

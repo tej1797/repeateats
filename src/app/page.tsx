@@ -3,9 +3,10 @@
 // Landing page — dark theme, world-class design.
 // Client component needed for Intersection Observer count-up + scroll effects.
 
-import { useState, useEffect, useRef, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -122,29 +123,73 @@ function StatItem({ end, suffix = '', prefix = '', label }: {
   );
 }
 
-// ─── OAuth redirect catcher ───────────────────────────────────────────────────
-// Suspense boundary required by Next.js 14 for useSearchParams in a page.
-// If Supabase drops ?code= on the homepage instead of /auth/callback,
-// this silently forwards it to the correct route handler.
-
-function OAuthRedirectCatcher() {
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const code  = searchParams.get('code');
-    const error = searchParams.get('error');
-    if (code)  { window.location.href = `/auth/callback?code=${code}`; return; }
-    if (error) { window.location.href = `/customer/login?error=${error}`; }
-  }, [searchParams]);
-
-  return null;
-}
-
 // ─── Main landing page ────────────────────────────────────────────────────────
 
 export default function LandingPage() {
+  const router       = useRouter();
   const portalsRef   = useRef<HTMLElement>(null);
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled,    setScrolled]    = useState(false);
+  const [processing,  setProcessing]  = useState(false);
+
+  // ── Client-side OAuth code exchange ─────────────────────────────────────────
+  // Supabase PKCE sends ?code= to Site URL (homepage) after Google login.
+  // We exchange the code here — the PKCE verifier cookie is on this domain
+  // so the exchange always succeeds without cross-origin cookie issues.
+  useEffect(() => {
+    const handleOAuthReturn = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code   = params.get('code');
+      const error  = params.get('error');
+
+      if (error) {
+        const portal = localStorage.getItem('rp_portal') || 'customer';
+        localStorage.removeItem('rp_portal');
+        const dest = portal === 'customer'
+          ? `/customer/login?error=${error}`
+          : `/${portal}?error=${error}`;
+        router.replace(dest);
+        return;
+      }
+
+      if (!code) return; // Normal homepage visit — nothing to do
+
+      setProcessing(true);
+
+      try {
+        const supabase = createClient();
+        const { error: authError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (authError) {
+          // Exchange failed — check if Supabase's detectSessionInUrl already handled it
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            const portal = localStorage.getItem('rp_portal') || 'customer';
+            localStorage.removeItem('rp_portal');
+            const dest = portal === 'customer'
+              ? '/customer/login?error=auth'
+              : `/${portal}?error=auth`;
+            router.replace(dest);
+            return;
+          }
+        }
+
+        const portal = localStorage.getItem('rp_portal') || 'customer';
+        localStorage.removeItem('rp_portal');
+        window.history.replaceState({}, '', '/'); // Clean ?code= from address bar
+
+        switch (portal) {
+          case 'restaurant': router.replace('/restaurant'); break;
+          case 'influencer': router.replace('/influencer'); break;
+          default:           router.replace('/customer');
+        }
+      } catch (err) {
+        console.error('OAuth handling error:', err);
+        router.replace('/customer/login?error=auth');
+      }
+    };
+
+    void handleOAuthReturn();
+  }, [router]);
 
   // Fade out scroll indicator after user scrolls past 80px
   useEffect(() => {
@@ -157,6 +202,30 @@ export default function LandingPage() {
     portalsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  if (processing) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#0A0A0A',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 48, height: 48,
+            border: '3px solid rgba(232,93,4,0.15)',
+            borderTopColor: '#E85D04',
+            borderRadius: '50%',
+            animation: 'spin 0.7s linear infinite',
+            margin: '0 auto 20px',
+          }} />
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <p style={{ color: '#888', fontSize: 15, fontFamily: 'system-ui' }}>
+            Signing you in...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -165,11 +234,6 @@ export default function LandingPage() {
       fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
       overflowX: 'hidden',
     }}>
-
-      {/* OAuth code forwarder — no-op unless ?code= is present */}
-      <Suspense fallback={null}>
-        <OAuthRedirectCatcher />
-      </Suspense>
 
       {/* ── NAV ────────────────────────────────────────────────────────────── */}
       <nav style={{
