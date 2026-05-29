@@ -1,101 +1,257 @@
 'use client';
 
-// Customer Deal Feed — connects to /api/deals and /api/restaurants.
-// This is a Client Component because it manages interactive state
-// (filters, modals, search). "use client" means this runs in the browser.
+// Customer Deal Feed — discovery homepage (Phase 3 redesign)
+// Sections: Header · HeroBanner · CuisinePills · Tabs · Trending · DealGrid · Featured Restaurants · Recently Added
+// Auth logic and data hooks are UNCHANGED from Phase 2.
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { QRCode } from 'react-qrcode-logo';
 import {
-  IconSearch, IconMapPin, IconX, IconCircleCheck,
-  IconInfoCircle, IconUser, IconBuildingStore, IconShoppingBag,
-  IconTruck, IconRefresh, IconDownload,
-  IconCrown, IconTicket, IconChartBar, IconLogout, IconCheck,
+  IconSearch, IconMapPin, IconX, IconBuildingStore, IconShoppingBag,
+  IconTruck, IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
-import ReviewsSection from '@/components/ReviewsSection';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
 import SharedDealCard from '@/components/deals/DealCard';
 import CuisinePills from '@/components/deals/CuisinePills';
+import DealDetailModal from '@/components/deals/DealDetailModal';
+import QRCodeModal from '@/components/deals/QRCodeModal';
 import Skeleton from '@/components/ui/Skeleton';
 import MobileNav from '@/components/layout/MobileNav';
-import { DealTypeBadge } from '@/components/ui/Badge';
-import { type Icon as TablerIcon } from '@tabler/icons-react';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
 import type { DealType } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
+import type { Icon as TablerIcon } from '@tabler/icons-react';
 
-// ─── Local types ──────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────
 type Tab        = 'active' | 'coming' | 'all';
 type FilterType = 'all' | DealType;
 
-const CITIES = [
+interface SearchResult {
+  restaurants: Array<{ id: string; name: string; cuisine: string | null; city: string }>;
+  deals:       Array<{ id: string; title: string; emoji: string; discount_value: string | null }>;
+  cities:      string[];
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────
+const CITIES: string[] = [
   'GTA Area', 'Mississauga', 'Brampton', 'Toronto',
   'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville',
 ];
 
-// TablerIcon is the base type for all @tabler/icons-react icon components
 const TYPE_FILTERS: { id: FilterType; label: string; Icon?: TablerIcon }[] = [
   { id: 'all',      label: 'All Types' },
-  { id: 'dine-in',  label: 'Dine-in',   Icon: IconBuildingStore },
-  { id: 'pickup',   label: 'Pickup',    Icon: IconShoppingBag },
-  { id: 'delivery', label: 'Delivery',  Icon: IconTruck },
+  { id: 'dine-in',  label: 'Dine-in',  Icon: IconBuildingStore },
+  { id: 'pickup',   label: 'Pickup',   Icon: IconShoppingBag },
+  { id: 'delivery', label: 'Delivery', Icon: IconTruck },
 ];
 
-// CuisineRow replaced by shared CuisinePills component
+// Food images per category — used by TrendingCard
+const CATEGORY_IMAGES: Record<string, string> = {
+  indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&q=80',
+  bbq:       'https://images.unsplash.com/photo-1558030006-450675393462?w=400&q=80',
+  italian:   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&q=80',
+  bar:       'https://images.unsplash.com/photo-1575444758702-4a6b9222336e?w=400&q=80',
+  canadian:  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&q=80',
+  bubbletea: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=400&q=80',
+  pizza:     'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80',
+  burgers:   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
+  sushi:     'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80',
+  desserts:  'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&q=80',
+  chinese:   'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&q=80',
+  seafood:   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&q=80',
+  default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
+};
 
-// SkeletonCard and DealTypeBadge replaced by shared components (Skeleton, Badge)
+// Hero slides (module-level so HeroBanner's useEffect dep array is empty)
+const HERO_SLIDES = [
+  {
+    emoji:    '🔥',
+    title:    '12 new deals this week',
+    sub:      'Fresh local restaurant deals, updated every Monday',
+    gradient: 'linear-gradient(135deg, #E85D04 0%, #A03C01 100%)',
+  },
+  {
+    emoji:    '💰',
+    title:    'Save up to 50% at local spots',
+    sub:      'Exclusive discounts from Ontario restaurants',
+    gradient: 'linear-gradient(135deg, #7E22CE 0%, #4C1D95 100%)',
+  },
+  {
+    emoji:    '⭐',
+    title:    'RepEAT+ — exclusive deals from $4.99/mo',
+    sub:      'Early access, bonus deals, and priority claims',
+    gradient: 'linear-gradient(135deg, #065F46 0%, #064E3B 100%)',
+  },
+] as const;
+
+// ─── HeroBanner ───────────────────────────────────────────────────────────
+function HeroBanner() {
+  const [slide, setSlide] = useState(0);
+  const touchStartX = useRef(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setSlide(s => (s + 1) % HERO_SLIDES.length), 4500);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-brand mb-5 h-[120px] md:h-[160px] select-none"
+      onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
+      onTouchEnd={e => {
+        const dx = touchStartX.current - e.changedTouches[0].clientX;
+        if (dx > 40)       setSlide(s => (s + 1) % HERO_SLIDES.length);
+        else if (dx < -40) setSlide(s => (s - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+      }}
+    >
+      {HERO_SLIDES.map((s, i) => (
+        <div
+          key={i}
+          className="absolute inset-0 flex items-center px-6 md:px-10 transition-opacity duration-500"
+          style={{ background: s.gradient, opacity: i === slide ? 1 : 0, pointerEvents: i === slide ? 'auto' : 'none' }}
+        >
+          {/* Decorative circles */}
+          <div className="absolute right-[-20px] top-[-20px] w-[160px] h-[160px] rounded-full bg-white/10 pointer-events-none" />
+          <div className="absolute right-[60px] bottom-[-40px] w-[120px] h-[120px] rounded-full bg-white/5 pointer-events-none" />
+
+          <div className="text-white relative z-10">
+            <div className="text-[28px] md:text-[36px] mb-1">{s.emoji}</div>
+            <div className="font-display text-[18px] md:text-[24px] font-bold leading-tight">{s.title}</div>
+            <div className="text-[12px] md:text-[14px] opacity-85 mt-1">{s.sub}</div>
+          </div>
+        </div>
+      ))}
+
+      {/* Dot indicators */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+        {HERO_SLIDES.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setSlide(i)}
+            className={`rounded-full bg-white transition-all duration-300 ${i === slide ? 'w-5 h-2 opacity-100' : 'w-2 h-2 opacity-50'}`}
+            aria-label={`Go to slide ${i + 1}`}
+          />
+        ))}
+      </div>
+
+      {/* Counter */}
+      <span className="absolute top-3 right-4 text-[11px] text-white/60 font-mono z-10">
+        {slide + 1}/{HERO_SLIDES.length}
+      </span>
+    </div>
+  );
+}
+
+// ─── TrendingCard — wider image-heavy card for the Trending row ───────────
+function TrendingCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => void }) {
+  const category = deal.restaurant?.category ?? 'default';
+  const img = CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.default;
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex-shrink-0 w-[200px] rounded-brand overflow-hidden shadow-brand border border-[var(--bd)] hover:-translate-y-1 hover:shadow-brand2 transition-all duration-150 text-left cursor-pointer"
+    >
+      <div className="relative h-[130px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={img} alt="" className="w-full h-full object-cover" loading="lazy" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+
+        {/* Emoji top-right */}
+        <span className="absolute top-2 right-2 text-[22px] drop-shadow-md">{deal.emoji ?? '🍽️'}</span>
+
+        {/* Claim count social proof */}
+        {deal.current_claims > 0 && (
+          <span className="absolute top-2 left-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
+            🔥 {deal.current_claims} claimed
+          </span>
+        )}
+
+        {/* Discount value */}
+        <span className="absolute bottom-2 left-2.5 font-display text-[18px] font-extrabold text-white drop-shadow">
+          {deal.discount_value}
+        </span>
+      </div>
+
+      <div className="bg-surface p-2.5">
+        <p className="font-bold text-[13px] text-tx line-clamp-1">{deal.title}</p>
+        <p className="text-[11px] text-t2 mt-0.5 truncate">{deal.restaurant?.name}</p>
+      </div>
+    </button>
+  );
+}
+
+// ─── RestaurantScrollCard — for the Featured Restaurants row ──────────────
+function RestaurantScrollCard({ r, dealCount }: { r: Restaurant; dealCount: number }) {
+  const router = useRouter();
+  return (
+    <button
+      onClick={() => router.push(`/customer/restaurant/${r.id}`)}
+      className="flex-shrink-0 w-[185px] bg-surface rounded-brand shadow-brand border border-[var(--bd)] overflow-hidden hover:-translate-y-0.5 hover:shadow-brand2 transition-all duration-150 text-left cursor-pointer"
+    >
+      <div
+        className="h-[105px] bg-cover bg-center"
+        style={{
+          background: r.cover_url
+            ? `url(${r.cover_url}) center/cover no-repeat`
+            : 'linear-gradient(135deg, #E85D04 0%, #A03C01 100%)',
+        }}
+      />
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-1 mb-1">
+          <p className="font-bold text-[13px] text-tx line-clamp-1 flex-1">{r.name}</p>
+          {dealCount > 0 && (
+            <span className="text-[10px] font-bold text-brand bg-brandlt px-1.5 py-0.5 rounded-full flex-shrink-0">
+              {dealCount} deal{dealCount !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-t2 truncate">{r.cuisine ? `${r.cuisine} · ` : ''}{r.city}</p>
+        {r.rating > 0 && (
+          <p className="text-[11px] text-t3 mt-1">⭐ {r.rating.toFixed(1)}</p>
+        )}
+      </div>
+    </button>
+  );
+}
 
 // ─── ProfileDrawer ────────────────────────────────────────────────────────
-// Slide-out sidebar (inspired by Uber Eats) — opens when user taps avatar.
-function ProfileDrawer({
-  user,
-  onClose,
-  onSignOut,
-}: {
-  user: User;
-  onClose: () => void;
-  onSignOut: () => void;
-}) {
-  const avatarUrl  = user.user_metadata?.avatar_url  as string | undefined;
-  const fullName   = (user.user_metadata?.full_name ?? user.user_metadata?.name ?? '') as string;
+function ProfileDrawer({ user, onClose, onSignOut }: { user: User; onClose: () => void; onSignOut: () => void }) {
+  const avatarUrl   = user.user_metadata?.avatar_url as string | undefined;
+  const fullName    = (user.user_metadata?.full_name ?? user.user_metadata?.name ?? '') as string;
   const displayName = fullName || (user.email?.split('@')[0] ?? 'You');
   const initials    = displayName.charAt(0).toUpperCase();
 
-  // Prevent body scroll while drawer is open
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  const navItems = [
+    { href: '/customer',         label: 'Browse Deals',      icon: '🏠' },
+    { href: '/customer/profile', label: 'My Profile',        icon: '👤' },
+    { href: '/customer/profile', label: 'My Claims',         icon: '🎟️' },
+    { href: '/customer/profile', label: 'Savings Dashboard', icon: '💰' },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Drawer panel — slides in from right */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
         className="relative w-[320px] max-w-[90vw] h-full bg-surface flex flex-col shadow-2xl"
         style={{ animation: 'slideInRight 0.25s ease' }}
       >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-t2 hover:text-tx transition-colors"
-        >
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface2 flex items-center justify-center text-t2 hover:text-tx transition-colors">
           <IconX size={16} />
         </button>
 
         {/* User header */}
         <div className="px-5 pt-8 pb-5 border-b border-[var(--bd)]">
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={displayName} className="w-14 h-14 rounded-full object-cover border-2 border-[var(--bd)]" />
@@ -112,54 +268,21 @@ function ProfileDrawer({
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          <Link
-            href="/customer"
-            onClick={onClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
-          >
-            <span className="text-[18px]">🏠</span> Browse Deals
-          </Link>
-          <Link
-            href="/profile"
-            onClick={onClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
-          >
-            <IconUser size={18} className="text-t2" /> My Profile
-          </Link>
-          <Link
-            href="/profile"
-            onClick={onClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
-          >
-            <IconTicket size={18} className="text-t2" /> My Claims
-          </Link>
-          <Link
-            href="/profile"
-            onClick={onClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors"
-          >
-            <IconChartBar size={18} className="text-t2" /> Savings Dashboard
-          </Link>
-
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {navItems.map(({ href, label, icon }) => (
+            <Link key={label} href={href} onClick={onClose} className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold text-tx hover:bg-surface2 transition-colors">
+              <span className="text-[18px]">{icon}</span> {label}
+            </Link>
+          ))}
           <div className="my-2 border-t border-[var(--bd)]" />
-
-          <Link
-            href="/repeat-plus"
-            onClick={onClose}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold hover:bg-surface2 transition-colors"
-            style={{ color: '#F59E0B' }}
-          >
+          <Link href="/repeat-plus" onClick={onClose} className="flex items-center gap-3 px-3 py-2.5 rounded-brands text-[14px] font-semibold hover:bg-surface2 transition-colors" style={{ color: '#F59E0B' }}>
             <IconCrown size={18} style={{ color: '#F59E0B' }} /> Upgrade to RepEAT+
           </Link>
         </nav>
 
-        {/* Footer */}
+        {/* Sign out */}
         <div className="px-3 py-4 border-t border-[var(--bd)]">
-          <button
-            onClick={onSignOut}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-brands text-[14px] font-semibold text-t2 hover:text-red-600 hover:bg-red-50 transition-colors"
-          >
+          <button onClick={onSignOut} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-brands text-[14px] font-semibold text-t2 hover:text-red-600 hover:bg-red-50 transition-colors">
             <IconLogout size={16} /> Sign out
           </button>
         </div>
@@ -168,26 +291,20 @@ function ProfileDrawer({
   );
 }
 
-// ─── DealCard — thin local wrapper → shared component ─────────────────────
-function DealCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => void }) {
-  // Delegate to the shared DealCard component
-  return <SharedDealCard deal={deal} onClick={onClick} />;
-}
-
-// ─── RestaurantCard (shown in "All Restaurants" tab) ─────────────────────
+// ─── RestaurantCard (All Restaurants tab) ────────────────────────────────
 function RestaurantCard({ r }: { r: Restaurant }) {
+  const router = useRouter();
   return (
-    <div className="bg-surface rounded-brand shadow-brand border border-[var(--bd)] p-4 hover:-translate-y-0.5 hover:shadow-brand2 transition-all duration-150 cursor-pointer">
+    <button
+      onClick={() => router.push(`/customer/restaurant/${r.id}`)}
+      className="bg-surface rounded-brand shadow-brand border border-[var(--bd)] p-4 hover:-translate-y-0.5 hover:shadow-brand2 transition-all duration-150 cursor-pointer text-left w-full"
+    >
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-12 h-12 rounded-brands bg-brandlt flex items-center justify-center flex-shrink-0 text-2xl">
-          🍽️
-        </div>
+        <div className="w-12 h-12 rounded-brands bg-brandlt flex items-center justify-center flex-shrink-0 text-2xl">🍽️</div>
         <div className="flex-1 min-w-0">
           <h3 className="font-body font-bold text-[15px] truncate">{r.name}</h3>
           <p className="text-[12px] text-t2">{r.cuisine} · {r.city}</p>
-          {r.rating > 0 && (
-            <p className="text-[12px] text-t3">⭐ {r.rating.toFixed(1)} · {r.review_count} reviews</p>
-          )}
+          {r.rating > 0 && <p className="text-[12px] text-t3">⭐ {r.rating.toFixed(1)} · {r.review_count} reviews</p>}
         </div>
       </div>
       <div className="flex gap-1.5 flex-wrap">
@@ -196,16 +313,21 @@ function RestaurantCard({ r }: { r: Restaurant }) {
         {r.accepts_delivery && <span className="text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">Delivery</span>}
         {r.open_to_collabs  && <span className="text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">🎥 Collabs open</span>}
       </div>
-    </div>
+    </button>
   );
 }
 
-// ─── Overlay wrapper (shared by all modals) ───────────────────────────────
+// ─── DealCard thin wrapper ────────────────────────────────────────────────
+function DealCard({ deal, onClick, claimed }: { deal: DealWithRestaurant; onClick: () => void; claimed?: boolean }) {
+  return <SharedDealCard deal={deal} onClick={onClick} claimed={claimed} />;
+}
+
+// ─── Overlay (shared by location + sign-in modals) ───────────────────────
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={e => e.target === e.currentTarget && onClose()}
     >
       {children}
     </div>
@@ -213,14 +335,7 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
 }
 
 // ─── LocationModal ────────────────────────────────────────────────────────
-function LocationModal({
-  city, radius, onApply, onClose,
-}: {
-  city: string;
-  radius: number;
-  onApply: (city: string, radius: number) => void;
-  onClose: () => void;
-}) {
+function LocationModal({ city, radius, onApply, onClose }: { city: string; radius: number; onApply: (c: string, r: number) => void; onClose: () => void }) {
   const [localCity,   setLocalCity]   = useState(city);
   const [localRadius, setLocalRadius] = useState(radius);
 
@@ -229,45 +344,29 @@ function LocationModal({
       <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-sm p-6 animate-[slideUp_0.2s_ease]">
         <div className="flex justify-between items-center mb-5">
           <span className="font-display text-[17px] font-bold">Location &amp; Radius</span>
-          <button onClick={onClose} className="p-1 text-t2 hover:text-tx transition-colors">
-            <IconX size={18} />
-          </button>
+          <button onClick={onClose} className="p-1 text-t2 hover:text-tx transition-colors"><IconX size={18} /></button>
         </div>
-
         <p className="text-[13px] font-semibold text-t2 mb-2">Quick select</p>
         <div className="flex flex-wrap gap-2 mb-5">
-          {CITIES.map((c) => (
+          {CITIES.map(c => (
             <button
               key={c}
               onClick={() => setLocalCity(c)}
-              className={`text-[13px] font-semibold px-3 py-1.5 rounded-full border transition-all ${
-                localCity === c
-                  ? 'bg-brand text-white border-brand'
-                  : 'bg-surface border-[var(--bd2)] text-t2 hover:border-brand hover:text-brand'
-              }`}
+              className={`text-[13px] font-semibold px-3 py-1.5 rounded-full border transition-all ${localCity === c ? 'bg-brand text-white border-brand' : 'bg-surface border-[var(--bd2)] text-t2 hover:border-brand hover:text-brand'}`}
             >
               {c === 'GTA Area' ? '🗺️ ' : '📍 '}{c}
             </button>
           ))}
         </div>
-
         <div className="flex justify-between items-baseline mb-2">
           <p className="text-[13px] text-t2 font-medium">Radius from <span className="text-brand font-bold">{localCity}</span></p>
           <p className="font-display text-[24px] font-extrabold text-brand">{localRadius} km</p>
         </div>
-        <input
-          type="range" min={5} max={100} step={5} value={localRadius}
-          onChange={(e) => setLocalRadius(Number(e.target.value))}
-          className="w-full mb-1 accent-brand"
-        />
+        <input type="range" min={5} max={100} step={5} value={localRadius} onChange={e => setLocalRadius(Number(e.target.value))} className="w-full mb-1 accent-brand" />
         <div className="flex justify-between text-[11px] text-t3 mb-5">
           <span>5 km</span><span>25</span><span>50</span><span>75</span><span>100 km</span>
         </div>
-
-        <button
-          onClick={() => { onApply(localCity, localRadius); onClose(); }}
-          className="w-full h-11 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors"
-        >
+        <button onClick={() => { onApply(localCity, localRadius); onClose(); }} className="w-full h-11 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors">
           Show deals in this area
         </button>
       </div>
@@ -275,221 +374,8 @@ function LocationModal({
   );
 }
 
-// ─── DealModal ────────────────────────────────────────────────────────────
-function DealModal({
-  deal, user, onClose, onClaim, claiming, claimError, alreadyClaimed, existingQrCode, onViewExisting,
-}: {
-  deal: DealWithRestaurant;
-  user: User | null;
-  onClose: () => void;
-  onClaim: () => void;
-  claiming: boolean;
-  claimError: string | null;
-  alreadyClaimed?: boolean;
-  existingQrCode?: string;
-  onViewExisting?: (code: string) => void;
-}) {
-  const fillPct   = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
-  const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
-  const soldOut   = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
-
-  return (
-    <Overlay onClose={onClose}>
-      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-sm overflow-hidden max-h-[93vh] overflow-y-auto animate-[slideUp_0.22s_ease]">
-        {/* Header with emoji */}
-        <div className="h-36 bg-brandlt flex items-center justify-center relative flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/25 flex items-center justify-center text-white hover:bg-black/40 transition-colors"
-          >
-            <IconX size={14} />
-          </button>
-          <span className="text-6xl">{deal.emoji ?? '🍽️'}</span>
-        </div>
-
-        <div className="p-5">
-          {/* Badges */}
-          {deal.deal_types?.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap mb-3">
-              {deal.deal_types.map((t) => <DealTypeBadge key={t} types={[t]} />)}
-            </div>
-          )}
-
-          {/* Restaurant + title */}
-          <p className="text-[13px] text-t2 mb-1">{deal.restaurant?.name}</p>
-          <h2 className="font-display text-[20px] font-bold mb-3 leading-snug">{deal.title}</h2>
-
-          {/* Discount */}
-          <div className="flex items-baseline gap-3 mb-4">
-            <span className="font-display text-[34px] font-extrabold text-brand leading-none">
-              {deal.discount_value}
-            </span>
-            {deal.valid_until && (
-              <span className="text-[13px] text-t2">Ends {deal.valid_until}</span>
-            )}
-          </div>
-
-          {/* Description */}
-          {deal.description && (
-            <p className="text-[14px] text-t2 leading-relaxed mb-4">{deal.description}</p>
-          )}
-
-          {/* Progress bar */}
-          {deal.max_claims !== null && (
-            <div className="bg-surface2 rounded-brands px-3 py-2.5 mb-4">
-              <div className="flex justify-between text-[12px] text-t3 mb-1.5">
-                <span>{deal.current_claims} claimed</span>
-                <span>{spotsLeft} spots left</span>
-              </div>
-              <div className="h-1.5 bg-[var(--bd2)] rounded-full overflow-hidden">
-                <div className="h-full bg-brand rounded-full transition-all duration-300" style={{ width: `${fillPct}%` }} />
-              </div>
-            </div>
-          )}
-
-          {/* Details */}
-          <div className="space-y-2 mb-5">
-            <div className="flex items-center gap-2 text-[13px] text-t2">
-              <IconMapPin size={15} className="text-brand flex-shrink-0" />
-              <span>{deal.restaurant?.address ?? deal.restaurant?.city}</span>
-            </div>
-            {deal.available_days && deal.available_days[0] !== 'all' && (
-              <div className="flex items-center gap-2 text-[13px] text-t2">
-                <span className="text-t3 text-[15px]">📅</span>
-                <span>{deal.available_days.join(', ')}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Error */}
-          {claimError && (
-            <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2 mb-3">
-              {claimError}
-            </p>
-          )}
-
-          {/* CTA */}
-          {deal.is_coming ? (
-            <div className="w-full h-12 rounded-brands bg-surface2 border border-[var(--bd2)] flex items-center justify-center text-[15px] font-semibold text-t2">
-              Available next week
-            </div>
-          ) : soldOut ? (
-            <div className="w-full h-12 rounded-brands bg-surface2 border border-[var(--bd2)] flex items-center justify-center text-[15px] font-semibold text-t2">
-              Fully claimed
-            </div>
-          ) : !user ? (
-            <Link
-              href="/customer/login"
-              className="w-full h-12 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands flex items-center justify-center transition-colors text-[15px]"
-            >
-              Sign in to claim this deal
-            </Link>
-          ) : alreadyClaimed && existingQrCode ? (
-            <button
-              onClick={() => onViewExisting?.(existingQrCode)}
-              className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-brands transition-colors text-[15px] flex items-center justify-center gap-2"
-            >
-              <IconCheck size={18} /> Already claimed — View QR Code
-            </button>
-          ) : (
-            <button
-              onClick={onClaim}
-              disabled={claiming}
-              className="w-full h-12 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-semibold rounded-brands transition-colors text-[15px]"
-            >
-              {claiming ? 'Claiming…' : 'Claim Deal'}
-            </button>
-          )}
-
-          {/* Google reviews — fetched live, shown below the CTA */}
-          {deal.restaurant?.id && (
-            <ReviewsSection restaurantId={deal.restaurant.id} />
-          )}
-        </div>
-      </div>
-    </Overlay>
-  );
-}
-
-// ─── QrModal ─────────────────────────────────────────────────────────────
-const QR_CANVAS_ID = 'repeateats-qr-canvas';
-
-function QrModal({
-  qrCode, dealTitle, onClose,
-}: {
-  qrCode: string;
-  dealTitle: string;
-  onClose: () => void;
-}) {
-  const handleDownload = () => {
-    const canvas = document.getElementById(QR_CANVAS_ID) as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const url  = canvas.toDataURL('image/png');
-    const link = document.createElement('a');
-    link.download = `repeateats-${qrCode}.png`;
-    link.href = url;
-    link.click();
-  };
-
-  return (
-    <Overlay onClose={onClose}>
-      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[310px] p-6 text-center animate-[slideUp_0.22s_ease]">
-        {/* Success icon */}
-        <div className="w-14 h-14 bg-brandlt rounded-full flex items-center justify-center mx-auto mb-3">
-          <IconCircleCheck size={28} className="text-brand" />
-        </div>
-        <h2 className="font-display text-[20px] font-bold mb-1">Deal Claimed!</h2>
-        <p className="text-[13px] text-t2 mb-4 px-2 line-clamp-2">{dealTitle}</p>
-
-        {/* Real scannable QR code */}
-        <div className="flex justify-center mb-4">
-          <div className="bg-white p-3 rounded-[12px] border border-gray-100 shadow-sm inline-block">
-            <QRCode
-              id={QR_CANVAS_ID}
-              value={qrCode}
-              size={180}
-              bgColor="#ffffff"
-              fgColor="#E85D04"
-              qrStyle="dots"
-              eyeRadius={8}
-            />
-          </div>
-        </div>
-
-        {/* Claim code */}
-        <p className="font-display text-[28px] font-extrabold tracking-[0.15em] text-brand mb-0.5">
-          {qrCode}
-        </p>
-        <p className="text-[12px] text-t3 mb-4">Show this to restaurant staff at checkout</p>
-
-        {/* Info banner */}
-        <div className="bg-brandlt rounded-brands px-3 py-2 text-[12px] text-t2 leading-relaxed mb-4 flex items-start gap-1.5">
-          <IconInfoCircle size={13} className="text-brand flex-shrink-0 mt-0.5" />
-          <span>Valid for one visit · Single use code</span>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={handleDownload}
-            className="flex-1 h-10 border border-[var(--bd2)] rounded-brands text-[13px] font-semibold text-t2 hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-1.5"
-          >
-            <IconDownload size={14} /> Save
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 h-10 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors text-[13px]"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </Overlay>
-  );
-}
-
 // ─── SignInModal ──────────────────────────────────────────────────────────
-function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (user: User) => void }) {
+function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u: User) => void }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
@@ -499,8 +385,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     const fn = isSignUp
       ? supabase.auth.signUp({ email, password })
       : supabase.auth.signInWithPassword({ email, password });
@@ -511,7 +396,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   };
 
   const handleGoogle = async () => {
-    localStorage.setItem('rp_portal', 'customer')
+    localStorage.setItem('rp_portal', 'customer');
     await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
@@ -522,46 +407,26 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <h2 className="font-display text-[20px] font-bold">{isSignUp ? 'Create account' : 'Sign in'}</h2>
           <button onClick={onClose} className="p-1 text-t2 hover:text-tx"><IconX size={18} /></button>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
           <div>
             <label className="block text-[13px] font-semibold text-t2 mb-1">Email</label>
-            <input
-              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@email.com" required
-              className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all"
-            />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com" required className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all" />
           </div>
           <div>
             <label className="block text-[13px] font-semibold text-t2 mb-1">Password</label>
-            <input
-              type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••" required
-              className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all"
-            />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all" />
           </div>
           {error && <p className="text-[13px] text-red-600">{error}</p>}
-          <button
-            type="submit" disabled={loading}
-            className="w-full h-11 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-semibold rounded-brands transition-colors"
-          >
+          <button type="submit" disabled={loading} className="w-full h-11 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-semibold rounded-brands transition-colors">
             {loading ? 'Loading…' : isSignUp ? 'Create account' : 'Sign in'}
           </button>
         </form>
-
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex-1 h-px bg-[var(--bd)]" />
-          <span className="text-[12px] text-t3">or</span>
-          <div className="flex-1 h-px bg-[var(--bd)]" />
+          <div className="flex-1 h-px bg-[var(--bd)]" /><span className="text-[12px] text-t3">or</span><div className="flex-1 h-px bg-[var(--bd)]" />
         </div>
-
-        <button
-          onClick={handleGoogle}
-          className="w-full h-11 border border-[var(--bd2)] rounded-brands font-semibold text-[14px] text-tx hover:border-brand hover:text-brand transition-all flex items-center justify-center gap-2"
-        >
+        <button onClick={handleGoogle} className="w-full h-11 border border-[var(--bd2)] rounded-brands font-semibold text-[14px] text-tx hover:border-brand hover:text-brand transition-all flex items-center justify-center gap-2">
           <span className="text-[16px]">G</span> Continue with Google
         </button>
-
         <p className="text-center text-[13px] text-t2 mt-4">
           {isSignUp ? 'Already have an account?' : 'No account?'}{' '}
           <button onClick={() => setIsSignUp(!isSignUp)} className="text-brand font-semibold">
@@ -576,42 +441,49 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 // ─── Main CustomerPage ────────────────────────────────────────────────────
 export default function CustomerPage() {
   // ── Filter state ────────────────────────────────────────────
-  const [category,  setCategory]  = useState('all');
-  const [dealType,  setDealType]  = useState<FilterType>('all');
-  const [tab,       setTab]       = useState<Tab>('active');
-  const [search,    setSearch]    = useState('');
-  const [city,      setCity]      = useState('GTA Area');
-  const [radius,    setRadius]    = useState(30);
+  const [category, setCategory] = useState('all');
+  const [dealType, setDealType] = useState<FilterType>('all');
+  const [tab,      setTab]      = useState<Tab>('active');
+  const [search,   setSearch]   = useState('');
+  const [city,     setCity]     = useState('GTA Area');
+  const [radius,   setRadius]   = useState(30);
+
+  // ── Pagination ──────────────────────────────────────────────
+  const [visibleCount, setVisibleCount] = useState(12);
+
+  // ── Search suggestions ──────────────────────────────────────
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult>({ restaurants: [], deals: [], cities: [] });
+  const searchDebounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchContainerRef  = useRef<HTMLDivElement>(null);
 
   // ── Modal state ─────────────────────────────────────────────
-  const [activeDeal,    setActiveDeal]    = useState<DealWithRestaurant | null>(null);
-  const [qrCode,        setQrCode]        = useState<string | null>(null);
-  const [showLocation,  setShowLocation]  = useState(false);
-  const [showSignIn,    setShowSignIn]    = useState(false);
-  const [showDrawer,    setShowDrawer]    = useState(false);
-  const [claimError,    setClaimError]    = useState<string | null>(null);
+  const [activeDeal,   setActiveDeal]   = useState<DealWithRestaurant | null>(null);
+  const [qrCode,       setQrCode]       = useState<string | null>(null);
+  const [showLocation, setShowLocation] = useState(false);
+  const [showSignIn,   setShowSignIn]   = useState(false);
+  const [showDrawer,   setShowDrawer]   = useState(false);
+  const [claimError,   setClaimError]   = useState<string | null>(null);
 
   // ── Auth state ──────────────────────────────────────────────
   const [user,         setUser]         = useState<User | null>(null);
   const [authChecked,  setAuthChecked]  = useState(false);
-  // deal_id → qr_code for deals the user has already claimed
   const [userClaimMap, setUserClaimMap] = useState<Record<string, string>>({});
   const supabase = useRef(createClient()).current;
   const router   = useRouter();
 
+  // Auth listener (unchanged from Phase 2)
   useEffect(() => {
     let mounted = true;
     let redirectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const handleSession = (user: User) => {
+    const handleSession = (u: User) => {
       if (!mounted) return;
       if (redirectTimer) { clearTimeout(redirectTimer); redirectTimer = null; }
-      setUser(user);
+      setUser(u);
       setAuthChecked(true);
     };
 
-    // onAuthStateChange is primary — fires INITIAL_SESSION and SIGNED_IN reliably
-    // after the cookie from the OAuth callback has propagated
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       if (session?.user) {
@@ -619,17 +491,13 @@ export default function CustomerPage() {
       } else if (event === 'SIGNED_OUT') {
         router.replace('/customer/login');
       }
-      // INITIAL_SESSION with no user: wait for the 2s timer below
     });
 
-    // Quick cookie check — instant if session already set (e.g. email/password login)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       if (session?.user) {
         handleSession(session.user);
       } else {
-        // No session yet — give onAuthStateChange 3s to fire before redirecting.
-        // Covers the race condition after OAuth exchange on the homepage.
         redirectTimer = setTimeout(() => {
           if (mounted) router.replace('/customer/login');
         }, 3000);
@@ -643,11 +511,11 @@ export default function CustomerPage() {
     };
   }, [supabase, router]);
 
-  // ── Fetch user's existing claims to detect duplicates ────────
+  // Fetch user's existing claims (unchanged)
   useEffect(() => {
     if (!authChecked || !user) return;
     fetch('/api/claims')
-      .then((r) => r.json())
+      .then(r => r.json())
       .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string }> }) => {
         if (!data) return;
         const map: Record<string, string> = {};
@@ -656,56 +524,75 @@ export default function CustomerPage() {
         }
         setUserClaimMap(map);
       })
-      .catch(() => {}); // non-critical — silently ignore
+      .catch(() => {});
   }, [authChecked, user]);
 
-  // ── Live claim counts via Supabase Realtime ──────────────────
-  // Overrides deal.current_claims so progress bars update for all watchers.
+  // Realtime claim counts (unchanged)
   const [liveClaimCounts, setLiveClaimCounts] = useState<Record<string, number>>({});
-
   useEffect(() => {
     if (!authChecked) return;
     const channel = supabase
       .channel('deals-live')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'deals' },
-        (payload) => {
-          const updated = payload.new as { id: string; current_claims: number };
-          setLiveClaimCounts((prev) => ({ ...prev, [updated.id]: updated.current_claims }));
-        }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'deals' }, (payload) => {
+        const updated = payload.new as { id: string; current_claims: number };
+        setLiveClaimCounts(prev => ({ ...prev, [updated.id]: updated.current_claims }));
+      })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [supabase, authChecked]);
 
-  // ── Data hooks ──────────────────────────────────────────────
-  const { deals, loading: dealsLoading, error: dealsError, refetch } = useDeals({
-    category: category === 'all' ? undefined : category,
-    type:     dealType === 'all' ? undefined : dealType,
-    tab:      tab === 'all' ? 'active' : tab, // 'all' tab shows restaurants, not deals
-    city:     city === 'GTA Area' ? undefined : city,
-  });
-  const { restaurants, loading: restsLoading } = useRestaurants({
-    city: city === 'GTA Area' ? undefined : city,
-  });
-  const { claimDeal, loading: claiming } = useClaims();
+  // Search suggestions — debounced fetch from /api/search
+  useEffect(() => {
+    if (!search.trim() || search.length < 2) {
+      setSearchResults({ restaurants: [], deals: [], cities: [] });
+      return;
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/search?q=${encodeURIComponent(search)}`);
+        const data = await res.json() as SearchResult;
+        setSearchResults(data);
+      } catch { /* ignore network errors */ }
+    }, 300);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [search]);
 
-  // Merge Realtime overrides into the deals from the API
+  // Close search dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Reset visible count when tab/filters change
+  useEffect(() => { setVisibleCount(12); }, [tab, category, dealType, city]);
+
+  // ── Data hooks (unchanged) ───────────────────────────────────
+  const { deals, loading: dealsLoading, error: dealsError, refetch } = useDeals({
+    category:  category === 'all' ? undefined : category,
+    type:      dealType === 'all' ? undefined : dealType,
+    tab:       tab === 'all' ? 'active' : tab,
+    city:      city === 'GTA Area' ? undefined : city,
+  });
+  const { restaurants, loading: restsLoading } = useRestaurants({ city: city === 'GTA Area' ? undefined : city });
+  const { claimDeal, loading: claiming }        = useClaims();
+
+  // Merge realtime counts (unchanged)
   const dealsWithLive = useMemo(
-    () => deals.map((d) => ({
-      ...d,
-      current_claims: liveClaimCounts[d.id] ?? d.current_claims,
-    })),
+    () => deals.map(d => ({ ...d, current_claims: liveClaimCounts[d.id] ?? d.current_claims })),
     [deals, liveClaimCounts]
   );
 
-  // ── Client-side search filter ────────────────────────────────
-  // Runs entirely in the browser — no network call on every keystroke
+  // Client-side search filter (unchanged)
   const filteredDeals = useMemo(() => {
     if (!search.trim()) return dealsWithLive;
     const q = search.toLowerCase();
-    return dealsWithLive.filter((d) =>
+    return dealsWithLive.filter(d =>
       d.title.toLowerCase().includes(q) ||
       (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
       (d.description ?? '').toLowerCase().includes(q)
@@ -715,45 +602,66 @@ export default function CustomerPage() {
   const filteredRests = useMemo(() => {
     if (!search.trim()) return restaurants;
     const q = search.toLowerCase();
-    return restaurants.filter((r) =>
-      r.name.toLowerCase().includes(q) ||
-      (r.cuisine ?? '').toLowerCase().includes(q)
+    return restaurants.filter(r =>
+      r.name.toLowerCase().includes(q) || (r.cuisine ?? '').toLowerCase().includes(q)
     );
   }, [restaurants, search]);
 
-  // ── Claim handler ────────────────────────────────────────────
+  // ── Derived data for new sections ───────────────────────────
+  const trendingDeals = useMemo(
+    () => [...dealsWithLive]
+      .sort((a, b) => b.current_claims - a.current_claims)
+      .filter(d => d.current_claims > 0)
+      .slice(0, 6),
+    [dealsWithLive]
+  );
+
+  const recentDeals = useMemo(() => {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return dealsWithLive
+      .filter(d => d.created_at && new Date(d.created_at) > cutoff)
+      .slice(0, 8);
+  }, [dealsWithLive]);
+
+  const dealCountByRestaurant = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const d of dealsWithLive) {
+      if (d.restaurant?.id) map[d.restaurant.id] = (map[d.restaurant.id] ?? 0) + 1;
+    }
+    return map;
+  }, [dealsWithLive]);
+
+  // ── Claim handler (unchanged) ────────────────────────────────
   const handleClaim = async () => {
     if (!activeDeal) return;
     setClaimError(null);
     const code = await claimDeal(activeDeal.id);
     if (code) {
-      // Track this claim so the button shows "View QR" if they open it again
-      setUserClaimMap((prev) => ({ ...prev, [activeDeal.id]: code }));
+      setUserClaimMap(prev => ({ ...prev, [activeDeal.id]: code }));
       setQrCode(code);
     } else {
       setClaimError('Could not claim this deal. Please try again.');
     }
   };
 
-  const loading  = tab === 'all' ? restsLoading : dealsLoading;
-  const tabDeals = tab === 'all' ? [] : filteredDeals;
-  const isEmpty  = !loading && (tab === 'all' ? filteredRests.length === 0 : tabDeals.length === 0);
+  // ── Derived booleans ─────────────────────────────────────────
+  const loading    = tab === 'all' ? restsLoading : dealsLoading;
+  const tabDeals   = tab === 'all' ? [] : filteredDeals;
+  const isEmpty    = !loading && (tab === 'all' ? filteredRests.length === 0 : tabDeals.length === 0);
+  const isSearching = search.length >= 2;
+  const hasSearchDropdown = searchFocused && isSearching && (
+    searchResults.restaurants.length > 0 ||
+    searchResults.deals.length > 0 ||
+    searchResults.cities.length > 0
+  );
 
-  const tabLabels: Record<Tab, string> = {
-    active: `Deals near you${!dealsLoading && filteredDeals.length > 0 ? ` (${filteredDeals.length})` : ''}`,
-    coming: 'Coming next week',
-    all:    'All restaurants',
-  };
-
-  // Show blank screen while redirecting unauthenticated users
-  if (!authChecked) {
-    return <div className="min-h-screen bg-[var(--bg)]" />;
-  }
+  // Blank screen while auth check runs
+  if (!authChecked) return <div className="min-h-screen bg-[var(--bg)]" />;
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
 
-      {/* ── Sticky nav ────────────────────────────────────────────── */}
+      {/* ── Sticky header ─────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-surface border-b border-[var(--bd)] shadow-sm">
         <div className="max-w-[1100px] mx-auto px-5 h-16 flex items-center gap-3">
 
@@ -762,41 +670,93 @@ export default function CustomerPage() {
             Rep<span className="text-brand">EAT</span>
           </Link>
 
-          {/* Search bar */}
-          <div className="relative flex-1 max-w-[520px]">
-            <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3 pointer-events-none" />
+          {/* Search + dropdown */}
+          <div className="relative flex-1 max-w-[520px]" ref={searchContainerRef}>
+            <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3 pointer-events-none z-10" />
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search restaurants, dishes, deals…"
-              className="w-full h-11 pl-10 pr-4 border border-[var(--bd2)] rounded-full bg-surface2 text-tx text-[14px] outline-none focus:bg-surface focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-t3"
+              onChange={e => { setSearch(e.target.value); setSearchFocused(true); }}
+              onFocus={() => setSearchFocused(true)}
+              placeholder="Search restaurants, deals, cuisines…"
+              className="w-full h-11 pl-10 pr-9 border border-[var(--bd2)] rounded-full bg-surface2 text-tx text-[14px] outline-none focus:bg-surface focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-t3"
             />
+            {search && (
+              <button onClick={() => { setSearch(''); setSearchFocused(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10 transition-colors">
+                <IconX size={16} />
+              </button>
+            )}
+
+            {/* Search suggestions dropdown */}
+            {hasSearchDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-surface border border-[var(--bd2)] rounded-brand shadow-brand2 z-50 overflow-hidden max-h-[380px] overflow-y-auto">
+                {searchResults.restaurants.length > 0 && (
+                  <>
+                    <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🍽️ Restaurants</p>
+                    {searchResults.restaurants.map(r => (
+                      <button
+                        key={r.id}
+                        onMouseDown={() => { router.push(`/customer/restaurant/${r.id}`); setSearchFocused(false); }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors"
+                      >
+                        <p className="text-[14px] font-semibold text-tx">{r.name}</p>
+                        <p className="text-[12px] text-t2">{r.cuisine} · {r.city}</p>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {searchResults.deals.length > 0 && (
+                  <>
+                    <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🏷️ Deals</p>
+                    {searchResults.deals.map(d => (
+                      <button
+                        key={d.id}
+                        onMouseDown={() => setSearchFocused(false)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors flex items-center gap-2.5"
+                      >
+                        <span className="text-[18px]">{d.emoji}</span>
+                        <div>
+                          <p className="text-[14px] font-semibold text-tx">{d.title}</p>
+                          {d.discount_value && <p className="text-[12px] text-brand font-bold">{d.discount_value}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {searchResults.cities.length > 0 && (
+                  <>
+                    <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">📍 Cities</p>
+                    {searchResults.cities.map(c => (
+                      <button
+                        key={c}
+                        onMouseDown={() => { setCity(c); setSearch(''); setSearchFocused(false); }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors text-[14px] font-semibold text-tx"
+                      >
+                        📍 {c}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Location button */}
+          {/* Location pill */}
           <button
             onClick={() => setShowLocation(true)}
             className="flex items-center gap-1.5 bg-brandlt border-[1.5px] border-brand rounded-full px-3.5 py-2 text-[13px] font-bold text-brand hover:bg-brand hover:text-white transition-all flex-shrink-0 whitespace-nowrap"
           >
             <IconMapPin size={14} />
-            <span>{city} · {radius} km</span>
+            <span className="hidden sm:inline">{city} · {radius} km</span>
+            <span className="sm:hidden">{radius} km</span>
           </button>
 
-          {/* Smart avatar — Google photo or initials; opens profile drawer */}
+          {/* Avatar */}
           {user ? (
-            <button
-              onClick={() => setShowDrawer(true)}
-              className="relative flex-shrink-0 hover:opacity-90 transition-opacity"
-              title="Open profile"
-            >
+            <button onClick={() => setShowDrawer(true)} className="relative flex-shrink-0 hover:opacity-90 transition-opacity" title="Open profile">
               {user.user_metadata?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.user_metadata.avatar_url as string}
-                  alt="Profile"
-                  className="w-9 h-9 rounded-full object-cover border-2 border-[var(--bd)]"
-                />
+                <img src={user.user_metadata.avatar_url as string} alt="Profile" className="w-9 h-9 rounded-full object-cover border-2 border-[var(--bd)]" />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-brand flex items-center justify-center">
                   <span className="text-white font-bold text-[14px]">
@@ -806,27 +766,19 @@ export default function CustomerPage() {
               )}
             </button>
           ) : (
-            <button
-              onClick={() => setShowSignIn(true)}
-              className="w-9 h-9 rounded-full bg-brandlt flex items-center justify-center flex-shrink-0 hover:bg-brand/20 transition-colors"
-              title="Sign in"
-            >
+            <button onClick={() => setShowSignIn(true)} className="w-9 h-9 rounded-full bg-brandlt flex items-center justify-center flex-shrink-0 hover:bg-brand/20 transition-colors" title="Sign in">
               <IconUser size={16} className="text-brand" />
             </button>
           )}
         </div>
 
         {/* Tab switcher */}
-        <div className="max-w-[1100px] mx-auto px-5 border-t border-[var(--bd)] flex gap-0 overflow-x-auto scrollbar-none">
-          {(['active', 'coming', 'all'] as Tab[]).map((t) => (
+        <div className="max-w-[1100px] mx-auto px-5 border-t border-[var(--bd)] flex overflow-x-auto scrollbar-none">
+          {(['active', 'coming', 'all'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all ${
-                tab === t
-                  ? 'text-brand border-brand'
-                  : 'text-t2 border-transparent hover:text-tx'
-              }`}
+              className={`px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all ${tab === t ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
             >
               {t === 'active' ? 'Deals This Week' : t === 'coming' ? 'Coming Next Week' : 'All Restaurants'}
             </button>
@@ -834,23 +786,22 @@ export default function CustomerPage() {
         </div>
       </header>
 
-      {/* ── Main content ──────────────────────────────────────────── */}
-      <main className="max-w-[1100px] mx-auto px-5 py-5 pb-20">
+      {/* ── Main content ───────────────────────────────────────────── */}
+      <main className="max-w-[1100px] mx-auto px-5 py-5 pb-28">
 
-        {/* Cuisine pills — photo backgrounds, horizontal scroll */}
+        {/* Section 2 — Hero Banner (active tab, not searching) */}
+        {tab === 'active' && !isSearching && <HeroBanner />}
+
+        {/* Section 3 — Cuisine Pills */}
         <CuisinePills selected={category} onChange={setCategory} className="mb-5" />
 
-        {/* Filter chips — deal type */}
+        {/* Section 4 — Filter chips */}
         <div className="flex gap-2 flex-wrap mb-5">
           {TYPE_FILTERS.map(({ id, label, Icon }) => (
             <button
               key={id}
               onClick={() => setDealType(id)}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold border-[1.5px] transition-all ${
-                dealType === id
-                  ? 'bg-brand text-white border-brand'
-                  : 'bg-surface text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'
-              }`}
+              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold border-[1.5px] transition-all ${dealType === id ? 'bg-brand text-white border-brand' : 'bg-surface text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
             >
               {Icon && <Icon size={12} />}
               {label}
@@ -860,76 +811,146 @@ export default function CustomerPage() {
 
         {/* Results header */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-[20px] font-bold">{tabLabels[tab]}</h2>
+          <h2 className="text-[20px] font-bold">
+            {tab === 'active'
+              ? `Deals near you${!dealsLoading && filteredDeals.length > 0 ? ` (${filteredDeals.length})` : ''}`
+              : tab === 'coming'
+              ? 'Coming next week'
+              : 'All restaurants'}
+          </h2>
           {dealsError && (
-            <button
-              onClick={refetch}
-              className="flex items-center gap-1.5 text-[13px] text-t2 hover:text-brand transition-colors"
-            >
+            <button onClick={refetch} className="flex items-center gap-1.5 text-[13px] text-t2 hover:text-brand transition-colors">
               <IconRefresh size={14} /> Retry
             </button>
           )}
         </div>
 
-        {/* Error state — only shown for deals tabs; the 'all' tab shows restaurants even if deals errored */}
+        {/* Section 5 — Trending Now (active tab, has claimed deals, not searching) */}
+        {tab === 'active' && !dealsLoading && trendingDeals.length > 0 && !isSearching && (
+          <section className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[16px] font-bold">🔥 Trending Now</h3>
+              <span className="text-[12px] text-t3">Most claimed this week</span>
+            </div>
+            <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
+              {trendingDeals.map(deal => (
+                <TrendingCard key={deal.id} deal={deal} onClick={() => { setActiveDeal(deal); setClaimError(null); }} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Error state */}
         {dealsError && !loading && tab !== 'all' && (
           <div className="text-center py-16 text-t2">
             <p className="text-4xl mb-3">⚠️</p>
             <p className="text-[18px] font-bold mb-1">Could not load deals</p>
             <p className="text-[14px] mb-4">{dealsError}</p>
-            <button
-              onClick={refetch}
-              className="h-10 px-6 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors"
-            >
-              Try again
-            </button>
+            <button onClick={refetch} className="h-10 px-6 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors">Try again</button>
           </div>
         )}
 
-        {/* Deal / Restaurant grid */}
-        {(!dealsError || tab === 'all') && (
+        {/* Loading skeletons */}
+        {loading && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} variant="dealCard" />)}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {isEmpty && !loading && (
+          <div className="text-center py-20 text-t2">
+            <p className="text-5xl mb-3">🔍</p>
+            <p className="text-[18px] font-bold mb-2">No {tab === 'all' ? 'restaurants' : 'deals'} found</p>
+            <p className="text-[14px]">Try a different category, type, or location</p>
+          </div>
+        )}
+
+        {/* Section 6 — Deal grid with stagger animation + load more */}
+        {(!dealsError || tab === 'all') && !loading && tab !== 'all' && tabDeals.length > 0 && (
           <>
-            {/* Loading skeletons */}
-            {loading && (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} variant="dealCard" />)}
-              </div>
-            )}
-
-            {/* Empty state */}
-            {isEmpty && !loading && (
-              <div className="text-center py-20 text-t2">
-                <p className="text-5xl mb-3">🔍</p>
-                <p className="text-[18px] font-bold mb-2">No {tab === 'all' ? 'restaurants' : 'deals'} found</p>
-                <p className="text-[14px]">Try a different category, type, or location</p>
-              </div>
-            )}
-
-            {/* Deal cards */}
-            {!loading && tab !== 'all' && tabDeals.length > 0 && (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-                {tabDeals.map((deal) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {tabDeals.slice(0, visibleCount).map((deal, i) => (
+                <div
+                  key={deal.id}
+                  style={{ animation: 'fadeUpIn 0.3s ease both', animationDelay: `${Math.min(i, 7) * 45}ms` }}
+                >
                   <DealCard
-                    key={deal.id}
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    claimed={!!userClaimMap[deal.id]}
                   />
-                ))}
-              </div>
-            )}
-
-            {/* Restaurant cards */}
-            {!loading && tab === 'all' && filteredRests.length > 0 && (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-                {filteredRests.map((r) => <RestaurantCard key={r.id} r={r} />)}
+                </div>
+              ))}
+            </div>
+            {/* Load more button */}
+            {visibleCount < tabDeals.length && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={() => setVisibleCount(v => v + 12)}
+                  className="h-11 px-8 border-[1.5px] border-[var(--bd2)] rounded-brands text-[14px] font-semibold text-t2 hover:border-brand hover:text-brand transition-all"
+                >
+                  Load more
+                  <span className="text-t3 ml-1.5 text-[12px]">({tabDeals.length - visibleCount} remaining)</span>
+                </button>
               </div>
             )}
           </>
         )}
+
+        {/* Restaurant grid (All tab) */}
+        {!loading && tab === 'all' && filteredRests.length > 0 && (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+            {filteredRests.map(r => <RestaurantCard key={r.id} r={r} />)}
+          </div>
+        )}
+
+        {/* Section 7 — Featured Restaurants (active tab, after deal grid, not searching) */}
+        {tab === 'active' && !dealsLoading && restaurants.length > 0 && !isSearching && (
+          <section className="mt-10 mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[16px] font-bold">🏪 Featured Restaurants</h3>
+              <button
+                onClick={() => setTab('all')}
+                className="text-[12px] text-brand font-semibold flex items-center gap-0.5 hover:underline"
+              >
+                View all <IconChevronRight size={13} />
+              </button>
+            </div>
+            <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
+              {restaurants.slice(0, 10).map(r => (
+                <RestaurantScrollCard key={r.id} r={r} dealCount={dealCountByRestaurant[r.id] ?? 0} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Section 8 — Recently Added (active tab, not searching) */}
+        {tab === 'active' && !dealsLoading && recentDeals.length > 0 && !isSearching && (
+          <section className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[16px] font-bold">✨ Recently Added</h3>
+              <span className="text-[12px] text-t3 font-medium">Last 7 days</span>
+            </div>
+            <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
+              {recentDeals.map(deal => (
+                <div key={deal.id} className="flex-shrink-0 w-[200px] relative">
+                  <span className="absolute top-2 left-2 z-20 text-[10px] font-bold text-white bg-brand px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
+                    NEW
+                  </span>
+                  <DealCard
+                    deal={deal}
+                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    claimed={!!userClaimMap[deal.id]}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
-      {/* ── Modals ────────────────────────────────────────────────── */}
-
+      {/* ── Modals ─────────────────────────────────────────────────── */}
       {showLocation && (
         <LocationModal
           city={city} radius={radius}
@@ -939,7 +960,7 @@ export default function CustomerPage() {
       )}
 
       {activeDeal && !qrCode && (
-        <DealModal
+        <DealDetailModal
           deal={activeDeal}
           user={user}
           onClose={() => setActiveDeal(null)}
@@ -948,14 +969,15 @@ export default function CustomerPage() {
           claimError={claimError}
           alreadyClaimed={!!userClaimMap[activeDeal.id]}
           existingQrCode={userClaimMap[activeDeal.id]}
-          onViewExisting={(code) => setQrCode(code)}
+          onViewExisting={code => setQrCode(code)}
         />
       )}
 
       {qrCode && activeDeal && (
-        <QrModal
-          qrCode={qrCode}
+        <QRCodeModal
+          code={qrCode}
           dealTitle={activeDeal.title}
+          restaurantName={activeDeal.restaurant?.name}
           onClose={() => { setQrCode(null); setActiveDeal(null); }}
         />
       )}
@@ -963,23 +985,19 @@ export default function CustomerPage() {
       {showSignIn && (
         <SignInModal
           onClose={() => setShowSignIn(false)}
-          onSuccess={(u) => { setUser(u); setShowSignIn(false); }}
+          onSuccess={u => { setUser(u); setShowSignIn(false); }}
         />
       )}
 
-      {/* ── Profile drawer ────────────────────────────────────────── */}
       {showDrawer && user && (
         <ProfileDrawer
           user={user}
           onClose={() => setShowDrawer(false)}
-          onSignOut={async () => {
-            setShowDrawer(false);
-            await supabase.auth.signOut();
-          }}
+          onSignOut={async () => { setShowDrawer(false); await supabase.auth.signOut(); }}
         />
       )}
 
-      {/* ── Mobile bottom nav ─────────────────────────────────────── */}
+      {/* ── Mobile nav ─────────────────────────────────────────────── */}
       <MobileNav portal="customer" />
     </div>
   );
