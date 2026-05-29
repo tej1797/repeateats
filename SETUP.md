@@ -356,3 +356,87 @@ repeateats/
 │       └── api.ts               ← Request/response types
 └── .env.local                   ← Your secret keys (never commit this)
 ```
+
+---
+
+## Required RLS Policies
+
+If you see "permission denied" errors, run these in Supabase → SQL Editor:
+
+```sql
+-- Allow restaurant owners to read/update their own restaurant
+CREATE POLICY "restaurant owners can manage own restaurant"
+  ON restaurants FOR ALL
+  USING (owner_id = auth.uid())
+  WITH CHECK (owner_id = auth.uid());
+
+-- Allow authenticated users to read all live restaurants
+CREATE POLICY "anyone can read live restaurants"
+  ON restaurants FOR SELECT
+  USING (is_live = true OR owner_id = auth.uid());
+
+-- Allow restaurant owners to manage deals for their restaurants
+CREATE POLICY "restaurant owners can manage own deals"
+  ON deals FOR ALL
+  USING (restaurant_id IN (
+    SELECT id FROM restaurants WHERE owner_id = auth.uid()
+  ))
+  WITH CHECK (restaurant_id IN (
+    SELECT id FROM restaurants WHERE owner_id = auth.uid()
+  ));
+
+-- Allow authenticated users to read active deals
+CREATE POLICY "anyone can read active deals"
+  ON deals FOR SELECT
+  USING (is_active = true OR restaurant_id IN (
+    SELECT id FROM restaurants WHERE owner_id = auth.uid()
+  ));
+
+-- Allow users to manage their own claims
+CREATE POLICY "users can manage own claims"
+  ON claims FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Allow influencers to manage their own profile
+CREATE POLICY "influencers can manage own profile"
+  ON influencers FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Allow anyone to read influencer profiles
+CREATE POLICY "anyone can read influencer profiles"
+  ON influencers FOR SELECT
+  USING (true);
+
+-- Allow authenticated users to read/write collabs they're part of
+CREATE POLICY "collab participants can access collabs"
+  ON collabs FOR ALL
+  USING (
+    influencer_id IN (SELECT id FROM influencers WHERE user_id = auth.uid())
+    OR restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
+  );
+
+-- Allow users to read/send messages in their collabs
+CREATE POLICY "collab participants can access messages"
+  ON messages FOR ALL
+  USING (
+    collab_id IN (
+      SELECT id FROM collabs WHERE
+        influencer_id IN (SELECT id FROM influencers WHERE user_id = auth.uid())
+        OR restaurant_id IN (SELECT id FROM restaurants WHERE owner_id = auth.uid())
+    )
+  );
+
+-- Allow users to manage their own notifications
+CREATE POLICY "users can manage own notifications"
+  ON notifications FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Allow users to read/update their own profile
+CREATE POLICY "users can manage own profile"
+  ON users FOR ALL
+  USING (id = auth.uid())
+  WITH CHECK (id = auth.uid());
+```

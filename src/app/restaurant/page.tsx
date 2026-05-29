@@ -262,7 +262,9 @@ export default function RestaurantPage() {
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const { restaurant: newRest } = await res.json() as { restaurant: Restaurant };
+      const json = await res.json() as { data?: Restaurant; restaurant?: Restaurant };
+      const newRest = json.data ?? json.restaurant;
+      if (!newRest?.id) throw new Error('Failed to create restaurant — no ID returned');
 
       // 2. Upload cover photo to Supabase Storage (if the user chose one)
       let coverUrl: string | null = null;
@@ -1418,15 +1420,19 @@ function Step5Photo({
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-function Dashboard({ restaurant, onSignOut, supabase }: {
+type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'settings';
+
+function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }: {
   restaurant: Restaurant;
   user: SupabaseUser;
   onSignOut: () => void;
   supabase: ReturnType<typeof createClient>;
 }) {
-  const [deals,   setDeals]   = useState<Deal[]>([]);
-  const [collabs, setCollabs] = useState<Collab[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tab,        setTab]        = useState<DashTab>('dashboard');
+  const [restaurant, setRestaurant] = useState<Restaurant>(initialRestaurant);
+  const [deals,      setDeals]      = useState<Deal[]>([]);
+  const [collabs,    setCollabs]    = useState<Collab[]>([]);
+  const [loading,    setLoading]    = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -1441,15 +1447,15 @@ function Dashboard({ restaurant, onSignOut, supabase }: {
     void load();
   }, [restaurant.id, supabase]);
 
-  const totalClaims  = deals.reduce((s, d) => s + d.current_claims, 0);
-  const activeDeals  = deals.filter((d) => d.is_active && !d.is_coming);
-  const openCollabs  = collabs.filter((c) => c.status === 'open' || c.status === 'negotiating');
+  const totalClaims = deals.reduce((s, d) => s + d.current_claims, 0);
+  const activeDeals = deals.filter((d) => d.is_active && !d.is_coming);
+  const openCollabs = collabs.filter((c) => c.status === 'open' || c.status === 'negotiating');
 
   const STATS = [
-    { label: 'Total claims',    value: totalClaims,        emoji: '🎟️' },
-    { label: 'Active deals',    value: activeDeals.length, emoji: '🔥' },
-    { label: 'Collab requests', value: openCollabs.length, emoji: '📸' },
-    { label: 'Rating',          value: restaurant.rating.toFixed(1), emoji: '⭐' },
+    { label: 'Total claims',    value: totalClaims,              emoji: '🎟️' },
+    { label: 'Active deals',    value: activeDeals.length,       emoji: '🔥' },
+    { label: 'Collab requests', value: openCollabs.length,       emoji: '📸' },
+    { label: 'Rating',          value: restaurant.rating?.toFixed(1) ?? '—', emoji: '⭐' },
   ];
 
   const toggleActive = async (deal: Deal) => {
@@ -1457,14 +1463,24 @@ function Dashboard({ restaurant, onSignOut, supabase }: {
     setDeals((prev) => prev.map((d) => d.id === deal.id ? { ...d, is_active: !d.is_active } : d));
   };
 
+  const GREEN = '#065F46';
+
+  const TABS: { id: DashTab; label: string }[] = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'deals',     label: 'Deals' },
+    { id: 'analytics', label: 'Analytics' },
+    { id: 'profile',   label: 'Profile' },
+    { id: 'settings',  label: 'Settings' },
+  ];
+
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Sticky header */}
       <header className="bg-surface border-b border-[var(--bd)] sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/restaurant" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-brands bg-[#ECFDF5] flex items-center justify-center">
-              <IconBuildingStore size={18} style={{ color: '#065F46' }} />
+              <IconBuildingStore size={18} style={{ color: GREEN }} />
             </div>
             <div>
               <div className="font-display text-[15px] font-extrabold leading-none">
@@ -1473,158 +1489,478 @@ function Dashboard({ restaurant, onSignOut, supabase }: {
               <div className="text-[11px] text-t2 leading-none mt-0.5">{restaurant.name}</div>
             </div>
           </a>
-          <button
-            onClick={onSignOut}
-            className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors"
-          >
+          <button onClick={onSignOut} className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors">
             <IconLogout size={16} /> Sign out
           </button>
         </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {/* Welcome banner */}
-        <div className="bg-surface rounded-brand shadow-brand p-5 flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-xl font-extrabold">{restaurant.name}</h1>
-            <p className="text-t2 text-sm">{restaurant.city} · {restaurant.cuisine}</p>
-            <div className="flex items-center gap-2 mt-2">
-              <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-full ${
-                restaurant.is_live
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-surface2 text-t3'
-              }`}>
-                {restaurant.is_live ? '🟢 Live' : '⏸ Paused'}
-              </span>
-              {restaurant.rating > 0 && (
-                <span className="text-[12px] text-t2">⭐ {restaurant.rating}</span>
-              )}
-            </div>
-          </div>
-          <div className="w-14 h-14 rounded-brands bg-surface2 flex items-center justify-center text-3xl shrink-0">
-            🍽️
-          </div>
-        </div>
-
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {STATS.map((s) => (
-            <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
-              <div className="text-2xl mb-1">{s.emoji}</div>
-              <div className="font-display text-2xl font-extrabold text-tx">{s.value}</div>
-              <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
-            </div>
+        {/* Tab nav */}
+        <div className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto scrollbar-none pb-0">
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className="px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 transition-colors"
+              style={{
+                borderColor: tab === t.id ? GREEN : 'transparent',
+                color: tab === t.id ? GREEN : 'var(--t2)',
+              }}>
+              {t.label}
+            </button>
           ))}
         </div>
+      </header>
 
-        {/* Deals section */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display text-lg font-bold">Your deals</h2>
-            <a
-              href="/restaurant/deals/new"
-              className="inline-flex items-center gap-1 text-[13px] text-brand font-semibold hover:underline"
-            >
-              <IconPlus size={15} /> Add deal
-            </a>
-          </div>
+      <main className="max-w-4xl mx-auto px-4 py-6">
 
-          {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((n) => (
-                <div key={n} className="h-16 bg-surface animate-pulse rounded-brands" />
+        {/* ── DASHBOARD TAB ─────────────────────────────────────── */}
+        {tab === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="bg-surface rounded-brand shadow-brand p-5 flex items-center justify-between">
+              <div>
+                <h1 className="font-display text-xl font-extrabold">{restaurant.name}</h1>
+                <p className="text-t2 text-sm">{restaurant.city} · {restaurant.cuisine}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-full ${restaurant.is_live ? 'bg-green-100 text-green-700' : 'bg-surface2 text-t3'}`}>
+                    {restaurant.is_live ? '🟢 Live' : '⏸ Paused'}
+                  </span>
+                  {restaurant.rating > 0 && <span className="text-[12px] text-t2">⭐ {restaurant.rating}</span>}
+                </div>
+              </div>
+              <div className="w-14 h-14 rounded-brands bg-surface2 flex items-center justify-center text-3xl shrink-0">🍽️</div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {STATS.map((s) => (
+                <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
+                  <div className="text-2xl mb-1">{s.emoji}</div>
+                  <div className="font-display text-2xl font-extrabold text-tx">{s.value}</div>
+                  <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
+                </div>
               ))}
             </div>
-          ) : deals.length === 0 ? (
-            <div className="bg-surface rounded-brand border-2 border-dashed border-[var(--bd2)] p-8 text-center">
-              <p className="text-t2 text-sm mb-3">No deals yet. Add your first promotion!</p>
-              <a
-                href="/restaurant/deals/new"
-                className="inline-flex items-center gap-1.5 px-4 h-9 bg-brand text-white rounded-brands text-sm font-semibold"
-              >
-                <IconPlus size={15} /> Create a deal
-              </a>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {deals.map((deal) => (
-                <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
-                  <span className="text-2xl shrink-0">{deal.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
-                    <div className="text-[12px] text-t2">
-                      {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
-                      {deal.max_claims ? ` / ${deal.max_claims} max` : ''}
-                      {' · '}
-                      {deal.is_coming ? '🔜 Coming soon' : deal.is_active ? '🟢 Active' : '⏸ Paused'}
-                    </div>
-                    {/* Claim progress bar — width is dynamic so must use inline style */}
-                    {deal.max_claims !== null && deal.max_claims > 0 && (
-                      <div className="mt-1.5 h-1.5 bg-surface2 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-brand rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => toggleActive(deal)}
-                    className={`shrink-0 text-[12px] font-semibold px-3 py-1 rounded-brands border transition-colors ${
-                      deal.is_active
-                        ? 'border-[var(--bd2)] text-t2 hover:border-red-300 hover:text-red-500'
-                        : 'border-brand/40 text-brand hover:bg-brand hover:text-white'
-                    }`}
-                  >
-                    {deal.is_active ? 'Pause' : 'Activate'}
+            {/* Recent deals summary */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-display text-lg font-bold">Active deals</h2>
+                <button onClick={() => setTab('deals')} className="text-[13px] text-brand font-semibold hover:underline">
+                  View all →
+                </button>
+              </div>
+              {loading ? (
+                <div className="space-y-2">{[1,2].map((n) => <div key={n} className="h-16 bg-surface animate-pulse rounded-brands" />)}</div>
+              ) : activeDeals.length === 0 ? (
+                <div className="bg-surface rounded-brand border-2 border-dashed border-[var(--bd2)] p-6 text-center">
+                  <p className="text-t2 text-sm mb-3">No active deals. Create your first promotion!</p>
+                  <button onClick={() => setTab('deals')} className="inline-flex items-center gap-1.5 px-4 h-9 rounded-brands text-sm font-semibold text-white" style={{ background: GREEN }}>
+                    <IconPlus size={15} /> Create a deal
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              ) : (
+                <div className="space-y-2">
+                  {activeDeals.slice(0, 3).map((deal) => (
+                    <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
+                      <span className="text-2xl shrink-0">{deal.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
+                        <div className="text-[12px] text-t2">{deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}{deal.max_claims ? ` / ${deal.max_claims} max` : ''}</div>
+                        {deal.max_claims !== null && deal.max_claims > 0 && (
+                          <div className="mt-1.5 h-1.5 bg-surface2 rounded-full overflow-hidden">
+                            <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+            {openCollabs.length > 0 && (
+              <section>
+                <h2 className="font-display text-lg font-bold mb-3">
+                  Collab requests
+                  <span className="ml-2 text-[13px] font-semibold text-brand bg-brandlt px-2 py-0.5 rounded-full">{openCollabs.length}</span>
+                </h2>
+                <div className="space-y-2">
+                  {openCollabs.map((c) => (
+                    <div key={c.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-brands bg-[#FDF4FF] flex items-center justify-center text-xl shrink-0">📸</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-tx truncate">{c.deliverables ?? 'Collab request'}</div>
+                        <div className="text-[12px] text-t2">
+                          {c.offer_amount_min && c.offer_amount_max ? `$${c.offer_amount_min}–$${c.offer_amount_max}` : 'Offer TBD'}
+                          {' · '}<span className={c.status === 'negotiating' ? 'text-brand' : 'text-t3'}>{c.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
 
-        {/* Collab requests (only shown when there are open ones) */}
-        {openCollabs.length > 0 && (
-          <section>
-            <h2 className="font-display text-lg font-bold mb-3">
-              Collab requests
-              <span className="ml-2 text-[13px] font-semibold text-brand bg-brandlt px-2 py-0.5 rounded-full">
-                {openCollabs.length}
-              </span>
-            </h2>
-            <div className="space-y-2">
-              {openCollabs.map((c) => (
-                <div key={c.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-brands bg-[#FDF4FF] flex items-center justify-center text-xl shrink-0">
-                    📸
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-tx truncate">
-                      {c.deliverables ?? 'Collab request'}
+        {/* ── DEALS TAB ─────────────────────────────────────────── */}
+        {tab === 'deals' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-xl font-bold">Your Deals</h2>
+              <button onClick={() => {/* TODO: open create deal modal */}}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-brands text-sm font-semibold text-white"
+                style={{ background: GREEN }}>
+                <IconPlus size={15} /> Create deal
+              </button>
+            </div>
+            {loading ? (
+              <div className="space-y-2">{[1,2,3].map((n) => <div key={n} className="h-20 bg-surface animate-pulse rounded-brands" />)}</div>
+            ) : deals.length === 0 ? (
+              <div className="bg-surface rounded-brand border-2 border-dashed border-[var(--bd2)] p-12 text-center">
+                <div className="text-4xl mb-3">🎫</div>
+                <p className="font-semibold text-tx mb-1">No deals yet</p>
+                <p className="text-t2 text-sm mb-4">Create your first deal to start attracting customers</p>
+                <button className="inline-flex items-center gap-1.5 px-5 h-10 rounded-brands text-sm font-semibold text-white" style={{ background: GREEN }}>
+                  <IconPlus size={15} /> Create your first deal
+                </button>
+              </div>
+            ) : (
+              <>
+                {(['active', 'paused', 'coming'] as const).map((group) => {
+                  const grouped = deals.filter((d) =>
+                    group === 'coming' ? d.is_coming :
+                    group === 'active' ? d.is_active && !d.is_coming :
+                    !d.is_active && !d.is_coming
+                  );
+                  if (grouped.length === 0) return null;
+                  return (
+                    <div key={group}>
+                      <h3 className="text-[12px] font-bold text-t2 uppercase tracking-wider mb-2">
+                        {group === 'active' ? '🟢 Active' : group === 'coming' ? '🔜 Coming soon' : '⏸ Paused'}
+                        <span className="ml-1 font-normal">({grouped.length})</span>
+                      </h3>
+                      <div className="space-y-2">
+                        {grouped.map((deal) => (
+                          <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
+                            <span className="text-2xl shrink-0">{deal.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
+                              <div className="text-[12px] text-t2">
+                                {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
+                                {deal.max_claims ? ` / ${deal.max_claims} max` : ' · No limit'}
+                                {deal.discount_value ? ` · ${deal.discount_value}` : ''}
+                              </div>
+                              {deal.max_claims !== null && deal.max_claims > 0 && (
+                                <div className="mt-1.5 h-1.5 bg-surface2 rounded-full overflow-hidden">
+                                  <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => toggleActive(deal)}
+                                className={`text-[12px] font-semibold px-3 py-1 rounded-brands border transition-colors ${deal.is_active ? 'border-[var(--bd2)] text-t2 hover:border-red-300 hover:text-red-500' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}>
+                                {deal.is_active ? 'Pause' : 'Activate'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="text-[12px] text-t2">
-                      {c.offer_amount_min && c.offer_amount_max
-                        ? `$${c.offer_amount_min}–$${c.offer_amount_max}`
-                        : 'Offer TBD'}
-                      {' · '}
-                      <span className={c.status === 'negotiating' ? 'text-brand' : 'text-t3'}>
-                        {c.status}
-                      </span>
-                    </div>
-                  </div>
-                  <a
-                    href={`/restaurant/collabs/${c.id}`}
-                    className="text-[13px] text-brand font-semibold hover:underline shrink-0"
-                  >
-                    View →
-                  </a>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── ANALYTICS TAB ─────────────────────────────────────── */}
+        {tab === 'analytics' && (
+          <div className="space-y-6">
+            <h2 className="font-display text-xl font-bold">Analytics</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {STATS.map((s) => (
+                <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
+                  <div className="text-2xl mb-1">{s.emoji}</div>
+                  <div className="font-display text-2xl font-extrabold text-tx">{s.value}</div>
+                  <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
                 </div>
               ))}
             </div>
-          </section>
+            {/* Top deals */}
+            <div className="bg-surface rounded-brand shadow-brand p-5">
+              <h3 className="font-display font-bold text-base mb-4">Top deals by claims</h3>
+              {deals.length === 0 ? (
+                <p className="text-t2 text-sm">No deals yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {[...deals].sort((a, b) => b.current_claims - a.current_claims).slice(0, 5).map((deal, i) => (
+                    <div key={deal.id} className="flex items-center gap-3">
+                      <span className="text-[13px] font-bold text-t3 w-5 text-center">{i + 1}</span>
+                      <span className="text-xl">{deal.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-tx truncate">{deal.title}</div>
+                        <div className="h-1.5 bg-surface2 rounded-full overflow-hidden mt-1">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${totalClaims > 0 ? Math.round((deal.current_claims / totalClaims) * 100) : 0}%`, background: GREEN }} />
+                        </div>
+                      </div>
+                      <span className="text-[13px] font-bold text-tx shrink-0">{deal.current_claims}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="bg-surface rounded-brand shadow-brand p-5">
+              <h3 className="font-display font-bold text-base mb-2">Insights</h3>
+              <div className="space-y-2 text-sm text-t2">
+                <p>📍 Restaurant active in <strong className="text-tx">{restaurant.city}</strong></p>
+                <p>🤝 Collab requests: <strong className="text-tx">{openCollabs.length} open</strong></p>
+                <p>🎯 Claim rate: <strong className="text-tx">
+                  {deals.length > 0 && deals.some((d) => d.max_claims)
+                    ? `${Math.round((totalClaims / deals.filter((d) => d.max_claims).reduce((s, d) => s + (d.max_claims ?? 0), 0)) * 100)}% of capacity used`
+                    : `${totalClaims} total claims`}
+                </strong></p>
+              </div>
+            </div>
+          </div>
         )}
+
+        {/* ── PROFILE TAB ───────────────────────────────────────── */}
+        {tab === 'profile' && (
+          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} />
+        )}
+
+        {/* ── SETTINGS TAB ──────────────────────────────────────── */}
+        {tab === 'settings' && (
+          <SettingsTab restaurant={restaurant} setRestaurant={setRestaurant} user={user} supabase={supabase} onSignOut={onSignOut} />
+        )}
+
       </main>
+    </div>
+  );
+}
+
+// ─── Profile Tab ──────────────────────────────────────────────────────────────
+
+function ProfileTab({ restaurant, setRestaurant, supabase }: {
+  restaurant: Restaurant;
+  setRestaurant: (r: Restaurant) => void;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [form,   setForm]   = useState({
+    name:       restaurant.name ?? '',
+    cuisine:    restaurant.cuisine ?? '',
+    address:    restaurant.address ?? '',
+    phone:      restaurant.phone ?? '',
+    website:    restaurant.website ?? '',
+    instagram:  ((restaurant as unknown) as Record<string, unknown>).instagram as string ?? '',
+    description:((restaurant as unknown) as Record<string, unknown>).description as string ?? '',
+  });
+  const [saving,   setSaving]   = useState(false);
+  const [saved,    setSaved]    = useState(false);
+  const [isLive,   setIsLive]   = useState(restaurant.is_live);
+  const [collabs,  setCollabs]  = useState(((restaurant as unknown) as Record<string, unknown>).open_to_collabs as boolean ?? false);
+
+  const GREEN = '#065F46';
+
+  const save = async () => {
+    setSaving(true);
+    const { data } = await supabase
+      .from('restaurants')
+      .update({ ...form, is_live: isLive, open_to_collabs: collabs })
+      .eq('id', restaurant.id)
+      .select()
+      .single();
+    if (data) setRestaurant(data as Restaurant);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl font-bold">Restaurant Profile</h2>
+
+      {/* Restaurant details */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <h3 className="font-semibold text-base">Restaurant Details</h3>
+        {([
+          { key: 'name',        label: 'Restaurant name' },
+          { key: 'cuisine',     label: 'Cuisine type' },
+          { key: 'address',     label: 'Address' },
+          { key: 'phone',       label: 'Phone number' },
+          { key: 'website',     label: 'Website' },
+          { key: 'instagram',   label: 'Instagram handle' },
+        ] as { key: keyof typeof form; label: string }[]).map(({ key, label }) => (
+          <div key={key}>
+            <label className="block text-[12px] font-semibold text-t2 mb-1">{label}</label>
+            <input
+              value={form[key]}
+              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+              className="w-full h-10 px-3 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#065F46] transition-colors bg-white"
+            />
+          </div>
+        ))}
+        <div>
+          <label className="block text-[12px] font-semibold text-t2 mb-1">Description</label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            rows={3}
+            className="w-full px-3 py-2 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#065F46] transition-colors bg-white resize-none"
+          />
+        </div>
+      </div>
+
+      {/* Status toggles */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <h3 className="font-semibold text-base">Status</h3>
+        {[
+          { label: 'Live on RepEAT', sub: 'Customers can see and claim your deals', val: isLive, set: setIsLive },
+          { label: 'Open to influencer collabs', sub: 'Creators can send you collab proposals', val: collabs, set: setCollabs },
+        ].map(({ label, sub, val, set }) => (
+          <div key={label} className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-tx">{label}</div>
+              <div className="text-[12px] text-t2">{sub}</div>
+            </div>
+            <button
+              onClick={() => set(!val)}
+              className="relative w-10 h-6 rounded-full transition-colors shrink-0"
+              style={{ background: val ? GREEN : '#D1D5DB' }}>
+              <span className="absolute top-0.5 transition-transform w-5 h-5 rounded-full bg-white shadow"
+                style={{ left: val ? 'calc(100% - 22px)' : 2 }} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={save} disabled={saving}
+        className="w-full h-11 rounded-brands text-white font-semibold text-[15px] transition-all disabled:opacity-50"
+        style={{ background: GREEN }}>
+        {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save changes'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+
+function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
+  restaurant: Restaurant;
+  setRestaurant: (r: Restaurant) => void;
+  user: SupabaseUser;
+  supabase: ReturnType<typeof createClient>;
+  onSignOut: () => void;
+}) {
+  const [paymentMethod, setPaymentMethod] = useState('etransfer');
+  const [notifs, setNotifs] = useState({ claimed: true, expired: true, collabs: true, weekly: false });
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const GREEN = '#065F46';
+
+  const pauseListing = async () => {
+    const { data } = await supabase.from('restaurants').update({ is_live: false }).eq('id', restaurant.id).select().single();
+    if (data) setRestaurant(data as Restaurant);
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl font-bold">Settings</h2>
+
+      {/* Account details */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-3">
+        <h3 className="font-semibold text-base">Account Details</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-t2">Name</span>
+            <span className="font-medium text-tx">{user.user_metadata?.full_name ?? user.email?.split('@')[0]}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-t2">Email</span>
+            <span className="font-medium text-tx">{user.email}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-t2">Member since</span>
+            <span className="font-medium text-tx">{new Date(user.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short' })}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment settings */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-3">
+        <h3 className="font-semibold text-base">Payment Settings</h3>
+        <p className="text-[12px] text-t2">How you&apos;ll pay creators for approved collabs</p>
+        <div className="space-y-2">
+          {[
+            { val: 'etransfer', label: 'Interac e-Transfer', icon: '💸' },
+            { val: 'bank',      label: 'Direct bank transfer', icon: '🏦' },
+            { val: 'paypal',    label: 'PayPal', icon: '🅿️' },
+          ].map(({ val, label, icon }) => (
+            <label key={val} className="flex items-center gap-3 p-3 rounded-brands border cursor-pointer transition-colors"
+              style={{ borderColor: paymentMethod === val ? GREEN : 'var(--bd)', background: paymentMethod === val ? '#F0FDF4' : '' }}>
+              <input type="radio" name="payment" value={val} checked={paymentMethod === val}
+                onChange={() => setPaymentMethod(val)} className="accent-[#065F46]" />
+              <span className="text-xl">{icon}</span>
+              <span className="text-sm font-medium text-tx">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Notification preferences */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <h3 className="font-semibold text-base">Notifications</h3>
+        {[
+          { key: 'claimed' as const, label: 'Deal claimed', sub: 'Email when a customer claims your deal' },
+          { key: 'expired' as const, label: 'Deal expired', sub: 'Email when a deal reaches its end date' },
+          { key: 'collabs' as const, label: 'Collab requests', sub: 'Email when a creator sends a proposal' },
+          { key: 'weekly'  as const, label: 'Weekly summary', sub: 'Sunday summary of claims and activity' },
+        ].map(({ key, label, sub }) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-tx">{label}</div>
+              <div className="text-[12px] text-t2">{sub}</div>
+            </div>
+            <button onClick={() => setNotifs((n) => ({ ...n, [key]: !n[key] }))}
+              className="relative w-10 h-6 rounded-full transition-colors shrink-0"
+              style={{ background: notifs[key] ? GREEN : '#D1D5DB' }}>
+              <span className="absolute top-0.5 transition-transform w-5 h-5 rounded-full bg-white shadow"
+                style={{ left: notifs[key] ? 'calc(100% - 22px)' : 2 }} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Danger zone */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4 border border-red-100">
+        <h3 className="font-semibold text-base text-red-600">Danger Zone</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-tx">Pause listing</div>
+            <div className="text-[12px] text-t2">Temporarily hide your restaurant from the feed</div>
+          </div>
+          <button onClick={pauseListing}
+            className="px-4 h-9 rounded-brands text-[13px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+            Pause
+          </button>
+        </div>
+        <div className="border-t border-[var(--bd)] pt-4">
+          <div className="text-sm font-semibold text-tx mb-1">Delete listing</div>
+          <div className="text-[12px] text-t2 mb-3">Type <strong>{restaurant.name}</strong> to confirm permanent deletion</div>
+          <input
+            value={deleteConfirm}
+            onChange={(e) => setDeleteConfirm(e.target.value)}
+            placeholder={restaurant.name}
+            className="w-full h-10 px-3 rounded-brands text-[14px] border border-red-200 outline-none mb-2 focus:border-red-400 transition-colors"
+          />
+          <button
+            disabled={deleteConfirm !== restaurant.name}
+            className="w-full h-10 rounded-brands text-[14px] font-semibold transition-all disabled:opacity-30"
+            style={{ background: '#EF4444', color: '#fff' }}>
+            Permanently delete listing
+          </button>
+        </div>
+      </div>
+
+      <button onClick={onSignOut}
+        className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors">
+        <IconLogout size={15} /> Sign out of RepEAT
+      </button>
     </div>
   );
 }

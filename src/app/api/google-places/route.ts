@@ -23,11 +23,29 @@ const ONTARIO_RESTAURANTS = [
   { name: 'Pita Land', address: '4141 Dixie Rd, Mississauga, ON L4W 1V4', city: 'Mississauga', phone: '+1 905-625-3333', cuisine: 'Mediterranean', rating: 4.2, place_id: 'static_miss_pita' },
   { name: 'Copper Branch', address: '100 City Centre Dr, Mississauga, ON L5B 2C9', city: 'Mississauga', phone: '+1 905-232-1234', cuisine: 'Vegan', rating: 4.3, place_id: 'static_miss_copper' },
   { name: 'Chili\'s Grill & Bar', address: '4141 Living Arts Dr, Mississauga, ON L5B 4C3', city: 'Mississauga', phone: '+1 905-276-0011', cuisine: 'Bar & Grill', rating: 4.1, place_id: 'static_miss_chilis' },
+  { name: 'Lahori Karahi', address: '2800 Matheson Blvd E, Mississauga, ON L4W 4X5', city: 'Mississauga', phone: '+1 905-625-5678', cuisine: 'Pakistani', rating: 4.4, place_id: 'static_miss_lahori' },
+  { name: 'Osmow\'s Shawarma', address: '1315 Lawrence Ave E, Mississauga, ON L5B 1H7', city: 'Mississauga', phone: '+1 905-615-9999', cuisine: 'Middle Eastern', rating: 4.3, place_id: 'static_miss_osmow' },
+  { name: 'Swiss Chalet', address: '3075 Hurontario St, Mississauga, ON L5A 2G9', city: 'Mississauga', phone: '+1 905-270-5555', cuisine: 'Canadian', rating: 3.9, place_id: 'static_miss_swiss' },
+  { name: 'Mandarin Restaurant', address: '377 Burnhamthorpe Rd E, Mississauga, ON L5A 3Y1', city: 'Mississauga', phone: '+1 905-848-9888', cuisine: 'Chinese Buffet', rating: 4.1, place_id: 'static_miss_mandarin' },
+  { name: 'Jack Astor\'s Bar & Grill', address: '4141 Living Arts Dr, Mississauga, ON L5B 4C3', city: 'Mississauga', phone: '+1 905-273-3333', cuisine: 'Bar & Grill', rating: 3.8, place_id: 'static_miss_jack' },
+  { name: 'Montana\'s BBQ & Bar', address: '1550 Dundas St E, Mississauga, ON L4X 1L4', city: 'Mississauga', phone: '+1 905-276-9000', cuisine: 'BBQ', rating: 4.0, place_id: 'static_miss_montana' },
+  { name: 'East Side Mario\'s', address: '3105 Dixie Rd, Mississauga, ON L4Y 2A7', city: 'Mississauga', phone: '+1 905-270-1234', cuisine: 'Italian', rating: 3.9, place_id: 'static_miss_esm' },
+  { name: 'Paramount Fine Foods', address: '3050 Vega Blvd, Mississauga, ON L5L 5X8', city: 'Mississauga', phone: '+1 905-820-6161', cuisine: 'Middle Eastern', rating: 4.3, place_id: 'static_miss_paramount' },
+  { name: 'Baton Rouge', address: '350 Burnhamthorpe Rd W, Mississauga, ON L5B 3J1', city: 'Mississauga', phone: '+1 905-270-7701', cuisine: 'Bar & Grill', rating: 4.1, place_id: 'static_miss_baton' },
+  { name: 'Milestones Grill', address: '3105 Dundas St W, Mississauga, ON L5L 3R8', city: 'Mississauga', phone: '+1 905-607-0809', cuisine: 'Bar & Grill', rating: 4.0, place_id: 'static_miss_milestones' },
+  { name: 'Mary Brown\'s Chicken', address: '2455 Hurontario St, Mississauga, ON L5A 2H5', city: 'Mississauga', phone: '+1 905-279-0008', cuisine: 'Fried Chicken', rating: 4.0, place_id: 'static_miss_mary' },
+  { name: 'Tim Hortons', address: '1 City Centre Dr, Mississauga, ON L5B 1M2', city: 'Mississauga', phone: '+1 905-279-5555', cuisine: 'Coffee & Donuts', rating: 3.7, place_id: 'static_miss_tims' },
   // ── Brampton ─────────────────────────────────────────────────────────────
   { name: 'Nirvana Restaurant', address: '2130 North Park Dr, Brampton, ON L6S 0C9', city: 'Brampton', phone: '+1 905-792-9111', cuisine: 'Indian', rating: 4.4, place_id: 'static_bram_nirvana' },
   { name: 'Bombay Chowpatty', address: '10 Gillingham Dr, Brampton, ON L6X 5C5', city: 'Brampton', phone: '+1 905-451-9876', cuisine: 'Indian Street Food', rating: 4.5, place_id: 'static_bram_bombay' },
   { name: 'The Great Punjab', address: '45 McMurchy Ave S, Brampton, ON L6Y 1Y2', city: 'Brampton', phone: '+1 905-455-2345', cuisine: 'Indian', rating: 4.3, place_id: 'static_bram_punjab' },
   { name: 'Shan-e-Punjab', address: '197 Queen St E, Brampton, ON L6W 2B3', city: 'Brampton', phone: '+1 905-457-8888', cuisine: 'Indian', rating: 4.2, place_id: 'static_bram_shan' },
+  { name: 'Tandoori Flame', address: '8945 Airport Rd, Brampton, ON L6T 4J5', city: 'Brampton', phone: '+1 905-791-3456', cuisine: 'Indian', rating: 4.3, place_id: 'static_bram_tandoor' },
+  { name: 'Pizza Nova', address: '415 Main St N, Brampton, ON L6V 1P9', city: 'Brampton', phone: '+1 905-459-0059', cuisine: 'Pizza', rating: 4.0, place_id: 'static_bram_piznova' },
+  { name: 'Pho 88', address: '370 Queen St E, Brampton, ON L6W 2B5', city: 'Brampton', phone: '+1 905-453-0088', cuisine: 'Vietnamese', rating: 4.2, place_id: 'static_bram_pho88' },
+  { name: 'Harvey\'s', address: '9 Rutherford Rd S, Brampton, ON L6W 3J4', city: 'Brampton', phone: '+1 905-451-5555', cuisine: 'Burgers', rating: 3.8, place_id: 'static_bram_harveys' },
+  { name: 'A&W Restaurant', address: '450 Steeles Ave W, Brampton, ON L6Y 0H5', city: 'Brampton', phone: '+1 905-452-9999', cuisine: 'Burgers', rating: 3.9, place_id: 'static_bram_aw' },
+  { name: 'New York Fries', address: '25 Peel Centre Dr, Brampton, ON L6T 3R5', city: 'Brampton', phone: '+1 905-791-5678', cuisine: 'Fries & Hotdogs', rating: 3.8, place_id: 'static_bram_nyf' },
   // ── Toronto ───────────────────────────────────────────────────────────────
   { name: 'India\'s Taste', address: '1315 Lawrence Ave E, Toronto, ON M3A 3R3', city: 'Toronto', phone: '+1 416-385-5678', cuisine: 'Indian', rating: 4.5, place_id: 'static_tor_indias' },
   { name: 'King Tandoori', address: '1446 Gerrard St E, Toronto, ON M4L 1Z7', city: 'Toronto', phone: '+1 416-466-5177', cuisine: 'Indian', rating: 4.4, place_id: 'static_tor_king' },
@@ -39,6 +57,20 @@ const ONTARIO_RESTAURANTS = [
   { name: 'Richmond Station', address: '1 Richmond St W, Toronto, ON M5H 3W4', city: 'Toronto', phone: '+1 647-748-1444', cuisine: 'Canadian', rating: 4.5, place_id: 'static_tor_richmond' },
   { name: 'Bar Isabel', address: '797 College St, Toronto, ON M6G 1C7', city: 'Toronto', phone: '+1 416-532-2222', cuisine: 'Spanish', rating: 4.6, place_id: 'static_tor_isabel' },
   { name: 'Gusto 101', address: '101 Portland St, Toronto, ON M5V 2N3', city: 'Toronto', phone: '+1 416-504-9669', cuisine: 'Italian', rating: 4.4, place_id: 'static_tor_gusto' },
+  { name: 'Byblos Toronto', address: '11 Duncan St, Toronto, ON M5H 3G8', city: 'Toronto', phone: '+1 416-551-7172', cuisine: 'Mediterranean', rating: 4.5, place_id: 'static_tor_byblos' },
+  { name: 'Piano Piano', address: '88 Harbord St, Toronto, ON M5S 1G5', city: 'Toronto', phone: '+1 416-929-7788', cuisine: 'Italian', rating: 4.5, place_id: 'static_tor_piano' },
+  { name: 'Grey Gardens', address: '199 Augusta Ave, Toronto, ON M5T 2L4', city: 'Toronto', phone: '+1 416-593-0545', cuisine: 'Canadian', rating: 4.4, place_id: 'static_tor_grey' },
+  { name: 'Alo Restaurant', address: '163 Spadina Ave, Toronto, ON M5V 2L6', city: 'Toronto', phone: '+1 416-260-2222', cuisine: 'French Fine Dining', rating: 4.8, place_id: 'static_tor_alo' },
+  { name: 'Pizzeria Libretto', address: '221 Ossington Ave, Toronto, ON M6J 2Z8', city: 'Toronto', phone: '+1 416-532-8000', cuisine: 'Pizza', rating: 4.4, place_id: 'static_tor_libretto' },
+  { name: 'Khao San Road', address: '326 Adelaide St W, Toronto, ON M5V 1R3', city: 'Toronto', phone: '+1 416-599-4044', cuisine: 'Thai', rating: 4.4, place_id: 'static_tor_khao' },
+  { name: 'Banjara Indian Cuisine', address: '796 Bloor St W, Toronto, ON M6G 1L7', city: 'Toronto', phone: '+1 416-963-9360', cuisine: 'Indian', rating: 4.3, place_id: 'static_tor_banjara' },
+  { name: 'Salad King', address: '335 Yonge St, Toronto, ON M5B 1R7', city: 'Toronto', phone: '+1 416-593-0333', cuisine: 'Thai', rating: 4.3, place_id: 'static_tor_salad' },
+  { name: 'The Golden Turtle', address: '125 Ossington Ave, Toronto, ON M6J 2Z5', city: 'Toronto', phone: '+1 416-531-0150', cuisine: 'Vietnamese', rating: 4.3, place_id: 'static_tor_turtle' },
+  { name: 'Canoe Restaurant', address: '66 Wellington St W, Toronto, ON M5K 1H6', city: 'Toronto', phone: '+1 416-364-0054', cuisine: 'Canadian Fine Dining', rating: 4.6, place_id: 'static_tor_canoe' },
+  { name: 'Sabai Sabai Kitchen & Bar', address: '2 Lakeview Ave, Toronto, ON M6J 3A5', city: 'Toronto', phone: '+1 416-534-1488', cuisine: 'Thai', rating: 4.3, place_id: 'static_tor_sabai' },
+  { name: 'Burrito Boyz', address: '218 Adelaide St W, Toronto, ON M5H 1W7', city: 'Toronto', phone: '+1 416-593-9993', cuisine: 'Mexican', rating: 4.3, place_id: 'static_tor_burrito' },
+  { name: 'The Carbon Bar', address: '99 Queen St E, Toronto, ON M5C 1S1', city: 'Toronto', phone: '+1 416-947-7000', cuisine: 'BBQ', rating: 4.2, place_id: 'static_tor_carbon' },
+  { name: 'Momofuku Noodle Bar', address: '190 University Ave, Toronto, ON M5H 0A3', city: 'Toronto', phone: '+1 647-253-6227', cuisine: 'Japanese', rating: 4.3, place_id: 'static_tor_momo' },
   // ── Markham ───────────────────────────────────────────────────────────────
   { name: 'Congee Queen', address: '4625 Hwy 7, Markham, ON L3R 1M5', city: 'Markham', phone: '+1 905-947-8282', cuisine: 'Chinese', rating: 4.2, place_id: 'static_mark_congee' },
   { name: 'Spring Rolls', address: '3261 Hwy 7, Markham, ON L3R 3Z6', city: 'Markham', phone: '+1 905-881-1111', cuisine: 'Asian', rating: 4.1, place_id: 'static_mark_spring' },
@@ -58,6 +90,14 @@ const ONTARIO_RESTAURANTS = [
   { name: 'Del\'s Italian Kitchen', address: '2980 King St E, Kitchener, ON N2A 1A9', city: 'Kitchener', phone: '+1 519-893-2911', cuisine: 'Italian', rating: 4.6, place_id: 'static_kit_dels' },
   { name: 'Wildcraft Grill', address: '425 King St W, Kitchener, ON N2G 1C4', city: 'Kitchener', phone: '+1 519-804-2790', cuisine: 'Grill', rating: 4.4, place_id: 'static_kit_wild' },
   { name: 'Bhima\'s Warung', address: '102 King St S, Waterloo, ON N2J 1P5', city: 'Waterloo', phone: '+1 519-886-1212', cuisine: 'Indonesian', rating: 4.5, place_id: 'static_wat_bhima' },
+  { name: 'TWH Social', address: '281 King St W, Kitchener, ON N2G 1B5', city: 'Kitchener', phone: '+1 519-804-4999', cuisine: 'Bar & Grill', rating: 4.3, place_id: 'static_kit_twh' },
+  { name: 'Grand Trunk Saloon', address: '61 Benton St, Kitchener, ON N2G 3H2', city: 'Kitchener', phone: '+1 519-208-8500', cuisine: 'American', rating: 4.4, place_id: 'static_kit_grand' },
+  { name: 'Ren Sushi', address: '4 King St N, Waterloo, ON N2J 2W7', city: 'Waterloo', phone: '+1 519-886-0800', cuisine: 'Japanese', rating: 4.3, place_id: 'static_wat_ren' },
+  { name: 'Bobby O\'Brien\'s', address: '130 King St W, Kitchener, ON N2G 1A8', city: 'Kitchener', phone: '+1 519-742-0011', cuisine: 'Irish Pub', rating: 4.2, place_id: 'static_kit_bobby' },
+  { name: 'Moose Winooski\'s', address: '30 Duke St W, Kitchener, ON N2H 3W5', city: 'Kitchener', phone: '+1 519-570-8880', cuisine: 'Bar & Grill', rating: 4.0, place_id: 'static_kit_moose' },
+  { name: 'Jane Bond', address: '141 Erb St W, Waterloo, ON N2L 1T3', city: 'Waterloo', phone: '+1 519-886-3160', cuisine: 'Bar & Grill', rating: 4.3, place_id: 'static_wat_jane' },
+  { name: 'Arabesque Restaurant', address: '289 Weber St N, Waterloo, ON N2J 3H8', city: 'Waterloo', phone: '+1 519-886-2233', cuisine: 'Middle Eastern', rating: 4.4, place_id: 'static_wat_arab' },
+  { name: 'Campus Pizza', address: '254 King St N, Waterloo, ON N2J 2Y9', city: 'Waterloo', phone: '+1 519-884-0000', cuisine: 'Pizza', rating: 4.1, place_id: 'static_wat_campus' },
   // ── Ottawa ────────────────────────────────────────────────────────────────
   { name: 'Beckta', address: '150 Elgin St, Ottawa, ON K2P 1L4', city: 'Ottawa', phone: '+1 613-238-7063', cuisine: 'Canadian Fine Dining', rating: 4.7, place_id: 'static_ott_beckta' },
   { name: 'El Camino', address: '380 Elgin St, Ottawa, ON K2P 1N1', city: 'Ottawa', phone: '+1 613-422-2800', cuisine: 'Mexican', rating: 4.5, place_id: 'static_ott_camino' },
@@ -173,13 +213,12 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Static Ontario fallback ───────────────────────────────────────────────
-  const q = query.toLowerCase();
-  const matches = ONTARIO_RESTAURANTS.filter((r) =>
-    r.name.toLowerCase().includes(q)    ||
-    r.address.toLowerCase().includes(q) ||
-    r.city.toLowerCase().includes(q)    ||
-    r.cuisine.toLowerCase().includes(q)
-  ).slice(0, 8);
+  // Split query into tokens so "indian mississauga" matches both fields
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = ONTARIO_RESTAURANTS.filter((r) => {
+    const haystack = [r.name, r.address, r.city, r.cuisine].join(' ').toLowerCase();
+    return tokens.every((t) => haystack.includes(t));
+  }).slice(0, 8);
 
   const results: PlaceResult[] = matches.map((r) => ({
     place_id: r.place_id,
