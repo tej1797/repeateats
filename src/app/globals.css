@@ -84,6 +84,11 @@ h1, h2, h3 {
   font-family: var(--fh);
 }
 
+/* Inputs inherit the page text colour by default so they're readable on any background */
+input, select, textarea {
+  color: var(--tx);
+}
+
 /* Modal slide-up animation — used via Tailwind's animate-[slideUp_...] */
 @keyframes slideUp {
   from { transform: translateY(16px); opacity: 0; }

@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Restaurant, Deal, Collab } from '@/types';
+import CreateDealModal from '@/components/restaurant/CreateDealModal';
 import {
   IconBuildingStore,
   IconArrowLeft,
@@ -504,12 +505,13 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
     setBtnState('loading'); setError('');
 
     if (isSignUp) {
+      localStorage.setItem('rp_portal', 'restaurant');
       const { data, error: authErr } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { role: 'restaurant' },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: window.location.origin,
         },
       });
       if (authErr) { setBtnState('idle'); setError(friendlyRestaurantError(authErr.message)); return; }
@@ -1445,11 +1447,12 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   onSignOut: () => void;
   supabase: ReturnType<typeof createClient>;
 }) {
-  const [tab,        setTab]        = useState<DashTab>('dashboard');
-  const [restaurant, setRestaurant] = useState<Restaurant>(initialRestaurant);
-  const [deals,      setDeals]      = useState<Deal[]>([]);
-  const [collabs,    setCollabs]    = useState<Collab[]>([]);
-  const [loading,    setLoading]    = useState(true);
+  const [tab,             setTab]             = useState<DashTab>('dashboard');
+  const [restaurant,      setRestaurant]      = useState<Restaurant>(initialRestaurant);
+  const [deals,           setDeals]           = useState<Deal[]>([]);
+  const [collabs,         setCollabs]         = useState<Collab[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [showCreateDeal,  setShowCreateDeal]  = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -1634,7 +1637,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-xl font-bold">Your Deals</h2>
-              <button onClick={() => {/* TODO: open create deal modal */}}
+              <button onClick={() => setShowCreateDeal(true)}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-brands text-sm font-semibold text-white"
                 style={{ background: GREEN }}>
                 <IconPlus size={15} /> Create deal
@@ -1647,7 +1650,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                 <div className="text-4xl mb-3">🎫</div>
                 <p className="font-semibold text-tx mb-1">No deals yet</p>
                 <p className="text-t2 text-sm mb-4">Create your first deal to start attracting customers</p>
-                <button className="inline-flex items-center gap-1.5 px-5 h-10 rounded-brands text-sm font-semibold text-white" style={{ background: GREEN }}>
+                <button onClick={() => setShowCreateDeal(true)} className="inline-flex items-center gap-1.5 px-5 h-10 rounded-brands text-sm font-semibold text-white" style={{ background: GREEN }}>
                   <IconPlus size={15} /> Create your first deal
                 </button>
               </div>
@@ -1763,6 +1766,14 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         )}
 
       </main>
+
+      {showCreateDeal && (
+        <CreateDealModal
+          restaurantId={restaurant.id}
+          onCreated={(deal) => setDeals((prev) => [deal as unknown as Deal, ...prev])}
+          onClose={() => setShowCreateDeal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1881,14 +1892,27 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
   supabase: ReturnType<typeof createClient>;
   onSignOut: () => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState('etransfer');
-  const [notifs, setNotifs] = useState({ claimed: true, expired: true, collabs: true, weekly: false });
-  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [paymentMethod,    setPaymentMethod]    = useState('etransfer');
+  const [notifs,           setNotifs]           = useState({ claimed: true, expired: true, collabs: true, weekly: false });
+  const [showDeleteModal,  setShowDeleteModal]  = useState(false);
+  const [deleting,         setDeleting]         = useState(false);
+  const [isLiveLocal,      setIsLiveLocal]      = useState(restaurant.is_live);
+  const [toggling,         setToggling]         = useState(false);
   const GREEN = '#065F46';
 
-  const pauseListing = async () => {
-    const { data } = await supabase.from('restaurants').update({ is_live: false }).eq('id', restaurant.id).select().single();
-    if (data) setRestaurant(data as Restaurant);
+  const toggleLive = async () => {
+    setToggling(true);
+    const { data } = await supabase.from('restaurants').update({ is_live: !isLiveLocal }).eq('id', restaurant.id).select().single();
+    if (data) { setRestaurant(data as Restaurant); setIsLiveLocal(!isLiveLocal); }
+    setToggling(false);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    await supabase.from('deals').delete().eq('restaurant_id', restaurant.id);
+    await supabase.from('restaurants').delete().eq('id', restaurant.id);
+    setDeleting(false);
+    onSignOut();
   };
 
   return (
@@ -1959,36 +1983,66 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
         ))}
       </div>
 
+      {/* Listing status */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <h3 className="font-semibold text-base">Listing Management</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-tx">{isLiveLocal ? 'Live — visible to customers' : 'Paused — hidden from feed'}</div>
+            <div className="text-[12px] text-t2">Toggle to hide or show your restaurant and deals</div>
+          </div>
+          <button
+            onClick={toggleLive}
+            disabled={toggling}
+            className="relative w-12 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60"
+            style={{ background: isLiveLocal ? GREEN : '#D1D5DB' }}
+          >
+            <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+              style={{ left: isLiveLocal ? 'calc(100% - 22px)' : 2 }} />
+          </button>
+        </div>
+      </div>
+
       {/* Danger zone */}
       <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4 border border-red-100">
         <h3 className="font-semibold text-base text-red-600">Danger Zone</h3>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-tx">Pause listing</div>
-            <div className="text-[12px] text-t2">Temporarily hide your restaurant from the feed</div>
+            <div className="text-sm font-semibold text-tx">Delete listing</div>
+            <div className="text-[12px] text-t2">Permanently removes your restaurant and all deals</div>
           </div>
-          <button onClick={pauseListing}
-            className="px-4 h-9 rounded-brands text-[13px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
-            Pause
-          </button>
-        </div>
-        <div className="border-t border-[var(--bd)] pt-4">
-          <div className="text-sm font-semibold text-tx mb-1">Delete listing</div>
-          <div className="text-[12px] text-t2 mb-3">Type <strong>{restaurant.name}</strong> to confirm permanent deletion</div>
-          <input
-            value={deleteConfirm}
-            onChange={(e) => setDeleteConfirm(e.target.value)}
-            placeholder={restaurant.name}
-            className="w-full h-10 px-3 rounded-brands text-[14px] border border-red-200 outline-none mb-2 focus:border-red-400 transition-colors"
-          />
           <button
-            disabled={deleteConfirm !== restaurant.name}
-            className="w-full h-10 rounded-brands text-[14px] font-semibold transition-all disabled:opacity-30"
-            style={{ background: '#EF4444', color: '#fff' }}>
-            Permanently delete listing
+            onClick={() => setShowDeleteModal(true)}
+            className="px-4 h-9 rounded-brands text-[13px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+          >
+            Delete
           </button>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteModal(false)} />
+          <div className="relative bg-surface rounded-brand p-6 w-full max-w-[380px] shadow-2xl">
+            <h3 className="font-bold text-[18px] mb-2">Delete listing?</h3>
+            <p className="text-[13px] text-t2 mb-5">
+              This will permanently delete <strong>{restaurant.name}</strong> and all its deals. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteModal(false)}
+                className="flex-1 h-11 rounded-brands border border-[var(--bd2)] text-[14px] font-semibold text-t2 hover:text-tx transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 h-11 rounded-brands text-[14px] font-bold text-white transition-all disabled:opacity-60"
+                style={{ background: '#EF4444' }}>
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button onClick={onSignOut}
         className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors">

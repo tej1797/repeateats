@@ -173,13 +173,30 @@ export default function CreatorSignupPage() {
       setLoading(true);
       const handle = normaliseHandle(igHandle);
 
+      const profilePayload = {
+        instagram_handle:   handle,
+        tiktok_handle:      ttHandle ? normaliseHandle(ttHandle) : null,
+        niche:              niches.join(', ') || null,
+        follower_range:     followerRange || null,
+        primary_platform:   platform || null,
+        city:               city || null,
+        bio:                bio || null,
+        rating:             0,
+        total_collabs:      0,
+        instagram_verified: false,
+      };
+
+      // Store portal + profile for post-email-confirmation creation
+      localStorage.setItem('rp_portal', 'influencer');
+      localStorage.setItem('rp_pending_influencer', JSON.stringify(profilePayload));
+
       // 1. Create auth user
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { full_name: name, role: 'influencer' },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: window.location.origin,
         },
       });
       if (authErr) {
@@ -190,25 +207,16 @@ export default function CreatorSignupPage() {
         return;
       }
 
-      // 2. Create influencer profile row
-      if (authData.user) {
-        await supabase.from('influencers').upsert({
-          user_id:             authData.user.id,
-          instagram_handle:    handle,
-          tiktok_handle:       ttHandle ? normaliseHandle(ttHandle) : null,
-          niche:               niches.join(', ') || null,
-          follower_range:      followerRange || null,
-          primary_platform:    platform || null,
-          city:                city || null,
-          bio:                 bio || null,
-          rating:              0,
-          total_collabs:       0,
-          instagram_verified:  false, // verified after signup by team
-        }, { onConflict: 'user_id' });
+      // 2. Create influencer profile row (only works if session exists — auto-confirm ON)
+      if (authData.session && authData.user) {
+        await supabase.from('influencers').upsert(
+          { user_id: authData.user.id, ...profilePayload },
+          { onConflict: 'user_id' }
+        );
+        localStorage.removeItem('rp_pending_influencer');
       }
 
       setLoading(false);
-      // If Supabase auto-confirmed (email confirmation disabled) → go straight to portal
       if (authData.session) {
         router.push('/influencer');
       } else {

@@ -262,10 +262,10 @@ function ProfileDrawer({ user, onClose, onSignOut }: { user: User; onClose: () =
   }, []);
 
   const navItems = [
-    { href: '/customer',         label: 'Browse Deals',      icon: '🏠' },
-    { href: '/customer/profile', label: 'My Profile',        icon: '👤' },
-    { href: '/customer/profile', label: 'My Claims',         icon: '🎟️' },
-    { href: '/customer/profile', label: 'Savings Dashboard', icon: '💰' },
+    { href: '/customer',                       label: 'Browse Deals',      icon: '🏠' },
+    { href: '/customer/profile',               label: 'My Profile',        icon: '👤' },
+    { href: '/customer/profile?tab=claims',    label: 'My Claims',         icon: '🎟️' },
+    { href: '/customer/profile?tab=savings',   label: 'Savings Dashboard', icon: '💰' },
   ];
 
   return (

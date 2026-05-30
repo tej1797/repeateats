@@ -143,8 +143,8 @@ export default function DealCard({ deal, onClick, compact = false, claimed = fal
         {/* Footer */}
         <p className="text-[11px] text-t3 truncate mt-auto">
           📍 {deal.restaurant?.city ?? ''}
-          {deal.available_days?.[0] !== 'all' && (
-            <span className="ml-1">· {deal.available_days.join(', ')}</span>
+          {(deal.available_days?.length ?? 0) > 0 && deal.available_days![0] !== 'all' && (
+            <span className="ml-1">· {deal.available_days!.join(', ')}</span>
           )}
         </p>
       </div>

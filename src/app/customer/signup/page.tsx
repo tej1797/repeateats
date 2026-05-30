@@ -190,12 +190,13 @@ export default function CustomerSignupPage() {
     // Final submit
     void (async () => {
       setLoading(true);
+      localStorage.setItem('rp_portal', 'customer');
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { full_name: name, city, favourite_cuisine: cuisine, role: 'customer' },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: window.location.origin,
         },
       });
       setLoading(false);

@@ -54,7 +54,7 @@ export default function QRCodeModal({ code, dealTitle, restaurantName, onClose }
           <div className="bg-white p-3 rounded-[12px] border border-gray-100 shadow-sm inline-block">
             <QRCode
               id={QR_CANVAS_ID}
-              value={code}
+              value={`https://repeateats.ca/redeem/${code}`}
               size={180}
               bgColor="#ffffff"
               fgColor="#E85D04"

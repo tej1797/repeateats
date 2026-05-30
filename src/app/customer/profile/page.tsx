@@ -225,6 +225,21 @@ export default function CustomerProfilePage() {
     setClaimsPage(1);
   }, [claimsFilter, loadClaims]);
 
+  // Scroll to section when ?tab=claims or ?tab=savings is present
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (!tab) return;
+    const id = tab === 'claims' ? 'claims' : tab === 'savings' ? 'savings' : null;
+    if (!id) return;
+    // small delay so the DOM is rendered
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+  }, [loading]);
+
   const handleSaveName = async () => {
     if (!nameInput.trim()) return;
     setSavingName(true);
@@ -341,7 +356,7 @@ export default function CustomerProfilePage() {
         </div>
 
         {/* ── SECTION 2: Savings Dashboard ────────────────────────── */}
-        <div>
+        <div id="savings">
           <h2 className="font-display text-[18px] font-bold mb-4">Your RepEAT Impact</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             <StatCard icon="💰" value={Math.round(totalSavedDollars * 100)} prefix="$" label="Total Saved" highlight={totalSavedDollars > 0} />
@@ -377,7 +392,7 @@ export default function CustomerProfilePage() {
         </div>
 
         {/* ── SECTION 3: Claim History ─────────────────────────────── */}
-        <div>
+        <div id="claims">
           <h2 className="font-display text-[18px] font-bold mb-4">Deal History</h2>
           <div className="flex gap-2 mb-4">
             {([['all', 'All'], ['month', 'This month'], ['week', 'This week']] as const).map(([id, label]) => (

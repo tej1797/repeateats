@@ -117,7 +117,24 @@ export default function InfluencerPage() {
       .select('*')
       .eq('user_id', uid)
       .maybeSingle();
-    if (data) setInfluencer(data as Influencer);
+    if (data) { setInfluencer(data as Influencer); return; }
+
+    // No row found — check for profile saved during email-confirmation signup
+    const pending = localStorage.getItem('rp_pending_influencer');
+    if (pending) {
+      try {
+        const profile = JSON.parse(pending) as Record<string, unknown>;
+        const { data: created } = await supabase
+          .from('influencers')
+          .upsert({ user_id: uid, ...profile }, { onConflict: 'user_id' })
+          .select()
+          .single();
+        if (created) {
+          setInfluencer(created as Influencer);
+          localStorage.removeItem('rp_pending_influencer');
+        }
+      } catch { /* silent — user can fill profile later */ }
+    }
   }
 
   const handleSignOut = useCallback(async () => {
