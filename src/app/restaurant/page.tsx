@@ -1552,6 +1552,22 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                 </div>
               ))}
             </div>
+            {/* Quick action — QR redemption */}
+            <a
+              href="/restaurant/redeem"
+              className="flex items-center gap-4 rounded-brand border-2 p-4 transition-all hover:shadow-md"
+              style={{ borderColor: '#065F46', background: 'rgba(6,95,70,0.04)' }}
+            >
+              <div className="w-11 h-11 rounded-brands flex items-center justify-center text-2xl flex-shrink-0" style={{ background: 'rgba(6,95,70,0.1)' }}>
+                📷
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-[15px]" style={{ color: '#065F46' }}>Redeem a customer QR code</p>
+                <p className="text-[12px] text-t2">Tap to open the staff redemption terminal</p>
+              </div>
+              <span className="text-[20px] text-t3">→</span>
+            </a>
+
             {/* Recent deals summary */}
             <section>
               <div className="flex items-center justify-between mb-3">

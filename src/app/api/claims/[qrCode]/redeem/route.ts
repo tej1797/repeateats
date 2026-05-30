@@ -1,12 +1,50 @@
-// POST /api/claims/[qrCode]/redeem
-// Restaurant staff scans the QR code and calls this endpoint to mark it redeemed.
-// The QR code is the URL-safe segment, e.g. /api/claims/RE-4A7X2B/redeem
+// GET  /api/claims/[qrCode]/redeem  — preview claim details for staff (auth required, ownership check)
+// POST /api/claims/[qrCode]/redeem  — mark as redeemed
+// QR code format: RE-XXXXXX  (e.g. RE-4A7X2B)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 type RouteParams = { params: { qrCode: string } };
 
+// ─── GET — claim preview ──────────────────────────────────────────────────────
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const supabase = createClient();
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const qrCode = decodeURIComponent(params.qrCode);
+
+  const { data: claim, error: claimError } = await supabase
+    .from('claims')
+    .select(`
+      id, qr_code, status, claimed_at, redeemed_at,
+      deal:deals (
+        title, emoji, discount_value,
+        restaurant:restaurants ( name, owner_id )
+      )
+    `)
+    .eq('qr_code', qrCode)
+    .single();
+
+  if (claimError || !claim) {
+    return NextResponse.json({ error: 'QR code not found' }, { status: 404 });
+  }
+
+  type DealShape = { title: string; emoji: string; discount_value: string | null; restaurant: { name: string; owner_id: string } | null };
+  const deal = claim.deal as unknown as DealShape | null;
+
+  if (deal?.restaurant?.owner_id !== user.id) {
+    return NextResponse.json({ error: 'This QR code belongs to a different restaurant' }, { status: 403 });
+  }
+
+  return NextResponse.json({ data: { ...claim, deal } });
+}
+
+// ─── POST — mark as redeemed ──────────────────────────────────────────────────
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   const supabase = createClient();
 

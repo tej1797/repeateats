@@ -49,8 +49,9 @@ const PORTALS = [
   },
 ];
 
-const STATS = [
-  { end: 400, suffix: '+', prefix: '',  label: 'Restaurants'    },
+// Static fallback stats (shown until live data loads)
+const FALLBACK_STATS = [
+  { end: 12,  suffix: '+', prefix: '',  label: 'Restaurants'    },
   { end: 15,  suffix: '',  prefix: '',  label: 'Ontario cities'  },
   { end: 0,   suffix: '',  prefix: '$', label: 'Monthly fee'     },
   { end: 0,   suffix: '%', prefix: '',  label: 'Commission'      },
@@ -130,6 +131,7 @@ export default function LandingPage() {
   const portalsRef   = useRef<HTMLElement>(null);
   const [scrolled,    setScrolled]    = useState(false);
   const [processing,  setProcessing]  = useState(false);
+  const [liveStats,   setLiveStats]   = useState(FALLBACK_STATS);
 
   // ── Client-side OAuth code exchange ─────────────────────────────────────────
   // Supabase PKCE sends ?code= to Site URL (homepage) after Google login.
@@ -190,6 +192,21 @@ export default function LandingPage() {
 
     void handleOAuthReturn();
   }, [router]);
+
+  // Fetch live platform stats for the count-up section
+  useEffect(() => {
+    fetch('/api/stats')
+      .then((r) => r.json())
+      .then((json: { restaurant_count?: number; deal_count?: number; claim_count?: number }) => {
+        setLiveStats([
+          { end: json.restaurant_count ?? 12, suffix: '+', prefix: '',  label: 'Restaurants'   },
+          { end: 15,                           suffix: '',  prefix: '',  label: 'Ontario cities' },
+          { end: 0,                            suffix: '',  prefix: '$', label: 'Monthly fee'    },
+          { end: 0,                            suffix: '%', prefix: '',  label: 'Commission'     },
+        ]);
+      })
+      .catch(() => { /* keep fallback */ });
+  }, []);
 
   // Fade out scroll indicator after user scrolls past 80px
   useEffect(() => {
@@ -537,7 +554,7 @@ export default function LandingPage() {
           display: 'flex', justifyContent: 'space-around',
           flexWrap: 'wrap', gap: 40,
         }}>
-          {STATS.map((s) => (
+          {liveStats.map((s) => (
             <StatItem key={s.label} end={s.end} suffix={s.suffix} prefix={s.prefix} label={s.label} />
           ))}
         </div>
