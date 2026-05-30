@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { IconMapPin, IconX, IconCheck } from '@tabler/icons-react';
+import { IconMapPin, IconX, IconCheck, IconShare2 } from '@tabler/icons-react';
 import ProgressBar from '@/components/ui/ProgressBar';
 import ReviewsSection from '@/components/ReviewsSection';
 import type { DealWithRestaurant } from '@/types/index';
@@ -17,6 +17,7 @@ interface DealDetailModalProps {
   alreadyClaimed?: boolean;
   existingQrCode?: string;
   onViewExisting?: (code: string) => void;
+  onShare?:        () => void;
 }
 
 export default function DealDetailModal({
@@ -24,11 +25,12 @@ export default function DealDetailModal({
   user,
   onClose,
   onClaim,
-  claiming      = false,
-  claimError    = null,
+  claiming       = false,
+  claimError     = null,
   alreadyClaimed = false,
   existingQrCode,
   onViewExisting,
+  onShare,
 }: DealDetailModalProps) {
   const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
   const soldOut   = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
@@ -51,6 +53,15 @@ export default function DealDetailModal({
           >
             <IconX size={14} />
           </button>
+          {onShare && (
+            <button
+              onClick={onShare}
+              className="absolute top-3 left-3 w-8 h-8 rounded-full bg-black/25 flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+              aria-label="Share deal"
+            >
+              <IconShare2 size={14} />
+            </button>
+          )}
           <span className="text-6xl">{deal.emoji ?? '🍽️'}</span>
         </div>
 

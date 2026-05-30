@@ -10,6 +10,7 @@ import Link from 'next/link';
 import {
   IconSearch, IconMapPin, IconX, IconBuildingStore, IconShoppingBag,
   IconTruck, IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
+  IconHeart,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
@@ -41,6 +42,18 @@ const CITIES: string[] = [
   'GTA Area', 'Mississauga', 'Brampton', 'Toronto',
   'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville',
 ];
+
+// Rough lat/lon for each Ontario city — used by geolocation "Use My Location"
+const CITY_COORDS: Record<string, [number, number]> = {
+  'GTA Area':           [43.65, -79.38],
+  'Toronto':            [43.65, -79.38],
+  'Mississauga':        [43.59, -79.64],
+  'Brampton':           [43.72, -79.76],
+  'Markham':            [43.86, -79.27],
+  'Kitchener-Waterloo': [43.45, -80.49],
+  'Hamilton':           [43.26, -79.87],
+  'Oakville':           [43.45, -79.69],
+};
 
 const TYPE_FILTERS: { id: FilterType; label: string; Icon?: TablerIcon }[] = [
   { id: 'all',      label: 'All Types' },
@@ -226,9 +239,26 @@ function ProfileDrawer({ user, onClose, onSignOut }: { user: User; onClose: () =
   const displayName = fullName || (user.email?.split('@')[0] ?? 'You');
   const initials    = displayName.charAt(0).toUpperCase();
 
+  const [miniStats, setMiniStats] = useState<{ claims: number; saved: number } | null>(null);
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  // Fetch quick stats to show in drawer header
+  useEffect(() => {
+    fetch('/api/profile')
+      .then(r => r.json())
+      .then(json => {
+        if (json.data) {
+          setMiniStats({
+            claims: json.data.stats.total_claims,
+            saved:  Math.round(json.data.stats.total_saved_cents / 100),
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const navItems = [
@@ -263,6 +293,11 @@ function ProfileDrawer({ user, onClose, onSignOut }: { user: User; onClose: () =
             <div className="flex-1 min-w-0">
               <p className="font-bold text-[16px] truncate">{displayName}</p>
               <p className="text-[12px] text-t2 truncate">{user.email}</p>
+              {miniStats && (
+                <p className="text-[11px] text-t3 mt-0.5">
+                  {miniStats.claims} claim{miniStats.claims !== 1 ? 's' : ''} · ${miniStats.saved} saved
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -338,6 +373,30 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
 function LocationModal({ city, radius, onApply, onClose }: { city: string; radius: number; onApply: (c: string, r: number) => void; onClose: () => void }) {
   const [localCity,   setLocalCity]   = useState(city);
   const [localRadius, setLocalRadius] = useState(radius);
+  const [locating,    setLocating]    = useState(false);
+  const [locateErr,   setLocateErr]   = useState('');
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) { setLocateErr('Geolocation not supported'); return; }
+    setLocating(true);
+    setLocateErr('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        // Find nearest Ontario city by Euclidean distance on lat/lon
+        let nearest = 'GTA Area';
+        let minDist = Infinity;
+        for (const [name, [clat, clon]] of Object.entries(CITY_COORDS)) {
+          const dist = Math.hypot(lat - clat, lon - clon);
+          if (dist < minDist) { minDist = dist; nearest = name; }
+        }
+        setLocalCity(nearest);
+        setLocating(false);
+      },
+      () => { setLocateErr('Could not get location. Please select manually.'); setLocating(false); },
+      { timeout: 8000 },
+    );
+  };
 
   return (
     <Overlay onClose={onClose}>
@@ -346,6 +405,18 @@ function LocationModal({ city, radius, onApply, onClose }: { city: string; radiu
           <span className="font-display text-[17px] font-bold">Location &amp; Radius</span>
           <button onClick={onClose} className="p-1 text-t2 hover:text-tx transition-colors"><IconX size={18} /></button>
         </div>
+
+        {/* Use My Location button */}
+        <button
+          onClick={handleUseMyLocation}
+          disabled={locating}
+          className="w-full h-10 mb-4 flex items-center justify-center gap-2 border border-brand text-brand font-semibold text-[13px] rounded-brands hover:bg-brandlt transition-all disabled:opacity-60"
+        >
+          <IconMapPin size={14} />
+          {locating ? 'Detecting location…' : '📍 Use My Location'}
+        </button>
+        {locateErr && <p className="text-[12px] text-red-500 mb-3 -mt-1">{locateErr}</p>}
+
         <p className="text-[13px] font-semibold text-t2 mb-2">Quick select</p>
         <div className="flex flex-wrap gap-2 mb-5">
           {CITIES.map(c => (
@@ -465,6 +536,10 @@ export default function CustomerPage() {
   const [showDrawer,   setShowDrawer]   = useState(false);
   const [claimError,   setClaimError]   = useState<string | null>(null);
 
+  // ── Favorites & recently viewed ─────────────────────────────
+  const [favorites,      setFavorites]      = useState<Set<string>>(new Set());
+  const [recentlyViewed, setRecentlyViewed] = useState<DealWithRestaurant[]>([]);
+
   // ── Auth state ──────────────────────────────────────────────
   const [user,         setUser]         = useState<User | null>(null);
   const [authChecked,  setAuthChecked]  = useState(false);
@@ -568,6 +643,38 @@ export default function CustomerPage() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Init favorites from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rp_favorites');
+      if (stored) setFavorites(new Set(JSON.parse(stored) as string[]));
+    } catch { /* ignore parse errors */ }
+  }, []);
+
+  const toggleFavorite = (dealId: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(dealId)) next.delete(dealId); else next.add(dealId);
+      try { localStorage.setItem('rp_favorites', JSON.stringify(Array.from(next))); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const addRecentlyViewed = (deal: DealWithRestaurant) => {
+    setRecentlyViewed(prev => [deal, ...prev.filter(d => d.id !== deal.id)].slice(0, 6));
+  };
+
+  const handleShare = async (deal: DealWithRestaurant) => {
+    const url = `${window.location.origin}/customer/restaurant/${deal.restaurant?.id ?? ''}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: deal.title, text: `${deal.emoji ?? ''} ${deal.title}`, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+      }
+    } catch { /* user cancelled share */ }
+  };
 
   // Reset visible count when tab/filters change
   useEffect(() => { setVisibleCount(12); }, [tab, category, dealType, city]);
@@ -825,6 +932,58 @@ export default function CustomerPage() {
           )}
         </div>
 
+        {/* Section 4b — Saved Deals (favorites, active tab, not searching) */}
+        {tab === 'active' && !isSearching && favorites.size > 0 && (() => {
+          const savedDeals = dealsWithLive.filter(d => favorites.has(d.id));
+          if (savedDeals.length === 0) return null;
+          return (
+            <section className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[16px] font-bold">❤️ Saved Deals</h3>
+                <span className="text-[12px] text-t3">{savedDeals.length} saved</span>
+              </div>
+              <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
+                {savedDeals.map(deal => (
+                  <div key={deal.id} className="flex-shrink-0 w-[200px] relative">
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleFavorite(deal.id); }}
+                      className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+                    >
+                      <IconHeart size={14} className="text-red-500 fill-red-500" />
+                    </button>
+                    <DealCard
+                      deal={deal}
+                      onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
+                      claimed={!!userClaimMap[deal.id]}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* Section 4c — Recently Viewed (active tab, not searching, has items) */}
+        {tab === 'active' && !isSearching && recentlyViewed.length > 0 && (
+          <section className="mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[16px] font-bold">🕐 Recently Viewed</h3>
+              <button onClick={() => setRecentlyViewed([])} className="text-[12px] text-t3 hover:text-tx transition-colors">Clear</button>
+            </div>
+            <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
+              {recentlyViewed.map(deal => (
+                <div key={deal.id} className="flex-shrink-0 w-[200px] relative">
+                  <DealCard
+                    deal={deal}
+                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    claimed={!!userClaimMap[deal.id]}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Section 5 — Trending Now (active tab, has claimed deals, not searching) */}
         {tab === 'active' && !dealsLoading && trendingDeals.length > 0 && !isSearching && (
           <section className="mb-8">
@@ -873,13 +1032,26 @@ export default function CustomerPage() {
               {tabDeals.slice(0, visibleCount).map((deal, i) => (
                 <div
                   key={deal.id}
+                  className="relative"
                   style={{ animation: 'fadeUpIn 0.3s ease both', animationDelay: `${Math.min(i, 7) * 45}ms` }}
                 >
                   <DealCard
                     deal={deal}
-                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                     claimed={!!userClaimMap[deal.id]}
                   />
+                  {/* Heart / save button */}
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleFavorite(deal.id); }}
+                    className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+                    aria-label={favorites.has(deal.id) ? 'Remove from saved' : 'Save deal'}
+                  >
+                    <IconHeart
+                      size={14}
+                      className={favorites.has(deal.id) ? 'text-red-500' : 'text-t3'}
+                      style={favorites.has(deal.id) ? { fill: '#ef4444' } : {}}
+                    />
+                  </button>
                 </div>
               ))}
             </div>
@@ -970,6 +1142,7 @@ export default function CustomerPage() {
           alreadyClaimed={!!userClaimMap[activeDeal.id]}
           existingQrCode={userClaimMap[activeDeal.id]}
           onViewExisting={code => setQrCode(code)}
+          onShare={() => handleShare(activeDeal)}
         />
       )}
 
