@@ -10,7 +10,7 @@ import Link from 'next/link';
 import {
   IconSearch, IconMapPin, IconX, IconBuildingStore, IconShoppingBag,
   IconTruck, IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
-  IconHeart,
+  IconHeart, IconClock,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
@@ -536,6 +536,9 @@ export default function CustomerPage() {
   const [showDrawer,   setShowDrawer]   = useState(false);
   const [claimError,   setClaimError]   = useState<string | null>(null);
 
+  // ── Active claims banner ─────────────────────────────────────
+  const [claimsBannerDismissed, setClaimsBannerDismissed] = useState(false);
+
   // ── Favorites & recently viewed ─────────────────────────────
   const [favorites,      setFavorites]      = useState<Set<string>>(new Set());
   const [recentlyViewed, setRecentlyViewed] = useState<DealWithRestaurant[]>([]);
@@ -892,6 +895,23 @@ export default function CustomerPage() {
           ))}
         </div>
       </header>
+
+      {/* ── Active claims banner ───────────────────────────────────── */}
+      {!claimsBannerDismissed && Object.keys(userClaimMap).length > 0 && (
+        <div className="bg-brand/10 border-b border-brand/20">
+          <div className="max-w-[1100px] mx-auto px-5 py-2.5 flex items-center gap-3">
+            <IconClock size={15} className="text-brand flex-shrink-0" />
+            <p className="text-[13px] font-semibold text-tx flex-1">
+              You have <span className="text-brand">{Object.keys(userClaimMap).length} active claim{Object.keys(userClaimMap).length !== 1 ? 's' : ''}</span>
+              {' '}— remember to redeem before they expire!{' '}
+              <Link href="/customer/profile?tab=claims" className="underline text-brand hover:text-brand2">View my QR codes →</Link>
+            </p>
+            <button onClick={() => setClaimsBannerDismissed(true)} className="text-t3 hover:text-tx flex-shrink-0">
+              <IconX size={15} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Main content ───────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-5 py-5 pb-28">

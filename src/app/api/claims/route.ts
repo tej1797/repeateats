@@ -86,13 +86,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Deal is fully claimed' }, { status: 409 });
   }
 
-  // Prevent double-claiming the same deal
+  // Prevent double-claiming the same deal (allow re-claim after revert/expire)
   const { data: existing } = await supabase
     .from('claims')
     .select('id')
     .eq('deal_id', body.deal_id)
     .eq('user_id', user.id)
-    .neq('status', 'expired')
+    .in('status', ['claimed', 'redeemed'])
     .single();
 
   if (existing) {
@@ -111,14 +111,16 @@ export async function POST(request: NextRequest) {
     qr_code = generateQrCode();
   }
 
-  // Insert the claim
+  // Insert the claim — expires 45 minutes from now
+  const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
   const { data: claim, error: claimError } = await supabase
     .from('claims')
     .insert({
-      deal_id:  body.deal_id,
-      user_id:  user.id,
+      deal_id:    body.deal_id,
+      user_id:    user.id,
       qr_code,
-      status:   'claimed',
+      status:     'claimed',
+      expires_at: expiresAt,
     })
     .select()
     .single();

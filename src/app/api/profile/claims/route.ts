@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   let query: any = supabase
     .from('claims')
     .select(`
-      id, qr_code, status, claimed_at, redeemed_at, money_saved_cents,
+      id, qr_code, status, claimed_at, redeemed_at, expires_at, reverted_at,
       deals (
         id, title, emoji, discount_value,
         restaurants ( id, name, city, category )

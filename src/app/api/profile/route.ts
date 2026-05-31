@@ -16,16 +16,15 @@ export async function GET() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single() as any;
 
-  // Aggregate stats directly from claims (works even without customer_stats view)
+  // Aggregate stats directly from claims (only active/redeemed claims count)
   const { data: claimRows } = await supabase
     .from('claims')
-    .select('id, money_saved_cents, claimed_at, deal_id, status')
+    .select('id, claimed_at, deal_id, status')
     .eq('user_id', user.id)
-    .neq('status', 'expired');
+    .in('status', ['claimed', 'redeemed']);
 
   const totalClaims = (claimRows ?? []).length;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const totalSavedCents = (claimRows ?? []).reduce((sum: number, c: any) => sum + (c.money_saved_cents ?? 0), 0);
+  const totalSavedCents = 0; // future: calculate from deal discount + order value
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lastClaimAt = (claimRows ?? []).reduce((latest: string | null, c: any) => {
     if (!latest) return c.claimed_at;
@@ -36,7 +35,7 @@ export async function GET() {
   const { data: recentClaims } = await supabase
     .from('claims')
     .select(`
-      id, qr_code, status, claimed_at, redeemed_at, money_saved_cents,
+      id, qr_code, status, claimed_at, redeemed_at, expires_at, reverted_at,
       deals (
         title, emoji, discount_value,
         restaurants ( name, city, category )
@@ -46,12 +45,12 @@ export async function GET() {
     .order('claimed_at', { ascending: false })
     .limit(5);
 
-  // Favourite restaurants: tally which restaurants the user has claimed from most
+  // Favourite restaurants: tally which restaurants the user has claimed from most (only active/redeemed)
   const { data: allClaims } = await supabase
     .from('claims')
     .select(`deals ( restaurant_id, restaurants ( id, name, cuisine, category, city, rating ) )`)
     .eq('user_id', user.id)
-    .neq('status', 'expired');
+    .in('status', ['claimed', 'redeemed']);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const restCounts: Record<string, { restaurant: any; count: number }> = {};
@@ -90,7 +89,7 @@ export async function GET() {
       stats: {
         total_claims: totalClaims,
         total_saved_cents: totalSavedCents,
-        unique_deals: new Set((claimRows ?? []).map((c) => (c as { deal_id: string }).deal_id)).size,
+        unique_deals: new Set((claimRows ?? []).map((c) => (c as { deal_id: string; status: string }).deal_id)).size,
         cities_explored: citiesSet.size,
         last_claim_at: lastClaimAt,
       },

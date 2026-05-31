@@ -472,3 +472,47 @@ DROP POLICY IF EXISTS "notifications_manage_own" ON public.notifications;
 CREATE POLICY "notifications_manage_own" ON public.notifications
   FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 ```
+
+## Claims System Migration (run in Supabase SQL Editor)
+
+Adds expiry + revert tracking to the claims table, and a helper RPC for safe claim count decrement.
+
+```sql
+-- Add new columns to claims table
+ALTER TABLE public.claims
+  ADD COLUMN IF NOT EXISTS expires_at    timestamptz,
+  ADD COLUMN IF NOT EXISTS reverted_at   timestamptz,
+  ADD COLUMN IF NOT EXISTS revert_reason text;
+
+-- Backfill expires_at for existing 'claimed' rows (45 min after claim)
+UPDATE public.claims
+SET expires_at = claimed_at + interval '45 minutes'
+WHERE status = 'claimed' AND expires_at IS NULL;
+
+-- RPC: safely decrement current_claims, floor at 0
+CREATE OR REPLACE FUNCTION decrement_claims(deal_id_input uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE public.deals
+  SET current_claims = GREATEST(0, current_claims - 1)
+  WHERE id = deal_id_input;
+END;
+$$;
+
+-- Optional: expire old claims automatically (run as a cron or manually)
+-- SELECT expire_old_claims();
+CREATE OR REPLACE FUNCTION expire_old_claims()
+RETURNS int LANGUAGE plpgsql AS $$
+DECLARE
+  updated int;
+BEGIN
+  UPDATE public.claims
+  SET status = 'expired'
+  WHERE status = 'claimed'
+    AND expires_at IS NOT NULL
+    AND expires_at < NOW();
+  GET DIAGNOSTICS updated = ROW_COUNT;
+  RETURN updated;
+END;
+$$;
+```

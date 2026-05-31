@@ -10,7 +10,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import {
   IconEdit, IconCrown, IconMapPin, IconTrophy,
   IconX, IconLogout, IconCheck, IconAlertTriangle,
+  IconQrcode, IconBan,
 } from '@tabler/icons-react';
+import QRCode from 'react-qrcode-logo';
 import { createClient } from '@/lib/supabase/client';
 import StarRating from '@/components/StarRating';
 import PortalHeader from '@/components/layout/PortalHeader';
@@ -26,11 +28,13 @@ interface ProfileStats {
 }
 
 interface RecentClaim {
-  id:                string;
-  qr_code:           string;
-  status:            'claimed' | 'redeemed' | 'expired';
-  claimed_at:        string;
-  money_saved_cents: number | null;
+  id:           string;
+  qr_code:      string;
+  status:       'claimed' | 'redeemed' | 'expired' | 'reverted';
+  claimed_at:   string;
+  redeemed_at:  string | null;
+  expires_at:   string | null;
+  reverted_at:  string | null;
   deals: {
     title:          string;
     emoji:          string;
@@ -60,14 +64,7 @@ interface ProfileData {
   favourite_restaurants: FavRestaurant[];
 }
 
-interface FullClaim extends RecentClaim {
-  deals: {
-    title:          string;
-    emoji:          string;
-    discount_value: string | null;
-    restaurants:    { name: string; city: string; category: string | null };
-  } | null;
-}
+type FullClaim = RecentClaim;
 
 const CITIES   = ['GTA Area', 'Mississauga', 'Brampton', 'Toronto', 'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville'];
 const CUISINES = ['Indian', 'Italian', 'BBQ', 'Bar & Grill', 'Canadian', 'Burgers', 'Chinese', 'Sushi', 'Pizza', 'Desserts', 'Vegan', 'Bubble Tea'];
@@ -121,6 +118,7 @@ function StatCard({ icon, value, label, prefix = '', suffix = '', highlight = fa
   );
 }
 
+// Monthly claim counts (we no longer track $ saved per claim directly)
 function buildMonthlyData(claims: FullClaim[]) {
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
@@ -130,14 +128,126 @@ function buildMonthlyData(claims: FullClaim[]) {
       month: d.toLocaleString('en', { month: 'short' }),
     };
   });
-  const savings: Record<string, number> = {};
-  for (const m of months) savings[m.key] = 0;
+  const counts: Record<string, number> = {};
+  for (const m of months) counts[m.key] = 0;
   for (const c of claims) {
+    if (c.status === 'reverted') continue;
     const d   = new Date(c.claimed_at);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (key in savings) savings[key] += (c.money_saved_cents ?? 0) / 100;
+    if (key in counts) counts[key]++;
   }
-  return months.map((m) => ({ month: m.month, saved: parseFloat(savings[m.key].toFixed(2)) }));
+  return months.map((m) => ({ month: m.month, saved: counts[m.key] }));
+}
+
+// ─── Countdown timer component ────────────────────────────────────────────────
+function ClaimCountdown({ expiresAt, claimedAt, onExpired }: {
+  expiresAt: string | null;
+  claimedAt: string;
+  onExpired?: () => void;
+}) {
+  const getMs = () => {
+    const target = expiresAt
+      ? new Date(expiresAt).getTime()
+      : new Date(claimedAt).getTime() + 45 * 60 * 1000; // fallback: claimed + 45min
+    return Math.max(0, target - Date.now());
+  };
+
+  const [msLeft, setMsLeft] = useState(getMs);
+
+  useEffect(() => {
+    if (msLeft <= 0) { onExpired?.(); return; }
+    const id = setInterval(() => {
+      const remaining = getMs();
+      setMsLeft(remaining);
+      if (remaining <= 0) { clearInterval(id); onExpired?.(); }
+    }, 1000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalMs  = 45 * 60 * 1000;
+  const progress = Math.max(0, Math.min(1, msLeft / totalMs));
+  const mins     = Math.floor(msLeft / 60000);
+  const secs     = Math.floor((msLeft % 60000) / 1000);
+  const urgent   = mins < 10;
+
+  if (msLeft <= 0) return <span className="text-[12px] font-bold text-red-500">Expired</span>;
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <span className={`text-[13px] font-bold tabular-nums ${urgent ? 'text-red-500' : 'text-brand'}`}>
+        {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+      </span>
+      <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${urgent ? 'bg-red-500' : 'bg-brand'}`}
+          style={{ width: `${progress * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── QR modal for profile page ────────────────────────────────────────────────
+function ProfileQrModal({ claim, onClose, onRevert }: {
+  claim: FullClaim;
+  onClose: () => void;
+  onRevert: (id: string) => void;
+}) {
+  const [revoking, setRevoking] = useState(false);
+
+  const handleRevert = async () => {
+    if (!confirm('Cancel this claim? You can re-claim the deal later.')) return;
+    setRevoking(true);
+    await fetch(`/api/claims/revert/${claim.id}`, { method: 'PATCH' });
+    onRevert(claim.id);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[340px] p-6 animate-[slideUp_0.22s_ease]">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h3 className="font-display text-[18px] font-bold">{claim.deals?.emoji} {claim.deals?.title}</h3>
+            <p className="text-[13px] text-t2">{claim.deals?.restaurants?.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1 text-t2 hover:text-tx"><IconX size={18} /></button>
+        </div>
+
+        <div className="flex justify-center mb-4">
+          <div className="p-3 bg-white rounded-brands border border-[var(--bd)]">
+            <QRCode
+              value={claim.qr_code}
+              size={180}
+              logoImage="/icon.png"
+              logoWidth={36}
+              logoHeight={36}
+              qrStyle="dots"
+              eyeRadius={6}
+            />
+          </div>
+        </div>
+
+        <p className="text-center text-[22px] font-mono font-bold text-tx tracking-widest mb-2">{claim.qr_code}</p>
+        <p className="text-center text-[12px] text-t3 mb-4">Show this QR code at the restaurant to redeem your deal</p>
+
+        {claim.status === 'claimed' && (
+          <div className="mb-4 flex justify-center">
+            <ClaimCountdown expiresAt={claim.expires_at} claimedAt={claim.claimed_at} />
+          </div>
+        )}
+
+        <button
+          onClick={handleRevert}
+          disabled={revoking}
+          className="w-full h-10 border border-red-200 text-red-600 text-[13px] font-semibold rounded-brands hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <IconBan size={14} /> {revoking ? 'Cancelling…' : 'Cancel claim'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const CAT_EMOJI: Record<string, string> = {
@@ -151,10 +261,17 @@ function StatusBadge({ status }: { status: string }) {
     claimed:  'bg-blue-50 text-blue-700 border-blue-200',
     redeemed: 'bg-green-50 text-green-700 border-green-200',
     expired:  'bg-gray-100 text-gray-500 border-gray-200',
+    reverted: 'bg-gray-100 text-gray-500 border-gray-200',
+  };
+  const labels: Record<string, string> = {
+    claimed:  'Active',
+    redeemed: 'Redeemed',
+    expired:  'Expired',
+    reverted: 'Cancelled',
   };
   return (
-    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border capitalize ${styles[status] ?? 'bg-gray-100 text-gray-500'}`}>
-      {status}
+    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${styles[status] ?? 'bg-gray-100 text-gray-500'}`}>
+      {labels[status] ?? status}
     </span>
   );
 }
@@ -172,6 +289,9 @@ export default function CustomerProfilePage() {
   const [claimsPage,    setClaimsPage]    = useState(1);
   const [claimsTotal,   setClaimsTotal]   = useState(0);
   const [hasMore,       setHasMore]       = useState(false);
+
+  const [qrClaim,      setQrClaim]      = useState<FullClaim | null>(null);
+  const [claimsTab,    setClaimsTab]    = useState<'active' | 'past'>('active');
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput,   setNameInput]   = useState('');
@@ -272,9 +392,8 @@ export default function CustomerProfilePage() {
 
   if (!profile) return null;
 
-  const { stats }         = profile;
-  const totalSavedDollars = stats.total_saved_cents / 100;
-  const monthlyData       = buildMonthlyData(allClaims);
+  const { stats }   = profile;
+  const monthlyData = buildMonthlyData(allClaims);
   const displayName       = profile.display_name ?? profile.email.split('@')[0];
 
   const headerUser = {
@@ -359,8 +478,8 @@ export default function CustomerProfilePage() {
         <div id="savings">
           <h2 className="font-display text-[18px] font-bold mb-4">Your RepEAT Impact</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <StatCard icon="💰" value={Math.round(totalSavedDollars * 100)} prefix="$" label="Total Saved" highlight={totalSavedDollars > 0} />
-            <StatCard icon="🎟️" value={stats.total_claims} label="Deals Used" />
+            <StatCard icon="🎟️" value={stats.total_claims} label="Deals Claimed" highlight={stats.total_claims > 0} />
+            <StatCard icon="🏆" value={stats.unique_deals} label="Unique Deals" />
             <StatCard icon="🏙️" value={stats.cities_explored || 1} label="Cities" />
             <StatCard icon="🔥" value={profile.streak_days} label="Day Streak" />
           </div>
@@ -373,19 +492,19 @@ export default function CustomerProfilePage() {
             </p>
           )}
           <div className="bg-surface rounded-brand border border-[var(--bd)] p-5">
-            <p className="text-[14px] font-bold mb-4">Monthly Savings</p>
+            <p className="text-[14px] font-bold mb-4">Monthly Claims</p>
             {monthlyData.some((d) => d.saved > 0) ? (
               <ResponsiveContainer width="100%" height={160}>
                 <BarChart data={monthlyData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                   <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                  <Tooltip formatter={(v) => [`$${Number(v).toFixed(2)}`, 'Saved']} contentStyle={{ borderRadius: 9, border: '1px solid var(--bd)', fontSize: 13 }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip formatter={(v) => [v, 'Claims']} contentStyle={{ borderRadius: 9, border: '1px solid var(--bd)', fontSize: 13 }} />
                   <Bar dataKey="saved" fill="#E85D04" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-[160px] flex items-center justify-center text-t3 text-[14px]">
-                Claim your first deal to see savings here
+                Claim your first deal to see activity here
               </div>
             )}
           </div>
@@ -393,66 +512,123 @@ export default function CustomerProfilePage() {
 
         {/* ── SECTION 3: Claim History ─────────────────────────────── */}
         <div id="claims">
-          <h2 className="font-display text-[18px] font-bold mb-4">Deal History</h2>
-          <div className="flex gap-2 mb-4">
-            {([['all', 'All'], ['month', 'This month'], ['week', 'This week']] as const).map(([id, label]) => (
+          <h2 className="font-display text-[18px] font-bold mb-4">My Claims</h2>
+
+          {/* Tab switcher: Active / Past */}
+          <div className="flex gap-1 mb-4 bg-surface2 p-1 rounded-brands w-fit">
+            {(['active', 'past'] as const).map((t) => (
               <button
-                key={id}
-                onClick={() => setClaimsFilter(id)}
-                className={`px-4 py-1.5 rounded-full text-[13px] font-semibold border transition-all ${claimsFilter === id ? 'bg-brand text-white border-brand' : 'text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
+                key={t}
+                onClick={() => setClaimsTab(t)}
+                className={`px-5 py-1.5 rounded-[7px] text-[13px] font-semibold transition-all ${claimsTab === t ? 'bg-surface text-tx shadow-sm' : 'text-t2 hover:text-tx'}`}
               >
-                {label}
+                {t === 'active' ? '🎟️ Active' : '📋 History'}
               </button>
             ))}
           </div>
 
-          {claimsLoading && allClaims.length === 0 ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-surface2 rounded-brand animate-pulse" />)}
-            </div>
-          ) : allClaims.length === 0 ? (
-            <div className="text-center py-12 text-t3 bg-surface rounded-brand border border-[var(--bd)]">
-              <p className="text-3xl mb-2">🎟️</p>
-              <p className="text-[15px] font-semibold">No claims yet</p>
-              <p className="text-[13px] mt-1">Browse deals and claim your first one!</p>
-              <Link href="/customer" className="inline-flex mt-4 h-9 px-5 bg-brand text-white text-[13px] font-semibold rounded-brands items-center hover:bg-brand2 transition-colors">
-                Browse deals →
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {allClaims.map((c) => (
-                <div key={c.id} className="bg-surface rounded-brand border border-[var(--bd)] p-4 flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-brands bg-brandlt flex items-center justify-center text-[22px] flex-shrink-0">
-                    {c.deals?.emoji ?? '🍽️'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[14px] truncate">{c.deals?.title ?? 'Deal'}</p>
-                    <p className="text-[12px] text-t2 truncate">
-                      {c.deals?.restaurants?.name} · {new Date(c.claimed_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    {(c.money_saved_cents ?? 0) > 0 ? (
-                      <span className="text-[13px] font-bold text-green-600">Saved ${(c.money_saved_cents! / 100).toFixed(2)}</span>
-                    ) : c.deals?.discount_value ? (
-                      <span className="text-[13px] font-bold text-brand">{c.deals.discount_value}</span>
-                    ) : null}
-                    <StatusBadge status={c.status} />
-                  </div>
-                </div>
-              ))}
-              {hasMore && (
+          {/* Filter row (past tab only) */}
+          {claimsTab === 'past' && (
+            <div className="flex gap-2 mb-4">
+              {([['all', 'All'], ['month', 'This month'], ['week', 'This week']] as const).map(([id, label]) => (
                 <button
-                  onClick={() => { const next = claimsPage + 1; setClaimsPage(next); loadClaims(claimsFilter, next, true); }}
-                  disabled={claimsLoading}
-                  className="w-full h-10 text-[13px] font-semibold text-t2 border border-[var(--bd2)] rounded-brands hover:border-brand hover:text-brand transition-all disabled:opacity-50"
+                  key={id}
+                  onClick={() => setClaimsFilter(id)}
+                  className={`px-4 py-1.5 rounded-full text-[13px] font-semibold border transition-all ${claimsFilter === id ? 'bg-brand text-white border-brand' : 'text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
                 >
-                  {claimsLoading ? 'Loading…' : `Load more (${claimsTotal - allClaims.length} remaining)`}
+                  {label}
                 </button>
-              )}
+              ))}
             </div>
           )}
+
+          {claimsLoading && allClaims.length === 0 ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => <div key={i} className="h-20 bg-surface2 rounded-brand animate-pulse" />)}
+            </div>
+          ) : (() => {
+            const activeClaims = allClaims.filter(c => c.status === 'claimed');
+            const pastClaims   = allClaims.filter(c => c.status !== 'claimed');
+            const shown        = claimsTab === 'active' ? activeClaims : pastClaims;
+
+            if (shown.length === 0) {
+              return (
+                <div className="text-center py-12 text-t3 bg-surface rounded-brand border border-[var(--bd)]">
+                  <p className="text-3xl mb-2">{claimsTab === 'active' ? '🎟️' : '📋'}</p>
+                  {claimsTab === 'active' ? (
+                    <>
+                      <p className="text-[15px] font-semibold">No active claims</p>
+                      <p className="text-[13px] mt-1">Claimed deals appear here with a live countdown timer.</p>
+                      <Link href="/customer" className="inline-flex mt-4 h-9 px-5 bg-brand text-white text-[13px] font-semibold rounded-brands items-center hover:bg-brand2 transition-colors">
+                        Browse deals →
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[15px] font-semibold">No past claims</p>
+                      <p className="text-[13px] mt-1">Redeemed and expired claims appear here.</p>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-2.5">
+                {shown.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`bg-surface rounded-brand border p-4 flex items-center gap-3 transition-all ${
+                      c.status === 'claimed' ? 'border-brand/30 shadow-sm' : 'border-[var(--bd)]'
+                    }`}
+                  >
+                    <div className="w-11 h-11 rounded-brands bg-brandlt flex items-center justify-center text-[22px] flex-shrink-0">
+                      {c.deals?.emoji ?? '🍽️'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[14px] truncate">{c.deals?.title ?? 'Deal'}</p>
+                      <p className="text-[12px] text-t2 truncate">
+                        {c.deals?.restaurants?.name} · {new Date(c.claimed_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                      {c.deals?.discount_value && (
+                        <p className="text-[12px] font-bold text-brand mt-0.5">{c.deals.discount_value}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      {c.status === 'claimed' ? (
+                        <>
+                          <ClaimCountdown
+                            expiresAt={c.expires_at}
+                            claimedAt={c.claimed_at}
+                            onExpired={() => {
+                              setAllClaims(prev => prev.map(x => x.id === c.id ? { ...x, status: 'expired' } : x));
+                            }}
+                          />
+                          <button
+                            onClick={() => setQrClaim(c)}
+                            className="flex items-center gap-1 text-[12px] font-bold text-brand hover:text-brand2 transition-colors"
+                          >
+                            <IconQrcode size={13} /> Show QR
+                          </button>
+                        </>
+                      ) : (
+                        <StatusBadge status={c.status} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {claimsTab === 'past' && hasMore && (
+                  <button
+                    onClick={() => { const next = claimsPage + 1; setClaimsPage(next); loadClaims(claimsFilter, next, true); }}
+                    disabled={claimsLoading}
+                    className="w-full h-10 text-[13px] font-semibold text-t2 border border-[var(--bd2)] rounded-brands hover:border-brand hover:text-brand transition-all disabled:opacity-50"
+                  >
+                    {claimsLoading ? 'Loading…' : `Load more (${claimsTotal - allClaims.length} remaining)`}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── SECTION 4: Favourite Restaurants ────────────────────── */}
@@ -569,6 +745,18 @@ export default function CustomerProfilePage() {
       </main>
 
       <MobileNav portal="customer" />
+
+      {/* QR modal */}
+      {qrClaim && (
+        <ProfileQrModal
+          claim={qrClaim}
+          onClose={() => setQrClaim(null)}
+          onRevert={(id) => {
+            setAllClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'reverted', reverted_at: new Date().toISOString() } : c));
+            setQrClaim(null);
+          }}
+        />
+      )}
     </div>
   );
 }
