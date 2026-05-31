@@ -19,10 +19,10 @@ interface NavItem {
 
 const NAV_ITEMS: Record<Portal, NavItem[]> = {
   customer: [
-    { href: '/customer',          icon: <IconTag size={22} />,             label: 'Deals' },
-    { href: '/customer?tab=coming', icon: <IconSearch size={22} />,        label: 'Coming' },
-    { href: '/profile',           icon: <IconTicket size={22} />,          label: 'Claims' },
-    { href: '/profile',           icon: <IconUser size={22} />,            label: 'Profile' },
+    { href: '/customer',                          icon: <IconTag size={22} />,    label: 'Deals' },
+    { href: '/customer?tab=coming',               icon: <IconSearch size={22} />, label: 'Coming' },
+    { href: '/customer/profile?tab=claims',       icon: <IconTicket size={22} />, label: 'Claims' },
+    { href: '/customer/profile',                  icon: <IconUser size={22} />,   label: 'Profile' },
   ],
   restaurant: [
     { href: '/restaurant',        icon: <IconLayoutDashboard size={22} />, label: 'Dashboard' },
@@ -59,7 +59,10 @@ export default function MobileNav({ portal }: MobileNavProps) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {items.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(item.href + '?');
+        // Match pathname + optional query string comparison
+        const [itemPath, itemQuery] = item.href.split('?');
+        const pathMatch = pathname === itemPath;
+        const active = pathMatch && (!itemQuery || (typeof window !== 'undefined' && window.location.search.includes(itemQuery)));
         return (
           <Link
             key={item.label}

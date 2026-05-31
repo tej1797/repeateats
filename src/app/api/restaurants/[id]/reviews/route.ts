@@ -18,8 +18,20 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     .single();
 
   if (error) {
-    const status = error.code === 'PGRST116' ? 404 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    // 404 if not found
+    if (error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    // If google review columns don't exist yet, return empty data gracefully
+    // (PGRST204 = column not found, PostgREST unknown column error)
+    return NextResponse.json({
+      data: {
+        google_place_id:     null,
+        google_rating:       null,
+        google_review_count: null,
+        google_reviews:      null,
+      },
+    });
   }
 
   // Trigger a background refresh if data is stale (> 24h) or never synced.

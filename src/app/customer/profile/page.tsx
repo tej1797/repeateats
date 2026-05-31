@@ -392,8 +392,9 @@ export default function CustomerProfilePage() {
 
   if (!profile) return null;
 
-  const { stats }   = profile;
-  const monthlyData = buildMonthlyData(allClaims);
+  const { stats }         = profile;
+  const totalSavedDollars = (stats.total_saved_cents ?? 0) / 100;
+  const monthlyData       = buildMonthlyData(allClaims);
   const displayName       = profile.display_name ?? profile.email.split('@')[0];
 
   const headerUser = {
@@ -408,6 +409,11 @@ export default function CustomerProfilePage() {
       <PortalHeader portal="customer" user={headerUser} onSignOut={handleSignOut} />
 
       <main className="max-w-[900px] mx-auto px-5 py-8 pb-28 space-y-8">
+
+        {/* ── Back to deals ────────────────────────────────────────── */}
+        <Link href="/customer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-t2 hover:text-brand transition-colors">
+          ← Back to deals
+        </Link>
 
         {/* ── SECTION 1: Profile Header ────────────────────────────── */}
         <div className="bg-surface rounded-brand border border-[var(--bd)] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
@@ -456,8 +462,8 @@ export default function CustomerProfilePage() {
             <p className="text-[12px] text-t3">
               Member since {profile.member_since ? new Date(profile.member_since).toLocaleDateString('en', { month: 'long', year: 'numeric' }) : 'today'}
             </p>
-            {profile.streak_days > 0 && (
-              <p className="text-[12px] font-bold text-brand mt-1">🔥 {profile.streak_days}-day streak</p>
+            {totalSavedDollars > 0 && (
+              <p className="text-[12px] font-bold text-green-600 mt-1">💰 ${totalSavedDollars.toFixed(2)} saved with RepEAT</p>
             )}
           </div>
 
@@ -478,10 +484,10 @@ export default function CustomerProfilePage() {
         <div id="savings">
           <h2 className="font-display text-[18px] font-bold mb-4">Your RepEAT Impact</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <StatCard icon="🎟️" value={stats.total_claims} label="Deals Claimed" highlight={stats.total_claims > 0} />
+            <StatCard icon="💰" value={Math.round(totalSavedDollars * 100)} prefix="$" label="Total Saved" highlight={totalSavedDollars > 0} />
+            <StatCard icon="🎟️" value={stats.total_claims} label="Deals Claimed" />
             <StatCard icon="🏆" value={stats.unique_deals} label="Unique Deals" />
             <StatCard icon="🏙️" value={stats.cities_explored || 1} label="Cities" />
-            <StatCard icon="🔥" value={profile.streak_days} label="Day Streak" />
           </div>
           {stats.last_claim_at && (
             <p className="text-[13px] text-t3 mb-5">

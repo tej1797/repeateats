@@ -6,8 +6,6 @@ import { createClient } from '@/lib/supabase/server';
 import type { CreateClaimBody } from '@/types/api';
 
 // ─── Generates a short, readable QR code like "RE-4A7X2B" ───
-// We take 6 characters from a random UUID — short enough to
-// read aloud, long enough to be effectively unique.
 function generateQrCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1 to avoid confusion
   let code = 'RE-';
@@ -26,11 +24,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Fetch claims with deal and restaurant name for display
   const { data, error } = await supabase
     .from('claims')
     .select(`
-      *,
+      id, qr_code, status, claimed_at, redeemed_at, expires_at, deal_id,
       deal:deals (
         title, emoji, discount_value, valid_until,
         restaurant:restaurants ( name, address )
@@ -52,7 +49,10 @@ export async function POST(request: NextRequest) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Please sign in to claim deals' },
+      { status: 401 },
+    );
   }
 
   let body: CreateClaimBody;
@@ -66,7 +66,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'deal_id is required' }, { status: 400 });
   }
 
-  // Fetch the deal to check availability
+  // ── Check for any existing claim for this deal ─────────────
+  const { data: existingClaim } = await supabase
+    .from('claims')
+    .select('id, status, expires_at, qr_code')
+    .eq('deal_id', body.deal_id)
+    .eq('user_id', user.id)
+    .not('status', 'in', '("reverted","expired")')
+    .maybeSingle();
+
+  if (existingClaim) {
+    // Redeemed deals cannot be claimed again
+    if (existingClaim.status === 'redeemed') {
+      return NextResponse.json(
+        { error: 'You already redeemed this deal' },
+        { status: 409 },
+      );
+    }
+
+    // Active 'claimed' — check if it has expired
+    if (existingClaim.status === 'claimed') {
+      const isExpired = existingClaim.expires_at
+        ? new Date(existingClaim.expires_at) < new Date()
+        : false;
+
+      if (isExpired) {
+        // Auto-expire it so the user can re-claim
+        await supabase
+          .from('claims')
+          .update({ status: 'expired' })
+          .eq('id', existingClaim.id);
+        // Fall through to create a new claim below
+      } else {
+        // Still active — return the existing QR code instead of erroring
+        return NextResponse.json({
+          data: existingClaim,
+          alreadyClaimed: true,
+        });
+      }
+    }
+  }
+
+  // ── Check deal availability ────────────────────────────────
   const { data: deal, error: dealError } = await supabase
     .from('deals')
     .select('id, max_claims, current_claims, is_active')
@@ -81,37 +122,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Deal is no longer active' }, { status: 409 });
   }
 
-  // Check if the deal is sold out (max_claims = null means unlimited)
   if (deal.max_claims !== null && deal.current_claims >= deal.max_claims) {
     return NextResponse.json({ error: 'Deal is fully claimed' }, { status: 409 });
   }
 
-  // Prevent double-claiming the same deal (allow re-claim after revert/expire)
-  const { data: existing } = await supabase
-    .from('claims')
-    .select('id')
-    .eq('deal_id', body.deal_id)
-    .eq('user_id', user.id)
-    .in('status', ['claimed', 'redeemed'])
-    .single();
-
-  if (existing) {
-    return NextResponse.json({ error: 'You have already claimed this deal' }, { status: 409 });
-  }
-
-  // Generate a unique QR code (retry up to 3 times on collision)
+  // ── Generate unique QR code ─────────────────────────────────
   let qr_code = generateQrCode();
   for (let attempt = 0; attempt < 3; attempt++) {
     const { data: collision } = await supabase
       .from('claims')
       .select('id')
       .eq('qr_code', qr_code)
-      .single();
+      .maybeSingle();
     if (!collision) break;
     qr_code = generateQrCode();
   }
 
-  // Insert the claim — expires 45 minutes from now
+  // ── Insert the claim — expires 45 minutes from now ─────────
   const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
   const { data: claim, error: claimError } = await supabase
     .from('claims')
@@ -126,10 +153,11 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (claimError) {
+    console.error('Claim insert error:', claimError);
     return NextResponse.json({ error: claimError.message }, { status: 500 });
   }
 
-  // Increment the claim counter on the deal
+  // Increment claim counter
   await supabase
     .from('deals')
     .update({ current_claims: deal.current_claims + 1 })

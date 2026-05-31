@@ -30,6 +30,7 @@ import type { Icon as TablerIcon } from '@tabler/icons-react';
 // ─── Types ────────────────────────────────────────────────────────────────
 type Tab        = 'active' | 'coming' | 'all';
 type FilterType = 'all' | DealType;
+interface ClaimInfo { qr_code: string; status: string; expires_at: string | null }
 
 interface SearchResult {
   restaurants: Array<{ id: string; name: string; cuisine: string | null; city: string }>;
@@ -546,7 +547,7 @@ export default function CustomerPage() {
   // ── Auth state ──────────────────────────────────────────────
   const [user,         setUser]         = useState<User | null>(null);
   const [authChecked,  setAuthChecked]  = useState(false);
-  const [userClaimMap, setUserClaimMap] = useState<Record<string, string>>({});
+  const [userClaimMap, setUserClaimMap] = useState<Record<string, ClaimInfo>>({});
   const supabase = useRef(createClient()).current;
   const router   = useRouter();
 
@@ -589,16 +590,20 @@ export default function CustomerPage() {
     };
   }, [supabase, router]);
 
-  // Fetch user's existing claims (unchanged)
+  // Fetch user's existing claims — store status + expires_at for cooldown logic
   useEffect(() => {
     if (!authChecked || !user) return;
     fetch('/api/claims')
       .then(r => r.json())
-      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string }> }) => {
+      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string; expires_at: string | null }> }) => {
         if (!data) return;
-        const map: Record<string, string> = {};
+        const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
-          if (c.status === 'claimed' && c.deal_id) map[c.deal_id] = c.qr_code;
+          if (!c.deal_id) continue;
+          // Track claimed (active), redeemed. Skip expired/reverted.
+          if (c.status === 'claimed' || c.status === 'redeemed') {
+            map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
+          }
         }
         setUserClaimMap(map);
       })
@@ -646,6 +651,24 @@ export default function CustomerPage() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Read ?tab= from URL on first load (supports MobileNav deep links)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('tab');
+    if (t === 'coming' || t === 'active' || t === 'all') setTab(t as Tab);
+  }, []);
+
+  // ── Claim status helpers ─────────────────────────────────────
+  const isActiveClaim = (dealId: string): boolean => {
+    const c = userClaimMap[dealId];
+    if (!c || c.status !== 'claimed') return false;
+    if (!c.expires_at) return true;
+    return new Date(c.expires_at) > new Date();
+  };
+
+  const isRedeemed = (dealId: string): boolean =>
+    userClaimMap[dealId]?.status === 'redeemed';
 
   // Init favorites from localStorage
   useEffect(() => {
@@ -741,22 +764,29 @@ export default function CustomerPage() {
     return map;
   }, [dealsWithLive]);
 
-  // ── Claim handler (unchanged) ────────────────────────────────
+  // ── Claim handler ────────────────────────────────────────────
   const handleClaim = async () => {
     if (!activeDeal) return;
     setClaimError(null);
-    const code = await claimDeal(activeDeal.id);
-    if (code) {
-      setUserClaimMap(prev => ({ ...prev, [activeDeal.id]: code }));
-      setQrCode(code);
+    const result = await claimDeal(activeDeal.id);
+    if (result) {
+      const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
+      setUserClaimMap(prev => ({
+        ...prev,
+        [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
+      }));
+      setQrCode(result.qr_code);
     } else {
       setClaimError('Could not claim this deal. Please try again.');
     }
   };
 
   // ── Derived booleans ─────────────────────────────────────────
+  // Hide deals the user has already redeemed from the main feed
+  const visibleFilteredDeals = filteredDeals.filter(d => !isRedeemed(d.id));
+
   const loading    = tab === 'all' ? restsLoading : dealsLoading;
-  const tabDeals   = tab === 'all' ? [] : filteredDeals;
+  const tabDeals   = tab === 'all' ? [] : visibleFilteredDeals;
   const isEmpty    = !loading && (tab === 'all' ? filteredRests.length === 0 : tabDeals.length === 0);
   const isSearching = search.length >= 2;
   const hasSearchDropdown = searchFocused && isSearching && (
@@ -897,21 +927,25 @@ export default function CustomerPage() {
       </header>
 
       {/* ── Active claims banner ───────────────────────────────────── */}
-      {!claimsBannerDismissed && Object.keys(userClaimMap).length > 0 && (
-        <div className="bg-brand/10 border-b border-brand/20">
-          <div className="max-w-[1100px] mx-auto px-5 py-2.5 flex items-center gap-3">
-            <IconClock size={15} className="text-brand flex-shrink-0" />
-            <p className="text-[13px] font-semibold text-tx flex-1">
-              You have <span className="text-brand">{Object.keys(userClaimMap).length} active claim{Object.keys(userClaimMap).length !== 1 ? 's' : ''}</span>
-              {' '}— remember to redeem before they expire!{' '}
-              <Link href="/customer/profile?tab=claims" className="underline text-brand hover:text-brand2">View my QR codes →</Link>
-            </p>
-            <button onClick={() => setClaimsBannerDismissed(true)} className="text-t3 hover:text-tx flex-shrink-0">
-              <IconX size={15} />
-            </button>
+      {(() => {
+        const activeCount = Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length;
+        if (claimsBannerDismissed || activeCount === 0) return null;
+        return (
+          <div className="bg-brand/10 border-b border-brand/20">
+            <div className="max-w-[1100px] mx-auto px-5 py-2.5 flex items-center gap-3">
+              <IconClock size={15} className="text-brand flex-shrink-0" />
+              <p className="text-[13px] font-semibold text-tx flex-1">
+                You have <span className="text-brand">{activeCount} active claim{activeCount !== 1 ? 's' : ''}</span>
+                {' '}— remember to redeem before they expire!{' '}
+                <Link href="/customer/profile?tab=claims" className="underline text-brand hover:text-brand2">View QR codes →</Link>
+              </p>
+              <button onClick={() => setClaimsBannerDismissed(true)} className="text-t3 hover:text-tx flex-shrink-0">
+                <IconX size={15} />
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Main content ───────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-5 py-5 pb-28">
@@ -974,7 +1008,7 @@ export default function CustomerPage() {
                     <DealCard
                       deal={deal}
                       onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
-                      claimed={!!userClaimMap[deal.id]}
+                      claimed={isActiveClaim(deal.id)}
                     />
                   </div>
                 ))}
@@ -996,7 +1030,7 @@ export default function CustomerPage() {
                   <DealCard
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
-                    claimed={!!userClaimMap[deal.id]}
+                    claimed={isActiveClaim(deal.id)}
                   />
                 </div>
               ))}
@@ -1058,7 +1092,7 @@ export default function CustomerPage() {
                   <DealCard
                     deal={deal}
                     onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
-                    claimed={!!userClaimMap[deal.id]}
+                    claimed={isActiveClaim(deal.id)}
                   />
                   {/* Heart / save button */}
                   <button
@@ -1133,7 +1167,7 @@ export default function CustomerPage() {
                   <DealCard
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
-                    claimed={!!userClaimMap[deal.id]}
+                    claimed={isActiveClaim(deal.id)}
                   />
                 </div>
               ))}
@@ -1159,8 +1193,9 @@ export default function CustomerPage() {
           onClaim={handleClaim}
           claiming={claiming}
           claimError={claimError}
-          alreadyClaimed={!!userClaimMap[activeDeal.id]}
-          existingQrCode={userClaimMap[activeDeal.id]}
+          alreadyClaimed={isActiveClaim(activeDeal.id)}
+          existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
+          isRedeemed={isRedeemed(activeDeal.id)}
           onViewExisting={code => setQrCode(code)}
           onShare={() => handleShare(activeDeal)}
         />

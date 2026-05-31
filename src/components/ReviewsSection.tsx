@@ -4,7 +4,7 @@
 // Fetches from /api/restaurants/[id]/reviews — returns cached data instantly,
 // then the server triggers a background refresh if the cache is > 24h old.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import StarRating from './StarRating';
 
 interface GoogleReview {
@@ -28,12 +28,15 @@ export default function ReviewsSection({
 }) {
   const [data,    setData]    = useState<ReviewsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const fetched = useRef(false);
 
   useEffect(() => {
+    if (fetched.current) return; // only fetch once per mount
+    fetched.current = true;
     fetch(`/api/restaurants/${restaurantId}/reviews`)
       .then((r) => r.json())
       .then((json) => { if (json.data) setData(json.data); })
-      .catch(console.error)
+      .catch(() => { /* no reviews available */ })
       .finally(() => setLoading(false));
   }, [restaurantId]);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { IconMapPin, IconX, IconCheck, IconShare2 } from '@tabler/icons-react';
+import { IconMapPin, IconX, IconCheck, IconShare2, IconCircleCheck } from '@tabler/icons-react';
 import ProgressBar from '@/components/ui/ProgressBar';
 import ReviewsSection from '@/components/ReviewsSection';
 import type { DealWithRestaurant } from '@/types/index';
@@ -16,6 +16,7 @@ interface DealDetailModalProps {
   claimError?:     string | null;
   alreadyClaimed?: boolean;
   existingQrCode?: string;
+  isRedeemed?:     boolean;
   onViewExisting?: (code: string) => void;
   onShare?:        () => void;
 }
@@ -29,6 +30,7 @@ export default function DealDetailModal({
   claimError     = null,
   alreadyClaimed = false,
   existingQrCode,
+  isRedeemed     = false,
   onViewExisting,
   onShare,
 }: DealDetailModalProps) {
@@ -147,6 +149,10 @@ export default function DealDetailModal({
             >
               Sign in to claim this deal
             </Link>
+          ) : isRedeemed ? (
+            <div className="w-full h-12 rounded-brands bg-green-50 border border-green-200 flex items-center justify-center gap-2 text-[15px] font-semibold text-green-700">
+              <IconCircleCheck size={18} /> Redeemed — deal used
+            </div>
           ) : alreadyClaimed && existingQrCode ? (
             <button
               onClick={() => onViewExisting?.(existingQrCode)}

@@ -131,32 +131,47 @@ export default function RestaurantDetailPage() {
   const [qrCode,       setQrCode]       = useState<string | null>(null);
   const [claimError,   setClaimError]   = useState<string | null>(null);
   const [showSignIn,   setShowSignIn]   = useState(false);
-  const [userClaimMap, setUserClaimMap] = useState<Record<string, string>>({});
+  interface ClaimInfo { qr_code: string; status: string; expires_at: string | null }
+  const [userClaimMap, setUserClaimMap] = useState<Record<string, ClaimInfo>>({});
   const { claimDeal, loading: claiming } = useClaims();
 
   useEffect(() => {
     if (!user) return;
     fetch('/api/claims')
       .then(r => r.json())
-      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string }> }) => {
+      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string; expires_at: string | null }> }) => {
         if (!data) return;
-        const map: Record<string, string> = {};
+        const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
-          if (c.status === 'claimed' && c.deal_id) map[c.deal_id] = c.qr_code;
+          if (!c.deal_id) continue;
+          if (c.status === 'claimed' || c.status === 'redeemed') {
+            map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
+          }
         }
         setUserClaimMap(map);
       })
       .catch(() => {});
   }, [user]);
 
+  const isActiveClaim = (dealId: string): boolean => {
+    const c = userClaimMap[dealId];
+    if (!c || c.status !== 'claimed') return false;
+    if (!c.expires_at) return true;
+    return new Date(c.expires_at) > new Date();
+  };
+
   const handleClaim = async () => {
     if (!activeDeal) return;
     if (!user) { setShowSignIn(true); return; }
     setClaimError(null);
-    const code = await claimDeal(activeDeal.id);
-    if (code) {
-      setUserClaimMap(prev => ({ ...prev, [activeDeal.id]: code }));
-      setQrCode(code);
+    const result = await claimDeal(activeDeal.id);
+    if (result) {
+      const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
+      setUserClaimMap(prev => ({
+        ...prev,
+        [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
+      }));
+      setQrCode(result.qr_code);
     } else {
       setClaimError('Could not claim this deal. Please try again.');
     }
@@ -390,7 +405,7 @@ export default function RestaurantDetailPage() {
                   key={deal.id}
                   deal={deal}
                   onClick={() => { setActiveDeal(deal); setClaimError(null); }}
-                  claimed={!!userClaimMap[deal.id]}
+                  claimed={isActiveClaim(deal.id)}
                 />
               ))}
             </div>
@@ -448,8 +463,9 @@ export default function RestaurantDetailPage() {
           onClaim={handleClaim}
           claiming={claiming}
           claimError={claimError}
-          alreadyClaimed={!!userClaimMap[activeDeal.id]}
-          existingQrCode={userClaimMap[activeDeal.id]}
+          alreadyClaimed={isActiveClaim(activeDeal.id)}
+          existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
+          isRedeemed={userClaimMap[activeDeal.id]?.status === 'redeemed'}
           onViewExisting={code => setQrCode(code)}
         />
       )}

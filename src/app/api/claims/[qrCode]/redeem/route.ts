@@ -62,7 +62,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     .select(`
       *,
       deal:deals (
-        restaurant_id,
+        restaurant_id, discount_type, discount_value,
         restaurant:restaurants ( owner_id )
       )
     `)
@@ -74,7 +74,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   }
 
   // Verify the logged-in user owns the restaurant this deal belongs to
-  const deal = claim.deal as { restaurant_id: string; restaurant: { owner_id: string } | null } | null;
+  const deal = claim.deal as {
+    restaurant_id: string;
+    discount_type: string | null;
+    discount_value: string | null;
+    restaurant: { owner_id: string } | null;
+  } | null;
   if (deal?.restaurant?.owner_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -87,12 +92,28 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'QR code has expired' }, { status: 409 });
   }
 
+  // Estimate savings based on discount type
+  const moneySavedCents = (() => {
+    if (!deal) return 1000;
+    const type = deal.discount_type?.toLowerCase() ?? '';
+    const val  = deal.discount_value ?? '';
+    if (type === 'fixed') {
+      const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? 1000 : Math.round(num * 100);
+    }
+    if (type === 'bogo')       return 1500;
+    if (type === 'free')       return 1000;
+    if (type === 'percentage') return 1500; // ~$15 estimate
+    return 1000;
+  })();
+
   // Mark as redeemed
   const { data: updated, error: updateError } = await supabase
     .from('claims')
     .update({
-      status:      'redeemed',
-      redeemed_at: new Date().toISOString(),
+      status:            'redeemed',
+      redeemed_at:       new Date().toISOString(),
+      money_saved_cents: moneySavedCents,
     })
     .eq('id', claim.id)
     .select()

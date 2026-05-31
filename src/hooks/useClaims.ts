@@ -1,14 +1,16 @@
 'use client';
 // useClaims — claim a deal and retrieve the generated QR code
-// Also lets you fetch all past claims for the current user.
 
 import { useState } from 'react';
 import type { Claim, ClaimWithDeal } from '@/types/index';
 
+interface ClaimResult {
+  qr_code: string;
+  alreadyClaimed?: boolean;
+}
+
 interface UseClaimsResult {
-  // Call this to claim a deal — returns the QR code string on success
-  claimDeal:   (dealId: string) => Promise<string | null>;
-  // All past claims for the current user
+  claimDeal:   (dealId: string) => Promise<ClaimResult | null>;
   fetchClaims: () => Promise<ClaimWithDeal[]>;
   loading:     boolean;
   error:       string | null;
@@ -18,8 +20,7 @@ export function useClaims(): UseClaimsResult {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  // POST /api/claims — returns the QR code or null on failure
-  const claimDeal = async (dealId: string): Promise<string | null> => {
+  const claimDeal = async (dealId: string): Promise<ClaimResult | null> => {
     setLoading(true);
     setError(null);
 
@@ -29,10 +30,25 @@ export function useClaims(): UseClaimsResult {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ deal_id: dealId }),
       });
-      const json = await res.json() as { data?: Claim; error?: string };
+      const json = await res.json() as {
+        data?: Claim & { qr_code: string };
+        error?: string;
+        alreadyClaimed?: boolean;
+      };
 
-      if (!res.ok || json.error) throw new Error(json.error ?? 'Failed to claim deal');
-      return json.data?.qr_code ?? null;
+      // 409 already-redeemed is a real block — surface the message
+      if (res.status === 409) {
+        throw new Error(json.error ?? 'Cannot claim this deal');
+      }
+
+      if (!res.ok && !json.alreadyClaimed) {
+        throw new Error(json.error ?? 'Failed to claim deal');
+      }
+
+      const qrCode = json.data?.qr_code;
+      if (!qrCode) return null;
+
+      return { qr_code: qrCode, alreadyClaimed: json.alreadyClaimed };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       return null;
@@ -41,7 +57,6 @@ export function useClaims(): UseClaimsResult {
     }
   };
 
-  // GET /api/claims — all claims for current user
   const fetchClaims = async (): Promise<ClaimWithDeal[]> => {
     setLoading(true);
     setError(null);

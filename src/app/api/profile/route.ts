@@ -19,12 +19,13 @@ export async function GET() {
   // Aggregate stats directly from claims (only active/redeemed claims count)
   const { data: claimRows } = await supabase
     .from('claims')
-    .select('id, claimed_at, deal_id, status')
+    .select('id, claimed_at, deal_id, status, money_saved_cents')
     .eq('user_id', user.id)
     .in('status', ['claimed', 'redeemed']);
 
   const totalClaims = (claimRows ?? []).length;
-  const totalSavedCents = 0; // future: calculate from deal discount + order value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalSavedCents = (claimRows ?? []).reduce((sum: number, c: any) => sum + (c.money_saved_cents ?? 0), 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lastClaimAt = (claimRows ?? []).reduce((latest: string | null, c: any) => {
     if (!latest) return c.claimed_at;
@@ -35,7 +36,7 @@ export async function GET() {
   const { data: recentClaims } = await supabase
     .from('claims')
     .select(`
-      id, qr_code, status, claimed_at, redeemed_at, expires_at, reverted_at,
+      id, qr_code, status, claimed_at, redeemed_at, expires_at, reverted_at, money_saved_cents,
       deals (
         title, emoji, discount_value,
         restaurants ( name, city, category )
