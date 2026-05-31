@@ -115,8 +115,9 @@ interface WizardData {
 // Shape returned by /api/google-places
 interface PlaceSuggestion {
   name: string; address: string; phone: string | null;
-  website: string | null; hours: string | null; rating: number | null;
-  types: string[]; place_id: string; source?: 'google' | 'database';
+  website: string | null; hours: string | null; hours_raw: string[] | null;
+  rating: number | null; types: string[]; place_id: string;
+  source?: 'google' | 'database';
 }
 
 type ViewState = 'loading' | 'auth' | 'onboarding' | 'dashboard';
@@ -229,58 +230,98 @@ export default function RestaurantPage() {
     setPublishing(true);
     setPublishError('');
 
+    // Failsafe: if publish hangs for 10s, surface an error
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      setPublishing(false);
+      setPublishError('Publishing is taking too long. Please check your connection and try again.');
+    }, 10000);
+
     try {
-      // Fresh auth check — session may have expired since page load
+      // Fresh auth check — ensures the session is still valid
       const { data: { user: freshUser }, error: authErr } = await supabase.auth.getUser();
       if (authErr || !freshUser) {
-        setPublishError('Your session has expired. Please sign in again.');
+        clearTimeout(timeoutId);
+        setPublishError('Session expired — please sign in again.');
         setView('auth');
         return;
       }
 
-      // 1. Create restaurant record via API route
-      const res = await fetch('/api/restaurants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner_id:        freshUser.id,
-          name:            wizard.name,
-          cuisine:         wizard.cuisine,
-          category:        CUISINE_TO_CATEGORY[wizard.cuisine] ?? 'other',
-          city:            wizard.city,
-          address:         wizard.address,
-          phone:           wizard.phone,
-          website:         wizard.website,
-          instagram:       wizard.instagram,
-          description:     wizard.description,
-          // Serialise hours: { Mon: "11:00–22:00" } or "Closed"
-          hours: Object.fromEntries(
-            DAYS.map((d) => [
-              d.toLowerCase(),
-              wizard.hours[d].closed
-                ? 'Closed'
-                : `${wizard.hours[d].open}–${wizard.hours[d].close}`,
-            ])
-          ),
-          accepts_dine_in:  wizard.acceptsDineIn,
-          accepts_pickup:   wizard.acceptsPickup,
-          accepts_delivery: wizard.acceptsDelivery,
-          open_to_collabs:  wizard.openToCollabs,
-          rating:           wizard.placeRating || 4.5,
-          is_live:          false, // flipped to true below after photo upload
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error('[handlePublish] API error:', errText);
-        throw new Error(errText || 'Server error creating restaurant');
-      }
-      const json = await res.json() as { data?: Restaurant; restaurant?: Restaurant; error?: string };
-      if (json.error) throw new Error(json.error);
-      const newRest = json.data ?? json.restaurant;
-      if (!newRest?.id) throw new Error('Failed to create restaurant — no ID returned');
+      const hoursPayload = Object.fromEntries(
+        DAYS.map((d) => [
+          d.toLowerCase(),
+          wizard.hours[d].closed
+            ? 'Closed'
+            : `${wizard.hours[d].open}–${wizard.hours[d].close}`,
+        ])
+      );
 
-      // 2. Upload cover photo to Supabase Storage (if the user chose one)
+      const restaurantPayload = {
+        owner_id:         freshUser.id,
+        name:             wizard.name,
+        cuisine:          wizard.cuisine  || 'Other',
+        category:         CUISINE_TO_CATEGORY[wizard.cuisine] ?? 'other',
+        city:             wizard.city,
+        address:          wizard.address  || '',
+        phone:            wizard.phone    || '',
+        website:          wizard.website  || '',
+        instagram:        wizard.instagram || '',
+        description:      wizard.description || '',
+        hours:            hoursPayload,
+        accepts_dine_in:  wizard.acceptsDineIn,
+        accepts_pickup:   wizard.acceptsPickup,
+        accepts_delivery: wizard.acceptsDelivery,
+        open_to_collabs:  wizard.openToCollabs,
+        rating:           wizard.placeRating || 4.5,
+        is_live:          false,
+      };
+
+      // Check if this owner already has a restaurant (re-publish scenario)
+      const { data: existing } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('owner_id', freshUser.id)
+        .maybeSingle();
+
+      let newRest: Restaurant;
+
+      if (existing) {
+        const { data, error: updateError } = await supabase
+          .from('restaurants')
+          .update(restaurantPayload)
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (updateError) {
+          clearTimeout(timeoutId);
+          setPublishError(
+            updateError.message.includes('permission') || updateError.code === '42501'
+              ? 'Permission denied — please sign out and sign back in, then try again.'
+              : `Could not update restaurant: ${updateError.message}`
+          );
+          return;
+        }
+        newRest = data as Restaurant;
+      } else {
+        const { data, error: insertError } = await supabase
+          .from('restaurants')
+          .insert(restaurantPayload)
+          .select()
+          .single();
+        if (insertError) {
+          clearTimeout(timeoutId);
+          setPublishError(
+            insertError.message.includes('permission') || insertError.code === '42501'
+              ? 'Permission denied — please sign out and sign back in, then try again.'
+              : `Could not create restaurant: ${insertError.message}`
+          );
+          return;
+        }
+        newRest = data as Restaurant;
+      }
+
+      // Upload cover photo to Supabase Storage (if the user chose one)
       let coverUrl: string | null = null;
       if (wizard.photoFile) {
         const ext  = wizard.photoFile.name.split('.').pop() ?? 'jpg';
@@ -289,46 +330,53 @@ export default function RestaurantPage() {
           .from('restaurant-photos')
           .upload(path, wizard.photoFile, { upsert: true });
         if (!upErr) {
-          const { data: pub } = supabase.storage
-            .from('restaurant-photos')
-            .getPublicUrl(path);
+          const { data: pub } = supabase.storage.from('restaurant-photos').getPublicUrl(path);
           coverUrl = pub.publicUrl;
         }
       }
 
-      // 3. Mark is_live and save cover URL
-      await fetch(`/api/restaurants/${newRest.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_live: true, cover_url: coverUrl }),
-      });
+      // Mark live + save cover URL
+      const updateFields: Record<string, unknown> = { is_live: true };
+      if (coverUrl) updateFields.cover_url = coverUrl;
+      const { data: liveRest, error: liveErr } = await supabase
+        .from('restaurants')
+        .update(updateFields)
+        .eq('id', newRest.id)
+        .select()
+        .single();
+      if (liveErr) {
+        clearTimeout(timeoutId);
+        setPublishError(`Could not go live: ${liveErr.message}`);
+        return;
+      }
 
-      // 4. Create any deals the user added during onboarding
+      // Create any deals added during onboarding
       for (const draft of wizard.deals) {
-        await fetch('/api/deals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...draft,
-            restaurant_id: newRest.id,
-            max_claims: draft.max_claims ? Number(draft.max_claims) : null,
-          }),
+        await supabase.from('deals').insert({
+          ...draft,
+          restaurant_id:  newRest.id,
+          current_claims: 0,
+          max_claims:     draft.max_claims ? Number(draft.max_claims) : null,
         });
       }
 
-      // 5. Fetch the final record and flip to dashboard
-      const { data: finalRest } = await supabase
-        .from('restaurants').select('*').eq('id', newRest.id).single();
-      setRestaurant(finalRest as Restaurant);
+      if (timedOut) return; // timeout already showed an error — don't navigate
+      clearTimeout(timeoutId);
+      setRestaurant(liveRest as Restaurant);
       setView('dashboard');
+
     } catch (err) {
-      console.error('[handlePublish] failed:', err);
+      clearTimeout(timeoutId);
+      if (timedOut) return;
+      console.error('[handlePublish]', err);
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setPublishError(msg.includes('permission denied') || msg.includes('RLS')
-        ? 'Permission error — please sign out and sign back in, then try again.'
-        : msg);
+      setPublishError(
+        msg.includes('permission') || msg.includes('RLS')
+          ? 'Permission denied — please sign out and sign back in, then try again.'
+          : msg
+      );
     } finally {
-      setPublishing(false);
+      if (!timedOut) setPublishing(false);
     }
   }, [user, wizard, supabase]);
 
@@ -644,6 +692,47 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   );
 }
 
+// ─── Google hours parsing helpers ────────────────────────────────────────────
+
+const GOOGLE_DAY_MAP: Record<string, string> = {
+  Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu',
+  Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun',
+};
+
+function to24h(timeStr: string): string {
+  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return '12:00';
+  let hour = parseInt(match[1], 10);
+  const min = match[2];
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === 'PM' && hour !== 12) hour += 12;
+  if (meridiem === 'AM' && hour === 12) hour = 0;
+  return `${hour.toString().padStart(2, '0')}:${min}`;
+}
+
+function parseGoogleHours(weekdayText: string[]): Record<string, HoursEntry> {
+  const result = defaultHours();
+  for (const line of weekdayText) {
+    const colonIdx = line.indexOf(': ');
+    if (colonIdx === -1) continue;
+    const dayFull = line.slice(0, colonIdx);
+    const hoursStr = line.slice(colonIdx + 2);
+    const key = GOOGLE_DAY_MAP[dayFull];
+    if (!key) continue;
+    if (hoursStr === 'Closed') {
+      result[key] = { open: '11:00', close: '22:00', closed: true };
+    } else if (hoursStr.includes('Open 24 hours')) {
+      result[key] = { open: '00:00', close: '23:59', closed: false };
+    } else {
+      const parts = hoursStr.split(/\s*[–\-]\s*/);
+      if (parts.length >= 2) {
+        result[key] = { open: to24h(parts[0].trim()), close: to24h(parts[1].trim()), closed: false };
+      }
+    }
+  }
+  return result;
+}
+
 // ─── Step 1: Google Places search ─────────────────────────────────────────────
 
 function Step1Places({
@@ -688,16 +777,20 @@ function Step1Places({
   }, [query, selected]);
 
   const handleSelect = (place: PlaceSuggestion) => {
-    const matched     = ONTARIO_CITIES.find((c) => place.address.includes(c));
+    const matched      = ONTARIO_CITIES.find((c) => place.address.includes(c));
     const fallbackCity = place.address.split(',')[1]?.trim() ?? 'Toronto';
-    patch({
+    const patchData: Partial<WizardData> = {
       name:        place.name,
       address:     place.address,
       city:        matched ?? fallbackCity,
       phone:       place.phone    ?? '',
       website:     place.website  ?? '',
       placeRating: place.rating   ?? 0,
-    });
+    };
+    if (place.hours_raw && place.hours_raw.length > 0) {
+      patchData.hours = parseGoogleHours(place.hours_raw);
+    }
+    patch(patchData);
     setQuery(place.name);
     setResults([]);
     setOpen(false);

@@ -191,15 +191,16 @@ export async function GET(request: NextRequest) {
 
             const r = detailData.result;
             return {
-              place_id: place.place_id,
-              name:     r.name,
-              address:  r.formatted_address,
-              phone:    r.formatted_phone_number ?? null,
-              website:  r.website ?? null,
-              hours:    r.opening_hours?.weekday_text?.join(' · ') ?? null,
-              rating:   r.rating ?? null,
-              types:    r.types ?? [],
-              source:   'google' as const,
+              place_id:  place.place_id,
+              name:      r.name,
+              address:   r.formatted_address,
+              phone:     r.formatted_phone_number ?? null,
+              website:   r.website ?? null,
+              hours:     r.opening_hours?.weekday_text?.join(' · ') ?? null,
+              hours_raw: r.opening_hours?.weekday_text ?? null,
+              rating:    r.rating ?? null,
+              types:     r.types ?? [],
+              source:    'google' as const,
             };
           })
         );
@@ -222,15 +223,16 @@ export async function GET(request: NextRequest) {
   }).slice(0, 8);
 
   const results: PlaceResult[] = matches.map((r) => ({
-    place_id: r.place_id,
-    name:     r.name,
-    address:  r.address,
-    phone:    r.phone,
-    website:  null,
-    hours:    null,
-    rating:   r.rating,
-    types:    [],
-    source:   'database' as const,
+    place_id:  r.place_id,
+    name:      r.name,
+    address:   r.address,
+    phone:     r.phone,
+    website:   null,
+    hours:     null,
+    hours_raw: null,
+    rating:    r.rating,
+    types:     [],
+    source:    'database' as const,
   }));
 
   // Return both `data` and `results` keys for compatibility

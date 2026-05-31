@@ -174,6 +174,7 @@ export interface PlaceResult {
   phone: string | null;
   website: string | null;
   hours: string | null;
+  hours_raw: string[] | null;
   rating: number | null;
   types: string[];
   place_id: string;
