@@ -32,6 +32,13 @@ import {
   IconSearch,
   IconUpload,
   IconFileText,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconShieldLock,
+  IconShieldOff,
+  IconCreditCard,
+  IconLock,
+  IconAlertTriangle,
 } from '@tabler/icons-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -311,6 +318,11 @@ export default function RestaurantPage() {
           .single();
         if (insertError) {
           clearTimeout(timeoutId);
+          // 23505 = unique violation — owner already has a restaurant (race condition)
+          if (insertError.code === '23505') {
+            const { data: raceRest } = await supabase.from('restaurants').select('*').eq('owner_id', freshUser.id).maybeSingle();
+            if (raceRest) { setRestaurant(raceRest as Restaurant); setView('dashboard'); return; }
+          }
           setPublishError(
             insertError.message.includes('permission') || insertError.code === '42501'
               ? 'Permission denied — please sign out and sign back in, then try again.'
@@ -1534,6 +1546,18 @@ function Step5Photo({
 
 type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'settings';
 
+interface ManagerPerms {
+  dashboard: boolean; deals: boolean; analytics: boolean;
+  collabs: boolean; profile: boolean; scanner: boolean;
+}
+interface ManagerLock { restaurant_id: string; perms: ManagerPerms }
+
+// SHA-256 hex digest for PIN hashing (browser-native)
+async function sha256hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }: {
   restaurant: Restaurant;
   user: SupabaseUser;
@@ -1546,6 +1570,32 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [collabs,         setCollabs]         = useState<Collab[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
+  const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
+
+  // Manager mode — driven by DB flag + localStorage lock
+  const [managerMode,  setManagerMode]  = useState(false);
+  const [managerPerms, setManagerPerms] = useState<ManagerPerms>({ dashboard: false, deals: false, analytics: false, collabs: false, profile: false, scanner: true });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('repeateats.manager_locked');
+      if (!raw) return;
+      const lock = JSON.parse(raw) as ManagerLock;
+      if (lock.restaurant_id === initialRestaurant.id) {
+        setManagerMode(true);
+        setManagerPerms(lock.perms);
+        // Verify DB still has manager_mode_enabled (in case owner disabled from another device)
+        supabase.from('restaurants').select('manager_mode_enabled').eq('id', initialRestaurant.id).single()
+          .then(({ data }) => {
+            if (!data?.manager_mode_enabled) {
+              localStorage.removeItem('repeateats.manager_locked');
+              setManagerMode(false);
+            }
+          });
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRestaurant.id]);
 
   useEffect(() => {
     async function load() {
@@ -1576,15 +1626,26 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     setDeals((prev) => prev.map((d) => d.id === deal.id ? { ...d, is_active: !d.is_active } : d));
   };
 
+  const deleteDeal = async (deal: Deal) => {
+    if (!confirm(`Delete "${deal.title}"? This cannot be undone.`)) return;
+    await supabase.from('deals').delete().eq('id', deal.id);
+    setDeals((prev) => prev.filter((d) => d.id !== deal.id));
+  };
+
   const GREEN = '#065F46';
 
-  const TABS: { id: DashTab; label: string }[] = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'deals',     label: 'Deals' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'profile',   label: 'Profile' },
-    { id: 'settings',  label: 'Settings' },
+  const ALL_TABS: { id: DashTab; label: string; perm?: keyof ManagerPerms }[] = [
+    { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
+    { id: 'deals',     label: 'Deals',     perm: 'deals'     },
+    { id: 'analytics', label: 'Analytics', perm: 'analytics' },
+    { id: 'profile',   label: 'Profile',   perm: 'profile'   },
+    { id: 'settings',  label: 'Settings'                     },
   ];
+
+  // In manager mode, only show tabs the owner enabled (settings never shown to manager)
+  const TABS = managerMode
+    ? ALL_TABS.filter((t) => t.perm && managerPerms[t.perm])
+    : ALL_TABS;
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -1599,12 +1660,27 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               <div className="font-display text-[15px] font-extrabold leading-none">
                 Rep<span className="text-brand">EAT</span>
               </div>
-              <div className="text-[11px] text-t2 leading-none mt-0.5">{restaurant.name}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-t2 leading-none">{restaurant.name}</span>
+                {(restaurant as unknown as Record<string,unknown>).rating as number > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+                    <IconStar size={9} /> {((restaurant as unknown as Record<string,unknown>).rating as number).toFixed(1)}
+                  </span>
+                )}
+              </div>
             </div>
           </a>
-          <button onClick={onSignOut} className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors">
-            <IconLogout size={16} /> Sign out
-          </button>
+          {managerMode ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(6,95,70,0.1)', color: GREEN }}>
+                <IconShieldLock size={13} /> Manager Mode
+              </span>
+            </div>
+          ) : (
+            <button onClick={onSignOut} className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors">
+              <IconLogout size={16} /> Sign out
+            </button>
+          )}
         </div>
         {/* Tab nav */}
         <div className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto scrollbar-none pb-0">
@@ -1779,11 +1855,27 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                 </div>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {/* Edit */}
+                              <button
+                                onClick={() => setEditingDeal(deal)}
+                                title="Edit deal"
+                                className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]">
+                                <IconPencil size={14} />
+                              </button>
+                              {/* Pause / Resume */}
                               <button
                                 onClick={() => toggleActive(deal)}
-                                className={`text-[12px] font-semibold px-3 py-1 rounded-brands border transition-colors ${deal.is_active ? 'border-[var(--bd2)] text-t2 hover:border-red-300 hover:text-red-500' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}>
-                                {deal.is_active ? 'Pause' : 'Activate'}
+                                title={deal.is_active ? 'Pause deal' : 'Resume deal'}
+                                className={`w-8 h-8 rounded-brands flex items-center justify-center transition-colors border ${deal.is_active ? 'border-[var(--bd)] text-t2 hover:text-amber-600 hover:border-amber-300' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}>
+                                {deal.is_active ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+                              </button>
+                              {/* Delete */}
+                              <button
+                                onClick={() => deleteDeal(deal)}
+                                title="Delete deal"
+                                className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors border border-[var(--bd)]">
+                                <IconTrash size={14} />
                               </button>
                             </div>
                           </div>
@@ -1860,12 +1952,35 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
       </main>
 
-      {showCreateDeal && (
+      {(showCreateDeal || editingDeal) && (
         <CreateDealModal
           restaurantId={restaurant.id}
-          onCreated={(deal) => setDeals((prev) => [deal as unknown as Deal, ...prev])}
-          onClose={() => setShowCreateDeal(false)}
+          existingDeal={editingDeal ?? undefined}
+          onCreated={(deal) => {
+            if (editingDeal) {
+              setDeals((prev) => prev.map((d) => d.id === (deal as unknown as Deal).id ? deal as unknown as Deal : d));
+              setEditingDeal(null);
+            } else {
+              setDeals((prev) => [deal as unknown as Deal, ...prev]);
+              setShowCreateDeal(false);
+            }
+          }}
+          onClose={() => { setShowCreateDeal(false); setEditingDeal(null); }}
         />
+      )}
+
+      {/* Manager mode exit — shown as a subtle link when locked */}
+      {managerMode && (
+        <div className="fixed bottom-4 left-0 right-0 flex justify-center z-50">
+          <ManagerExitPrompt
+            restaurant={restaurant}
+            onExit={() => {
+              localStorage.removeItem('repeateats.manager_locked');
+              supabase.from('restaurants').update({ manager_mode_enabled: false }).eq('id', restaurant.id);
+              setManagerMode(false);
+            }}
+          />
+        </div>
       )}
     </div>
   );
@@ -1976,6 +2091,61 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
   );
 }
 
+// ─── Manager Exit Prompt ──────────────────────────────────────────────────────
+function ManagerExitPrompt({ restaurant, onExit }: {
+  restaurant: Restaurant;
+  onExit: () => void;
+}) {
+  const [open,  setOpen]  = useState(false);
+  const [pin,   setPin]   = useState('');
+  const [error, setError] = useState('');
+  const [busy,  setBusy]  = useState(false);
+
+  const handleVerify = async () => {
+    if (pin.length !== 6) return;
+    setBusy(true);
+    const hash = await sha256hex(pin + restaurant.id);
+    const ownerHash = (restaurant as unknown as Record<string,unknown>).owner_pin_hash as string | null;
+    if (hash === ownerHash) {
+      onExit();
+    } else {
+      setError('Incorrect PIN');
+      setPin('');
+    }
+    setBusy(false);
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="text-[11px] text-t3 hover:text-t2 transition-colors bg-surface px-3 py-1 rounded-full border border-[var(--bd)] shadow-sm">
+        Exit manager mode
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-surface rounded-brand shadow-brand2 border border-[var(--bd)] p-4 w-[280px] text-center animate-[slideUp_0.18s_ease]">
+      <p className="text-[13px] font-bold mb-3">Enter Owner PIN to exit</p>
+      <input
+        type="password" maxLength={6} value={pin} autoFocus
+        onChange={e => { setPin(e.target.value.replace(/\D/g,'')); setError(''); }}
+        onKeyDown={e => e.key === 'Enter' && handleVerify()}
+        placeholder="6-digit PIN"
+        className="w-full h-10 px-3 text-center font-mono text-[18px] tracking-widest border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46] mb-2"
+      />
+      {error && <p className="text-[12px] text-red-500 mb-2">{error}</p>}
+      <div className="flex gap-2">
+        <button onClick={() => setOpen(false)} className="flex-1 h-9 rounded-brands border border-[var(--bd2)] text-[13px] text-t2">Cancel</button>
+        <button onClick={handleVerify} disabled={pin.length !== 6 || busy}
+          className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50"
+          style={{ background: '#065F46' }}>
+          {busy ? '…' : 'Confirm'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
@@ -1985,13 +2155,48 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
   supabase: ReturnType<typeof createClient>;
   onSignOut: () => void;
 }) {
-  const [paymentMethod,    setPaymentMethod]    = useState('etransfer');
-  const [notifs,           setNotifs]           = useState({ claimed: true, expired: true, collabs: true, weekly: false });
-  const [showDeleteModal,  setShowDeleteModal]  = useState(false);
-  const [deleting,         setDeleting]         = useState(false);
-  const [isLiveLocal,      setIsLiveLocal]      = useState(restaurant.is_live);
-  const [toggling,         setToggling]         = useState(false);
+  const rest = restaurant as unknown as Record<string, unknown>;
   const GREEN = '#065F46';
+
+  // Pause / live
+  const [isPaused,    setIsPaused]    = useState(!!(rest.is_paused as boolean));
+  const [isLiveLocal, setIsLiveLocal] = useState(restaurant.is_live);
+  const [toggling,    setToggling]    = useState(false);
+
+  // Notifications
+  const [notifs, setNotifs] = useState({ claimed: true, expired: true, collabs: true, weekly: false });
+
+  // Manager mode
+  const [mgrEnabled,  setMgrEnabled]  = useState(!!(rest.manager_mode_enabled as boolean));
+  const [showMgrSetup, setShowMgrSetup] = useState(false);
+  const [showDisableMgr, setShowDisableMgr] = useState(false);
+
+  // Payment methods
+  const [ownerPinForPay, setOwnerPinForPay] = useState('');
+  const [payPinError,   setPayPinError]   = useState('');
+  const [payPinBusy,    setPayPinBusy]    = useState(false);
+  const [payUnlocked,   setPayUnlocked]   = useState(false);
+
+  // Danger zone
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting,        setDeleting]        = useState(false);
+
+  const Toggle = ({ val, onToggle, disabled = false }: { val: boolean; onToggle: () => void; disabled?: boolean }) => (
+    <button onClick={onToggle} disabled={disabled}
+      className="relative w-10 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60"
+      style={{ background: val ? GREEN : '#D1D5DB' }}>
+      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+        style={{ left: val ? 'calc(100% - 22px)' : 2 }} />
+    </button>
+  );
+
+  const togglePause = async () => {
+    setToggling(true);
+    const newVal = !isPaused;
+    const { data } = await supabase.from('restaurants').update({ is_paused: newVal }).eq('id', restaurant.id).select().single();
+    if (data) { setRestaurant(data as Restaurant); setIsPaused(newVal); }
+    setToggling(false);
+  };
 
   const toggleLive = async () => {
     setToggling(true);
@@ -2008,13 +2213,128 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
     onSignOut();
   };
 
+  const verifyOwnerPin = async (pin: string): Promise<boolean> => {
+    const hash = await sha256hex(pin + restaurant.id);
+    return hash === (rest.owner_pin_hash as string | null);
+  };
+
+  const handlePayPinSubmit = async () => {
+    if (ownerPinForPay.length !== 6) return;
+    setPayPinBusy(true);
+    const ok = await verifyOwnerPin(ownerPinForPay);
+    setPayPinBusy(false);
+    if (ok) { setPayUnlocked(true); setPayPinError(''); }
+    else { setPayPinError('Incorrect PIN'); setOwnerPinForPay(''); }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="font-display text-xl font-bold">Settings</h2>
 
-      {/* Account details */}
+      {/* ── Pause Restaurant ───────────────────────────────────── */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <h3 className="font-semibold text-base">Pause Restaurant</h3>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-tx">{isPaused ? '⏸ Paused — hidden from customers' : '✅ Active — visible to customers'}</div>
+            <div className="text-[12px] text-t2">Temporarily hide your restaurant from the customer feed without deleting anything</div>
+          </div>
+          <Toggle val={isPaused} onToggle={togglePause} disabled={toggling} />
+        </div>
+        <div className="flex items-center justify-between gap-4 pt-2 border-t border-[var(--bd)]">
+          <div>
+            <div className="text-sm font-semibold text-tx">{isLiveLocal ? '🟢 Live on RepEAT' : '⭕ Not published'}</div>
+            <div className="text-[12px] text-t2">Master listing toggle — when off, restaurant is completely hidden</div>
+          </div>
+          <Toggle val={isLiveLocal} onToggle={toggleLive} disabled={toggling} />
+        </div>
+      </div>
+
+      {/* ── Manager Mode ───────────────────────────────────────── */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-base flex items-center gap-2">
+            <IconShieldLock size={16} style={{ color: GREEN }} /> Manager Mode
+          </h3>
+          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${mgrEnabled ? 'bg-green-100 text-green-700' : 'bg-surface2 text-t3'}`}>
+            {mgrEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+        <p className="text-[13px] text-t2">Give staff scanner-only access. You choose which other tabs they can see. Both you and staff get separate PINs.</p>
+        {mgrEnabled ? (
+          <button onClick={() => setShowDisableMgr(true)}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-brands text-[13px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+            <IconShieldOff size={14} /> Disable Manager Mode
+          </button>
+        ) : (
+          <button onClick={() => setShowMgrSetup(true)}
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-brands text-[13px] font-semibold text-white transition-colors"
+            style={{ background: GREEN }}>
+            <IconShieldLock size={14} /> Enable Manager Mode
+          </button>
+        )}
+      </div>
+
+      {/* ── Payment Methods ────────────────────────────────────── */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-base flex items-center gap-2">
+            <IconCreditCard size={16} style={{ color: GREEN }} /> Payment Methods
+          </h3>
+          {!payUnlocked && (
+            <span className="text-[11px] text-t3 flex items-center gap-1"><IconLock size={12} /> Owner PIN required</span>
+          )}
+        </div>
+        {!payUnlocked ? (
+          <div className="space-y-3">
+            <p className="text-[13px] text-t2">Enter your Owner PIN to view or edit payment details.</p>
+            <div className="flex gap-2">
+              <input type="password" maxLength={6} value={ownerPinForPay}
+                onChange={e => { setOwnerPinForPay(e.target.value.replace(/\D/,'')); setPayPinError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handlePayPinSubmit()}
+                placeholder="6-digit PIN"
+                className="flex-1 h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46]"
+              />
+              <button onClick={handlePayPinSubmit} disabled={ownerPinForPay.length !== 6 || payPinBusy}
+                className="h-10 px-4 rounded-brands text-[13px] font-semibold text-white disabled:opacity-50"
+                style={{ background: GREEN }}>
+                {payPinBusy ? '…' : 'Unlock'}
+              </button>
+            </div>
+            {payPinError && <p className="text-[12px] text-red-500">{payPinError}</p>}
+            {!(rest.owner_pin_hash as string | null) && (
+              <p className="text-[12px] text-amber-600 bg-amber-50 border border-amber-200 rounded-brands px-3 py-2">
+                ⚠️ No Owner PIN set — enable Manager Mode first to create your PINs.
+              </p>
+            )}
+          </div>
+        ) : (
+          <PaymentMethodsEditor restaurantId={restaurant.id} supabase={supabase} />
+        )}
+      </div>
+
+      {/* ── Notifications ──────────────────────────────────────── */}
+      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+        <h3 className="font-semibold text-base">Notifications</h3>
+        {([
+          { key: 'claimed' as const, label: 'Deal claimed', sub: 'Email when a customer claims your deal' },
+          { key: 'expired' as const, label: 'Deal expired', sub: 'Email when a deal reaches its end date' },
+          { key: 'collabs' as const, label: 'Collab requests', sub: 'Email when a creator sends a proposal' },
+          { key: 'weekly'  as const, label: 'Weekly summary', sub: 'Sunday summary of claims and activity' },
+        ]).map(({ key, label, sub }) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-tx">{label}</div>
+              <div className="text-[12px] text-t2">{sub}</div>
+            </div>
+            <Toggle val={notifs[key]} onToggle={() => setNotifs((n) => ({ ...n, [key]: !n[key] }))} />
+          </div>
+        ))}
+      </div>
+
+      {/* ── Account ────────────────────────────────────────────── */}
       <div className="bg-surface rounded-brand shadow-brand p-5 space-y-3">
-        <h3 className="font-semibold text-base">Account Details</h3>
+        <h3 className="font-semibold text-base">Account</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-t2">Name</span>
@@ -2029,107 +2349,38 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
             <span className="font-medium text-tx">{new Date(user.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short' })}</span>
           </div>
         </div>
+        <button onClick={onSignOut} className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors pt-2">
+          <IconLogout size={15} /> Sign out of RepEAT
+        </button>
       </div>
 
-      {/* Payment settings */}
-      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-3">
-        <h3 className="font-semibold text-base">Payment Settings</h3>
-        <p className="text-[12px] text-t2">How you&apos;ll pay creators for approved collabs</p>
-        <div className="space-y-2">
-          {[
-            { val: 'etransfer', label: 'Interac e-Transfer', icon: '💸' },
-            { val: 'bank',      label: 'Direct bank transfer', icon: '🏦' },
-            { val: 'paypal',    label: 'PayPal', icon: '🅿️' },
-          ].map(({ val, label, icon }) => (
-            <label key={val} className="flex items-center gap-3 p-3 rounded-brands border cursor-pointer transition-colors"
-              style={{ borderColor: paymentMethod === val ? GREEN : 'var(--bd)', background: paymentMethod === val ? '#F0FDF4' : '' }}>
-              <input type="radio" name="payment" value={val} checked={paymentMethod === val}
-                onChange={() => setPaymentMethod(val)} className="accent-[#065F46]" />
-              <span className="text-xl">{icon}</span>
-              <span className="text-sm font-medium text-tx">{label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Notification preferences */}
-      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
-        <h3 className="font-semibold text-base">Notifications</h3>
-        {[
-          { key: 'claimed' as const, label: 'Deal claimed', sub: 'Email when a customer claims your deal' },
-          { key: 'expired' as const, label: 'Deal expired', sub: 'Email when a deal reaches its end date' },
-          { key: 'collabs' as const, label: 'Collab requests', sub: 'Email when a creator sends a proposal' },
-          { key: 'weekly'  as const, label: 'Weekly summary', sub: 'Sunday summary of claims and activity' },
-        ].map(({ key, label, sub }) => (
-          <div key={key} className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-sm font-semibold text-tx">{label}</div>
-              <div className="text-[12px] text-t2">{sub}</div>
-            </div>
-            <button onClick={() => setNotifs((n) => ({ ...n, [key]: !n[key] }))}
-              className="relative w-10 h-6 rounded-full transition-colors shrink-0"
-              style={{ background: notifs[key] ? GREEN : '#D1D5DB' }}>
-              <span className="absolute top-0.5 transition-transform w-5 h-5 rounded-full bg-white shadow"
-                style={{ left: notifs[key] ? 'calc(100% - 22px)' : 2 }} />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* Listing status */}
-      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
-        <h3 className="font-semibold text-base">Listing Management</h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-tx">{isLiveLocal ? 'Live — visible to customers' : 'Paused — hidden from feed'}</div>
-            <div className="text-[12px] text-t2">Toggle to hide or show your restaurant and deals</div>
-          </div>
-          <button
-            onClick={toggleLive}
-            disabled={toggling}
-            className="relative w-12 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60"
-            style={{ background: isLiveLocal ? GREEN : '#D1D5DB' }}
-          >
-            <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
-              style={{ left: isLiveLocal ? 'calc(100% - 22px)' : 2 }} />
-          </button>
-        </div>
-      </div>
-
-      {/* Danger zone */}
+      {/* ── Danger Zone ────────────────────────────────────────── */}
       <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4 border border-red-100">
-        <h3 className="font-semibold text-base text-red-600">Danger Zone</h3>
+        <h3 className="font-semibold text-base text-red-600 flex items-center gap-2">
+          <IconAlertTriangle size={15} /> Danger Zone
+        </h3>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-tx">Delete listing</div>
             <div className="text-[12px] text-t2">Permanently removes your restaurant and all deals</div>
           </div>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="px-4 h-9 rounded-brands text-[13px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
-          >
+          <button onClick={() => setShowDeleteModal(true)}
+            className="px-4 h-9 rounded-brands text-[13px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
             Delete
           </button>
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
+      {/* Delete modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteModal(false)} />
           <div className="relative bg-surface rounded-brand p-6 w-full max-w-[380px] shadow-2xl">
             <h3 className="font-bold text-[18px] mb-2">Delete listing?</h3>
-            <p className="text-[13px] text-t2 mb-5">
-              This will permanently delete <strong>{restaurant.name}</strong> and all its deals. This cannot be undone.
-            </p>
+            <p className="text-[13px] text-t2 mb-5">This will permanently delete <strong>{restaurant.name}</strong> and all its deals. This cannot be undone.</p>
             <div className="flex gap-3">
-              <button onClick={() => setShowDeleteModal(false)}
-                className="flex-1 h-11 rounded-brands border border-[var(--bd2)] text-[14px] font-semibold text-t2 hover:text-tx transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 h-11 rounded-brands text-[14px] font-bold text-white transition-all disabled:opacity-60"
-                style={{ background: '#EF4444' }}>
+              <button onClick={() => setShowDeleteModal(false)} className="flex-1 h-11 rounded-brands border border-[var(--bd2)] text-[14px] font-semibold text-t2">Cancel</button>
+              <button onClick={handleDelete} disabled={deleting} className="flex-1 h-11 rounded-brands text-[14px] font-bold text-white disabled:opacity-60" style={{ background: '#EF4444' }}>
                 {deleting ? 'Deleting…' : 'Yes, delete'}
               </button>
             </div>
@@ -2137,9 +2388,249 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
         </div>
       )}
 
-      <button onClick={onSignOut}
-        className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors">
-        <IconLogout size={15} /> Sign out of RepEAT
+      {/* Manager Mode setup modal */}
+      {showMgrSetup && (
+        <ManagerSetupModal
+          restaurant={restaurant}
+          supabase={supabase}
+          onDone={(perms) => {
+            setMgrEnabled(true);
+            setShowMgrSetup(false);
+            // Lock this device into manager mode
+            localStorage.setItem('repeateats.manager_locked', JSON.stringify({ restaurant_id: restaurant.id, perms }));
+            window.location.reload();
+          }}
+          onClose={() => setShowMgrSetup(false)}
+        />
+      )}
+
+      {/* Manager Mode disable modal */}
+      {showDisableMgr && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowDisableMgr(false)} />
+          <OwnerPinGate
+            restaurant={restaurant}
+            title="Disable Manager Mode"
+            onSuccess={async () => {
+              await supabase.from('restaurants').update({ manager_mode_enabled: false }).eq('id', restaurant.id);
+              localStorage.removeItem('repeateats.manager_locked');
+              setMgrEnabled(false);
+              setShowDisableMgr(false);
+            }}
+            onClose={() => setShowDisableMgr(false)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Owner PIN Gate ───────────────────────────────────────────────────────────
+function OwnerPinGate({ restaurant, title, onSuccess, onClose }: {
+  restaurant: Restaurant; title: string;
+  onSuccess: () => void | Promise<void>; onClose: () => void;
+}) {
+  const rest = restaurant as unknown as Record<string,unknown>;
+  const [pin, setPin] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const verify = async () => {
+    if (pin.length !== 6) return;
+    setBusy(true);
+    const hash = await sha256hex(pin + restaurant.id);
+    if (hash === (rest.owner_pin_hash as string | null)) {
+      await onSuccess();
+    } else { setErr('Incorrect PIN'); setPin(''); }
+    setBusy(false);
+  };
+  return (
+    <div className="relative bg-surface rounded-brand p-6 w-full max-w-[340px] shadow-2xl">
+      <button onClick={onClose} className="absolute top-3 right-3 text-t3 hover:text-tx"><IconX size={16} /></button>
+      <h3 className="font-bold text-[17px] mb-1">{title}</h3>
+      <p className="text-[13px] text-t2 mb-4">Enter your 6-digit Owner PIN to continue.</p>
+      <input type="password" maxLength={6} value={pin} autoFocus
+        onChange={e => { setPin(e.target.value.replace(/\D/g,'')); setErr(''); }}
+        onKeyDown={e => e.key === 'Enter' && verify()}
+        placeholder="6-digit PIN"
+        className="w-full h-11 px-3 font-mono text-[18px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46] mb-2"
+      />
+      {err && <p className="text-[12px] text-red-500 mb-2">{err}</p>}
+      <button onClick={verify} disabled={pin.length !== 6 || busy}
+        className="w-full h-11 rounded-brands text-[14px] font-bold text-white disabled:opacity-50"
+        style={{ background: '#065F46' }}>
+        {busy ? '…' : 'Confirm'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Manager Setup Modal ──────────────────────────────────────────────────────
+function ManagerSetupModal({ restaurant, supabase, onDone, onClose }: {
+  restaurant: Restaurant;
+  supabase: ReturnType<typeof createClient>;
+  onDone: (perms: ManagerPerms) => void;
+  onClose: () => void;
+}) {
+  const GREEN = '#065F46';
+  const [mgrPin,   setMgrPin]   = useState('');
+  const [ownPin,   setOwnPin]   = useState('');
+  const [perms, setPerms] = useState<ManagerPerms>({ dashboard: false, deals: false, analytics: false, collabs: false, profile: false, scanner: true });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleSave = async () => {
+    if (mgrPin.length !== 6) { setErr('Manager PIN must be 6 digits'); return; }
+    if (ownPin.length !== 6) { setErr('Owner PIN must be 6 digits'); return; }
+    if (mgrPin === ownPin) { setErr('Manager and Owner PINs must be different'); return; }
+    setSaving(true);
+    const [mgrHash, ownHash] = await Promise.all([
+      sha256hex(mgrPin + restaurant.id),
+      sha256hex(ownPin + restaurant.id),
+    ]);
+    const { error } = await supabase.from('restaurants').update({
+      manager_pin_hash: mgrHash,
+      owner_pin_hash: ownHash,
+      manager_mode_enabled: true,
+      manager_perms: perms,
+    }).eq('id', restaurant.id);
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    onDone(perms);
+  };
+
+  const permLabels: { key: keyof ManagerPerms; label: string }[] = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'deals',     label: 'Deals' },
+    { key: 'analytics', label: 'Analytics' },
+    { key: 'collabs',   label: 'Collabs' },
+    { key: 'profile',   label: 'Profile' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-surface rounded-brand p-6 w-full max-w-[420px] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <button onClick={onClose} className="absolute top-3 right-3 text-t3 hover:text-tx"><IconX size={16} /></button>
+        <h3 className="font-bold text-[18px] mb-1 flex items-center gap-2"><IconShieldLock size={18} style={{ color: GREEN }} /> Enable Manager Mode</h3>
+        <p className="text-[13px] text-t2 mb-5">Set PINs and choose which tabs your staff can access. The Scanner tab is always available.</p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Manager PIN (staff uses this)</label>
+            <input type="password" maxLength={6} value={mgrPin} placeholder="6 digits"
+              onChange={e => setMgrPin(e.target.value.replace(/\D/g,''))}
+              className="w-full h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46]"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Owner PIN (you use this to exit + view payments)</label>
+            <input type="password" maxLength={6} value={ownPin} placeholder="6 digits"
+              onChange={e => setOwnPin(e.target.value.replace(/\D/g,''))}
+              className="w-full h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-2">Staff tab permissions</label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-3 rounded-brands border border-[var(--bd)] bg-surface2 opacity-70">
+                <span className="text-[13px] font-semibold text-tx">📷 Scanner</span>
+                <span className="text-[11px] text-t2 font-semibold">Always on</span>
+              </div>
+              {permLabels.map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between p-3 rounded-brands border border-[var(--bd)]">
+                  <span className="text-[13px] font-semibold text-tx">{label}</span>
+                  <button onClick={() => setPerms(p => ({ ...p, [key]: !p[key] }))}
+                    className="relative w-9 h-5 rounded-full transition-colors"
+                    style={{ background: perms[key] ? GREEN : '#D1D5DB' }}>
+                    <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                      style={{ left: perms[key] ? 'calc(100% - 18px)' : 2 }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {err && <p className="text-[12px] text-red-500 mt-3">{err}</p>}
+        <button onClick={handleSave} disabled={saving || mgrPin.length !== 6 || ownPin.length !== 6}
+          className="w-full h-11 mt-5 rounded-brands text-[14px] font-bold text-white disabled:opacity-50 transition-all"
+          style={{ background: GREEN }}>
+          {saving ? 'Saving…' : 'Enable Manager Mode'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Payment Methods Editor ───────────────────────────────────────────────────
+function PaymentMethodsEditor({ restaurantId, supabase }: {
+  restaurantId: string;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const GREEN = '#065F46';
+  interface Payout {
+    card_last4: string; bank_account_name: string; bank_transit: string;
+    bank_institution: string; bank_account: string; paypal_email: string; etransfer_email: string;
+  }
+  const [form, setForm] = useState<Payout>({ card_last4: '', bank_account_name: '', bank_transit: '', bank_institution: '', bank_account: '', paypal_email: '', etransfer_email: '' });
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    supabase.from('restaurant_payouts').select('*').eq('restaurant_id', restaurantId).maybeSingle()
+      .then(({ data }) => {
+        if (data) setForm(f => ({ ...f, ...data }));
+        setLoaded(true);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurantId]);
+
+  const save = async () => {
+    setSaving(true);
+    await supabase.from('restaurant_payouts').upsert({ restaurant_id: restaurantId, ...form, updated_at: new Date().toISOString() });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  if (!loaded) return <div className="h-10 bg-surface2 rounded-brands animate-pulse" />;
+
+  const Field = ({ label, k, placeholder }: { label: string; k: keyof Payout; placeholder?: string }) => (
+    <div>
+      <label className="block text-[12px] font-semibold text-t2 mb-1">{label}</label>
+      <input value={form[k]} placeholder={placeholder}
+        onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
+        className="w-full h-9 px-3 border border-[var(--bd2)] rounded-brands bg-surface text-[13px] text-tx outline-none focus:border-[#065F46]"
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Credit Card</p>
+        <Field label="Card last 4 digits" k="card_last4" placeholder="1234" />
+      </div>
+      <div className="space-y-3 pt-3 border-t border-[var(--bd)]">
+        <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Bank Deposit</p>
+        <Field label="Account name" k="bank_account_name" />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Transit #" k="bank_transit" placeholder="12345" />
+          <Field label="Institution #" k="bank_institution" placeholder="001" />
+        </div>
+        <Field label="Account #" k="bank_account" />
+      </div>
+      <div className="space-y-3 pt-3 border-t border-[var(--bd)]">
+        <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Online</p>
+        <Field label="PayPal email" k="paypal_email" placeholder="you@paypal.com" />
+        <Field label="Interac e-Transfer email" k="etransfer_email" placeholder="you@bank.com" />
+      </div>
+      <button onClick={save} disabled={saving}
+        className="w-full h-10 rounded-brands text-[13px] font-bold text-white disabled:opacity-50"
+        style={{ background: GREEN }}>
+        {saved ? '✓ Saved!' : saving ? 'Saving…' : 'Save payment details'}
       </button>
     </div>
   );

@@ -257,14 +257,20 @@ export default function CreatorProfilePage() {
   const [editName, setEditName] = useState(false);
   const [newName,  setNewName]  = useState('');
   const [savingName, setSavingName] = useState(false);
-  const [activeTab, setActiveTab] = useState<'collabs' | 'payment' | 'checklist' | 'history'>('collabs');
+  const [activeTab,  setActiveTab]  = useState<'collabs' | 'payment' | 'checklist' | 'history' | 'settings'>('collabs');
+  const [available,  setAvailable]  = useState(true);
+  const [savingAvail, setSavingAvail] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.replace('/influencer'); return; }
       fetch('/api/creator/profile')
         .then((r) => r.json())
-        .then(({ data: d }) => { setProfile(d); setNewName(d?.display_name ?? ''); })
+        .then(({ data: d }) => {
+          setProfile(d);
+          setNewName(d?.display_name ?? '');
+          setAvailable(d?.available !== false); // default true
+        })
         .finally(() => setLoading(false));
     });
   }, [supabase, router]);
@@ -474,6 +480,7 @@ export default function CreatorProfilePage() {
               { id: 'payment',  label: 'Payment' },
               { id: 'checklist', label: 'Checklist' },
               { id: 'history',  label: 'History' },
+              { id: 'settings', label: 'Settings' },
             ] as const).map((t) => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
                 className="flex-1 py-3 text-[13px] font-semibold border-b-2 transition-all"
@@ -514,6 +521,43 @@ export default function CreatorProfilePage() {
 
             {/* Checklist */}
             {activeTab === 'checklist' && <ChecklistSection />}
+
+            {/* Settings */}
+            {activeTab === 'settings' && (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-gray-100 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-[14px] text-gray-900">Available for collabs</p>
+                      <p className="text-[12px] text-gray-400 mt-0.5">
+                        {available ? 'Restaurants can find and contact you' : 'Your profile is hidden from restaurant discovery'}
+                      </p>
+                    </div>
+                    <button
+                      disabled={savingAvail}
+                      onClick={async () => {
+                        setSavingAvail(true);
+                        const next = !available;
+                        await savePatch({ available: next });
+                        setAvailable(next);
+                        setSavingAvail(false);
+                      }}
+                      className="relative w-10 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60"
+                      style={{ background: available ? '#7E22CE' : '#D1D5DB' }}
+                    >
+                      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                        style={{ left: available ? 'calc(100% - 22px)' : 2 }} />
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-4 space-y-2 text-[13px] text-gray-400">
+                  <p className="font-semibold text-gray-600">About & Support</p>
+                  <a href="mailto:support@repeateats.ca" className="block hover:text-[#7E22CE] transition-colors">Contact support</a>
+                  <a href="/privacy" className="block hover:text-[#7E22CE] transition-colors">Privacy policy</a>
+                  <a href="/terms" className="block hover:text-[#7E22CE] transition-colors">Terms of service</a>
+                </div>
+              </div>
+            )}
 
             {/* History */}
             {activeTab === 'history' && (

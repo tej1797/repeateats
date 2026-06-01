@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('restaurants')
     .select('*')
-    .eq('is_live', true)  // only show published restaurants
+    .eq('is_live', true)          // only show published restaurants
+    .or('is_paused.eq.false,is_paused.is.null')  // exclude paused restaurants
     .order('created_at', { ascending: false });
 
   // Optional city filter — "GTA Area" shows all GTA cities

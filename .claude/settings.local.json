@@ -30,7 +30,21 @@
       "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/influencer/page.tsx)",
       "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/customer/page.tsx)",
       "Bash(head -20 grep -n \"signInWithPassword\\\\|router.push\" /Users/tejas/Documents/repeateats/src/app/customer/login/page.tsx)",
-      "Bash(head -30 grep -n \"getSession\\\\|getUser\\\\|onAuthStateChange\\\\|setView\\\\|mounted\\\\|setTimeout\\\\|router.push\\\\|''''login''''\\\\|''''loading''''\\\\|''''auth''''\" /Users/tejas/Documents/repeateats/src/app/influencer/page.tsx)"
+      "Bash(head -30 grep -n \"getSession\\\\|getUser\\\\|onAuthStateChange\\\\|setView\\\\|mounted\\\\|setTimeout\\\\|router.push\\\\|''''login''''\\\\|''''loading''''\\\\|''''auth''''\" /Users/tejas/Documents/repeateats/src/app/influencer/page.tsx)",
+      "Bash(cat /Users/tejas/Documents/repeateats/src/app/api/claims/[qrCode]/redeem/route.ts)",
+      "Bash(npm list:*)",
+      "Bash(grep -n \"MobileNav\\\\|</main>\\\\|</div>.*$\" /Users/tejas/Documents/repeateats/src/app/restaurant/page.tsx)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(grep -rn \"@react-three\\\\|from ''three''\" src/ --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(cat -n src/app/api/claims/[qrCode]/redeem/route.ts)",
+      "Bash(rm -rf \"/Users/tejas/Documents/repeateats/src/app/api/claims/[id]\")",
+      "Bash(mkdir -p \"/Users/tejas/Documents/repeateats/src/app/api/claims/revert/[id]\")",
+      "Bash(grep -rn reviews /Users/tejas/Documents/repeateats/src/app/api/ --include=*.ts)",
+      "Bash(grep -n \"setUserClaimMap\\\\|ClaimResult\\\\|ClaimInfo\" /Users/tejas/Documents/repeateats/src/app/customer/restaurant/[id]/page.tsx)",
+      "Bash(grep -n \"alreadyClaimed\\\\|existingQrCode\\\\|userClaimMap\" /Users/tejas/Documents/repeateats/src/app/customer/restaurant/[id]/page.tsx)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }

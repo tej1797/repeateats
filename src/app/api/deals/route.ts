@@ -27,13 +27,13 @@ export async function GET(request: NextRequest) {
   const tab           = searchParams.get('tab') ?? 'active';
   const restaurant_id = searchParams.get('restaurant_id');
 
-  // Include category in the restaurant join so client can filter by it
+  // Include category + is_paused in the restaurant join
   let query = supabase
     .from('deals')
     .select(`
       *,
       restaurant:restaurants (
-        id, name, cuisine, category, city, address, rating
+        id, name, cuisine, category, city, address, rating, is_paused
       )
     `)
     .eq('is_active', true)
@@ -58,7 +58,11 @@ export async function GET(request: NextRequest) {
   // Category and city filters applied after fetch.
   // Filtering on joined/aliased tables via .eq() has inconsistent behaviour
   // across Supabase SDK versions, so we do it in JS — the dataset is small.
-  let results = (data ?? []) as Array<typeof data[number] & { restaurant: RestaurantInfo }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let results = (data ?? []) as Array<typeof data[number] & { restaurant: RestaurantInfo & { is_paused?: boolean } }>;
+
+  // Always exclude deals from paused restaurants (customer-facing)
+  results = results.filter((d) => !(d.restaurant as unknown as Record<string, unknown>)?.is_paused);
 
   if (category && category !== 'all') {
     results = results.filter((d) => d.restaurant?.category === category);

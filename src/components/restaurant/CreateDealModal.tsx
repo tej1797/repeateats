@@ -14,28 +14,38 @@ type DayKey = typeof DAYS[number];
 type DealTypeKey = typeof DEAL_TYPES[number];
 type DiscountTypeKey = 'percentage' | 'dollar' | 'free_item' | 'bogo' | 'other';
 
-interface Props {
-  restaurantId: string;
-  onCreated: (deal: Record<string, unknown>) => void;
-  onClose: () => void;
+interface ExistingDeal {
+  id: string; emoji: string | null; title: string; description: string | null;
+  discount_type: string | null; discount_value: string | null;
+  deal_types: string[]; available_days: string[];
+  max_claims: number | null; valid_from: string | null; valid_until: string | null;
+  is_coming: boolean;
 }
 
-export default function CreateDealModal({ restaurantId, onCreated, onClose }: Props) {
-  const supabase = createClient();
+interface Props {
+  restaurantId:  string;
+  existingDeal?: ExistingDeal;
+  onCreated:     (deal: Record<string, unknown>) => void;
+  onClose:       () => void;
+}
 
-  const [emoji,          setEmoji]          = useState('🍽️');
-  const [title,          setTitle]          = useState('');
-  const [description,    setDescription]    = useState('');
-  const [discountType,   setDiscountType]   = useState<DiscountTypeKey>('percentage');
-  const [discountValue,  setDiscountValue]  = useState('');
-  const [selectedTypes,  setSelectedTypes]  = useState<Set<DealTypeKey>>(new Set<DealTypeKey>(['dine-in']));
-  const [allDays,        setAllDays]        = useState(true);
-  const [selectedDays,   setSelectedDays]   = useState<Set<DayKey>>(new Set());
-  const [unlimited,      setUnlimited]      = useState(true);
-  const [maxClaims,      setMaxClaims]      = useState('');
-  const [validFrom,      setValidFrom]      = useState('');
-  const [validUntil,     setValidUntil]     = useState('');
-  const [isComing,       setIsComing]       = useState(false);
+export default function CreateDealModal({ restaurantId, existingDeal, onCreated, onClose }: Props) {
+  const supabase = createClient();
+  const isEdit   = !!existingDeal;
+
+  const [emoji,          setEmoji]          = useState(existingDeal?.emoji ?? '🍽️');
+  const [title,          setTitle]          = useState(existingDeal?.title ?? '');
+  const [description,    setDescription]    = useState(existingDeal?.description ?? '');
+  const [discountType,   setDiscountType]   = useState<DiscountTypeKey>(((existingDeal?.discount_type ?? 'percentage') as DiscountTypeKey));
+  const [discountValue,  setDiscountValue]  = useState(existingDeal?.discount_value ?? '');
+  const [selectedTypes,  setSelectedTypes]  = useState<Set<DealTypeKey>>(new Set<DealTypeKey>((existingDeal?.deal_types ?? ['dine-in']) as DealTypeKey[]));
+  const [allDays,        setAllDays]        = useState(!existingDeal || existingDeal.available_days[0] === 'all');
+  const [selectedDays,   setSelectedDays]   = useState<Set<DayKey>>(new Set((existingDeal?.available_days ?? []).filter(d => d !== 'all') as DayKey[]));
+  const [unlimited,      setUnlimited]      = useState(!existingDeal || existingDeal.max_claims === null);
+  const [maxClaims,      setMaxClaims]      = useState(existingDeal?.max_claims?.toString() ?? '');
+  const [validFrom,      setValidFrom]      = useState(existingDeal?.valid_from ?? '');
+  const [validUntil,     setValidUntil]     = useState(existingDeal?.valid_until ?? '');
+  const [isComing,       setIsComing]       = useState(existingDeal?.is_coming ?? false);
   const [submitting,     setSubmitting]     = useState(false);
   const [error,          setError]          = useState('');
   const [done,           setDone]           = useState(false);
@@ -75,7 +85,6 @@ export default function CreateDealModal({ restaurantId, onCreated, onClose }: Pr
       deal_types:     Array.from(selectedTypes),
       available_days: allDays ? ['all'] : Array.from(selectedDays),
       max_claims:     unlimited ? null : (parseInt(maxClaims) || null),
-      current_claims: 0,
       is_active:      !isComing,
       is_coming:      isComing,
       valid_from:     validFrom || null,
@@ -83,16 +92,25 @@ export default function CreateDealModal({ restaurantId, onCreated, onClose }: Pr
       scope:          'menu',
     };
 
-    const { data, error: insertError } = await supabase
-      .from('deals')
-      .insert(payload)
-      .select()
-      .single();
+    let data: Record<string, unknown> | null = null;
+    let opError: { message: string } | null = null;
+
+    if (isEdit && existingDeal) {
+      const { data: updated, error: updateError } = await supabase
+        .from('deals').update(payload).eq('id', existingDeal.id).select().single();
+      data = updated as Record<string, unknown> | null;
+      opError = updateError;
+    } else {
+      const { data: created, error: insertError } = await supabase
+        .from('deals').insert({ ...payload, current_claims: 0 }).select().single();
+      data = created as Record<string, unknown> | null;
+      opError = insertError;
+    }
 
     setSubmitting(false);
 
-    if (insertError) {
-      setError(insertError.message);
+    if (opError) {
+      setError(opError.message);
       return;
     }
 
@@ -113,7 +131,7 @@ export default function CreateDealModal({ restaurantId, onCreated, onClose }: Pr
         {/* Header */}
         <div className="sticky top-0 bg-surface z-10 px-5 pt-5 pb-4 border-b border-[var(--bd)] flex items-center justify-between">
           <div>
-            <h2 className="font-display text-[20px] font-extrabold">Create a Deal</h2>
+            <h2 className="font-display text-[20px] font-extrabold">{isEdit ? 'Edit Deal' : 'Create a Deal'}</h2>
             <p className="text-[13px] text-t2 mt-0.5">Fill in the details below</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full bg-surface2 flex items-center justify-center text-t2 hover:text-tx transition-colors">
@@ -126,7 +144,7 @@ export default function CreateDealModal({ restaurantId, onCreated, onClose }: Pr
             <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgba(6,95,70,0.1)' }}>
               <IconCheck size={32} style={{ color: GREEN }} />
             </div>
-            <p className="font-bold text-[18px]" style={{ color: GREEN }}>Deal created!</p>
+            <p className="font-bold text-[18px]" style={{ color: GREEN }}>{isEdit ? 'Deal updated!' : 'Deal created!'}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="px-5 py-5 space-y-5">

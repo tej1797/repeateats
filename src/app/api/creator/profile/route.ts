@@ -84,6 +84,7 @@ export async function GET() {
       bank_institution:     influencer.bank_institution ?? null,
       bank_account_masked:  influencer.bank_account_masked ?? null,
       preferred_payment:    influencer.preferred_payment ?? 'etransfer',
+      available:            influencer.available !== false, // default true
       stats: {
         total_earned:      totalEarned,
         escrow_balance:    escrowBalance,
@@ -111,7 +112,7 @@ export async function PATCH(request: NextRequest) {
     'display_name', 'instagram_handle', 'tiktok_handle', 'niche',
     'follower_range', 'primary_platform', 'city', 'bio',
     'etransfer_email', 'paypal_email', 'bank_transit', 'bank_institution',
-    'bank_account_masked', 'preferred_payment',
+    'bank_account_masked', 'preferred_payment', 'available',
   ];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
