@@ -516,3 +516,77 @@ BEGIN
 END;
 $$;
 ```
+
+## Stripe Setup for RepEAT+
+
+### 1. Create products in Stripe Dashboard (dashboard.stripe.com)
+
+Products → + Add Product:
+- Name: "RepEAT+ Monthly"
+- Price: $4.99 CAD / month (recurring)
+- Copy the `price_id` → `STRIPE_MONTHLY_PRICE_ID`
+
+Add a second price to the same product:
+- Price: $39.99 CAD / year (recurring)
+- Copy the `price_id` → `STRIPE_YEARLY_PRICE_ID`
+
+### 2. Enable Apple Pay + Google Pay
+
+Settings → Payment methods → Enable:
+- ✅ Apple Pay
+- ✅ Google Pay
+- ✅ Cards (Visa, Mastercard, Amex)
+
+### 3. Configure Webhook
+
+Developers → Webhooks → + Add endpoint:
+- URL: `https://repeateats.ca/api/stripe/webhook`
+- Events to listen for:
+  - `checkout.session.completed`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.payment_failed`
+
+Copy Webhook secret → `STRIPE_WEBHOOK_SECRET`
+
+### 4. Add all keys to Vercel
+
+```bash
+npx vercel env add STRIPE_SECRET_KEY
+npx vercel env add STRIPE_PUBLISHABLE_KEY
+npx vercel env add STRIPE_WEBHOOK_SECRET
+npx vercel env add STRIPE_MONTHLY_PRICE_ID
+npx vercel env add STRIPE_YEARLY_PRICE_ID
+```
+
+### 5. Local .env.local
+
+```
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_MONTHLY_PRICE_ID=price_...
+STRIPE_YEARLY_PRICE_ID=price_...
+```
+
+### 6. Database migration (already applied via MCP)
+
+```sql
+alter table public.users
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_subscription_id text,
+  add column if not exists repeat_plus_plan text,
+  add column if not exists repeat_plus_expires_at timestamptz;
+```
+
+## Deal Type Filter SQL (apply in Supabase SQL Editor)
+
+```sql
+-- Seed discount_type on existing deals
+update public.deals set discount_type = 'bogo'
+  where title ilike '%buy%get%' or title ilike '%bogo%';
+update public.deals set discount_type = 'percentage'
+  where discount_value ilike '%\%%';
+update public.deals set discount_type = 'free_item'
+  where title ilike '%free%';
+```

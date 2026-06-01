@@ -469,8 +469,20 @@ export default function CustomerProfilePage() {
 
           <div className="flex-shrink-0">
             {profile.is_repeat_plus ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B', border: '1.5px solid #F59E0B' }}>
-                <IconCrown size={14} /> RepEAT+ Member
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B', border: '1.5px solid #F59E0B' }}>
+                  <IconCrown size={14} /> RepEAT+ Member
+                </div>
+                <button
+                  onClick={async () => {
+                    const res  = await fetch('/api/stripe/portal', { method: 'POST' });
+                    const json = await res.json() as { url?: string };
+                    if (json.url) window.location.href = json.url;
+                  }}
+                  className="text-[11px] text-t3 hover:text-brand underline transition-colors"
+                >
+                  Manage subscription →
+                </button>
               </div>
             ) : (
               <Link href="/repeat-plus" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold border border-[var(--bd2)] text-t2 hover:border-brand hover:text-brand transition-all">

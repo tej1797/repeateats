@@ -1,13 +1,71 @@
-'use client';
+// Deal preview page — server-rendered, no auth required.
+// Shows real deals to convince visitors to sign up.
 
-// Deal preview page — shows top deals WITHOUT requiring login.
-// Used as the landing target for "Browse deals →" CTA.
-
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { createClient } from '@supabase/supabase-js';
 import type { DealWithRestaurant } from '@/types/index';
 
-// ─── Deal card (preview mode — no claim button) ───────────────────────────────
+// ─── Server-side data fetch ───────────────────────────────────────────────────
+async function getPreviewDeals(): Promise<{ featured: DealWithRestaurant[]; total: number }> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+
+  const { data: allDeals, count } = await supabase
+    .from('deals')
+    .select(`
+      *,
+      restaurant:restaurants(id, name, city, cuisine, address, rating, is_paused)
+    `, { count: 'exact' })
+    .eq('is_active', true)
+    .eq('is_coming', false)
+    .or('restaurants.is_paused.eq.false,restaurants.is_paused.is.null')
+    .order('current_claims', { ascending: false })
+    .limit(50);
+
+  const deals = (allDeals ?? []) as DealWithRestaurant[];
+  const total  = count ?? deals.length;
+
+  // Variety selection: 2 highest claimed + 2 newest + 2 from different cuisines
+  const seen = new Set<string>();
+  const pick  = (deal: DealWithRestaurant) => {
+    if (seen.has(deal.id)) return false;
+    seen.add(deal.id);
+    return true;
+  };
+
+  const byClaimsTop = [...deals]
+    .sort((a, b) => b.current_claims - a.current_claims)
+    .filter(pick)
+    .slice(0, 2);
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const newest = [...deals]
+    .filter((d) => d.created_at && d.created_at > sevenDaysAgo)
+    .filter(pick)
+    .slice(0, 2);
+
+  const cuisinesSeen = new Set<string | null>();
+  const varied = deals.filter((d) => {
+    if (!pick(d)) return false;
+    const c = d.restaurant?.cuisine ?? null;
+    if (cuisinesSeen.has(c)) return false;
+    cuisinesSeen.add(c);
+    return true;
+  }).slice(0, 2);
+
+  const featured = [...byClaimsTop, ...newest, ...varied].slice(0, 6);
+
+  // Pad to 6 with remaining deals if variety didn't fill up
+  if (featured.length < 6) {
+    deals.filter(pick).slice(0, 6 - featured.length).forEach(d => featured.push(d));
+  }
+
+  return { featured, total };
+}
+
+// ─── Deal card (server component — no claim button) ───────────────────────────
 function PreviewDealCard({ deal }: { deal: DealWithRestaurant }) {
   const fillPct   = deal.max_claims ? Math.min((deal.current_claims / deal.max_claims) * 100, 100) : 0;
   const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
@@ -21,17 +79,15 @@ function PreviewDealCard({ deal }: { deal: DealWithRestaurant }) {
 
   return (
     <div className="bg-surface rounded-brand shadow-brand border border-[var(--bd)] overflow-hidden flex flex-col">
-      {/* Emoji header */}
       <div className="h-28 bg-brandlt flex items-center justify-center relative flex-shrink-0">
         <span className="text-5xl select-none">{deal.emoji ?? '🍽️'}</span>
-        {deal.is_coming && (
-          <span className="absolute top-2 right-2 bg-white/90 text-[10px] font-bold px-2 py-0.5 rounded-full text-t2 border border-[var(--bd)]">
-            Coming soon
+        {deal.current_claims > 0 && (
+          <span className="absolute top-2 left-2 text-[10px] font-bold bg-black/60 text-white px-2 py-0.5 rounded-full">
+            🔥 {deal.current_claims} claimed
           </span>
         )}
       </div>
 
-      {/* Card body */}
       <div className="p-4 flex flex-col flex-1">
         {deal.deal_types?.length > 0 && (
           <div className="mb-2">
@@ -48,18 +104,16 @@ function PreviewDealCard({ deal }: { deal: DealWithRestaurant }) {
           {deal.title}
         </h3>
 
-        {/* Discount value */}
         {deal.discount_value && (
           <div className="font-display text-[26px] font-extrabold text-brand leading-none mb-1">
             {deal.discount_value}
           </div>
         )}
 
-        {/* Progress bar */}
         {deal.max_claims !== null && (
           <div className="mb-3">
             <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
-              <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${fillPct}%` }} />
+              <div className="h-full bg-brand rounded-full" style={{ width: `${fillPct}%` }} />
             </div>
             {spotsLeft !== null && (
               <p className="text-[11px] text-t3 mt-1">
@@ -69,12 +123,10 @@ function PreviewDealCard({ deal }: { deal: DealWithRestaurant }) {
           </div>
         )}
 
-        {/* City */}
         {deal.restaurant?.city && (
           <p className="text-[11px] text-t3 mb-3">📍 {deal.restaurant.city}</p>
         )}
 
-        {/* Sign in to claim button */}
         <Link
           href="/customer/login"
           className="mt-auto block w-full h-10 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors text-[13px] flex items-center justify-center gap-1.5"
@@ -86,7 +138,6 @@ function PreviewDealCard({ deal }: { deal: DealWithRestaurant }) {
   );
 }
 
-// ─── Blurred placeholder card ─────────────────────────────────────────────────
 function BlurCard() {
   return (
     <div className="bg-surface rounded-brand border border-[var(--bd)] overflow-hidden opacity-60 blur-[2px] pointer-events-none select-none">
@@ -102,43 +153,26 @@ function BlurCard() {
   );
 }
 
-// ─── Main preview page ────────────────────────────────────────────────────────
-export default function PreviewPage() {
-  const [deals,   setDeals]   = useState<DealWithRestaurant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/deals?tab=active')
-      .then((r) => r.json())
-      .then((json: { data?: DealWithRestaurant[]; error?: string }) => {
-        if (json.error) throw new Error(json.error);
-        setDeals(json.data ?? []);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load deals'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const topDeals = deals.slice(0, 6);
+// ─── Main preview page (Server Component) ────────────────────────────────────
+export default async function PreviewPage() {
+  const { featured, total } = await getPreviewDeals();
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="bg-surface border-b border-[var(--bd)] sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="font-display text-[22px] font-extrabold tracking-tight leading-none">
             Rep<span className="text-brand">EAT</span>
           </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/customer/login" className="text-[13px] font-semibold text-brand hover:text-brand2 transition-colors">
-              Sign in →
-            </Link>
-          </div>
+          <Link href="/customer/login" className="text-[13px] font-semibold text-brand hover:text-brand2 transition-colors">
+            Sign in →
+          </Link>
         </div>
       </div>
 
-      {/* ── Sign-in banner ──────────────────────────────────────────────────── */}
+      {/* Sign-in banner */}
       <div className="bg-brand text-white">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
           <p className="text-[14px] font-semibold">
@@ -153,7 +187,6 @@ export default function PreviewPage() {
         </div>
       </div>
 
-      {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="max-w-6xl mx-auto px-4 py-8">
 
         <div className="mb-6">
@@ -165,73 +198,46 @@ export default function PreviewPage() {
           </p>
         </div>
 
-        {/* Error state */}
-        {error && (
-          <div className="text-[14px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-4 py-3 mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Loading skeletons */}
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-surface rounded-brand border border-[var(--bd)] overflow-hidden animate-pulse">
-                <div className="h-28 bg-surface2" />
-                <div className="p-4 space-y-3">
-                  <div className="h-3 w-14 bg-surface2 rounded-full" />
-                  <div className="h-4 w-3/4 bg-surface2 rounded-full" />
-                  <div className="h-7 w-1/2 bg-surface2 rounded-full" />
-                  <div className="h-9 bg-surface2 rounded-brands" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Top 6 deal cards */}
-        {!loading && !error && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {topDeals.map((deal) => (
-              <PreviewDealCard key={deal.id} deal={deal} />
-            ))}
-            {topDeals.length === 0 && (
-              <p className="text-t2 text-[14px] col-span-full py-12 text-center">
-                No deals available right now — check back soon.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Blurred "more deals" row with overlay */}
-        {!loading && topDeals.length > 0 && (
-          <div className="relative">
-            {/* Blurred placeholder row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <BlurCard key={i} />
+        {featured.length === 0 ? (
+          <p className="text-t2 text-[14px] py-12 text-center">
+            No deals available right now — check back soon.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              {featured.map((deal) => (
+                <PreviewDealCard key={deal.id} deal={deal} />
               ))}
             </div>
 
-            {/* Gradient + CTA overlay */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center"
-              style={{ background: 'linear-gradient(to bottom, transparent 0%, var(--bg) 40%)' }}>
-              <div className="text-center px-6 mt-16">
-                <p className="font-display text-[20px] font-bold mb-2">
-                  + {Math.max(0, deals.length - 6)} more deals available
-                </p>
-                <p className="text-[14px] text-t2 mb-5">
-                  Create a free account to see all deals and claim them in seconds.
-                </p>
-                <Link
-                  href="/customer/login"
-                  className="inline-flex items-center gap-2 h-12 px-8 bg-brand hover:bg-brand2 text-white font-bold rounded-brand text-[15px] transition-colors shadow-brand"
+            {/* Blurred "more deals" row with overlay */}
+            {total > 6 && (
+              <div className="relative">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 3 }).map((_, i) => <BlurCard key={i} />)}
+                </div>
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center"
+                  style={{ background: 'linear-gradient(to bottom, transparent 0%, var(--bg) 40%)' }}
                 >
-                  Sign in to see all deals →
-                </Link>
+                  <div className="text-center px-6 mt-16">
+                    <p className="font-display text-[20px] font-bold mb-2">
+                      + {total - 6} more deals available
+                    </p>
+                    <p className="text-[14px] text-t2 mb-5">
+                      Create a free account to see all deals and claim them in seconds.
+                    </p>
+                    <Link
+                      href="/customer/login"
+                      className="inline-flex items-center gap-2 h-12 px-8 bg-brand hover:bg-brand2 text-white font-bold rounded-brand text-[15px] transition-colors shadow-brand"
+                    >
+                      Sign in to see all {total} deals →
+                    </Link>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

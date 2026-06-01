@@ -8,10 +8,11 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  IconSearch, IconMapPin, IconX, IconBuildingStore, IconShoppingBag,
-  IconTruck, IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
+  IconSearch, IconMapPin, IconX,
+  IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
   IconHeart, IconClock,
 } from '@tabler/icons-react';
+import { DEAL_FILTERS, type DealFilterId } from '@/lib/constants';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
@@ -23,13 +24,10 @@ import QRCodeModal from '@/components/deals/QRCodeModal';
 import Skeleton from '@/components/ui/Skeleton';
 import MobileNav from '@/components/layout/MobileNav';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
-import type { DealType } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
-import type { Icon as TablerIcon } from '@tabler/icons-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────
-type Tab        = 'active' | 'coming' | 'all';
-type FilterType = 'all' | DealType;
+type Tab = 'active' | 'coming' | 'all';
 interface ClaimInfo { qr_code: string; status: string; expires_at: string | null }
 
 interface SearchResult {
@@ -56,12 +54,6 @@ const CITY_COORDS: Record<string, [number, number]> = {
   'Oakville':           [43.45, -79.69],
 };
 
-const TYPE_FILTERS: { id: FilterType; label: string; Icon?: TablerIcon }[] = [
-  { id: 'all',      label: 'All Types' },
-  { id: 'dine-in',  label: 'Dine-in',  Icon: IconBuildingStore },
-  { id: 'pickup',   label: 'Pickup',   Icon: IconShoppingBag },
-  { id: 'delivery', label: 'Delivery', Icon: IconTruck },
-];
 
 // Food images per category — used by TrendingCard
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -514,7 +506,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 export default function CustomerPage() {
   // ── Filter state ────────────────────────────────────────────
   const [category, setCategory] = useState('all');
-  const [dealType, setDealType] = useState<FilterType>('all');
+  const [dealType, setDealType] = useState<DealFilterId>('all');
   const [tab,      setTab]      = useState<Tab>('active');
   const [search,   setSearch]   = useState('');
   const [city,     setCity]     = useState('GTA Area');
@@ -702,13 +694,19 @@ export default function CustomerPage() {
     } catch { /* user cancelled share */ }
   };
 
-  // Reset visible count when tab/filters change
+  // Reset visible count + deal type filter when tab changes
   useEffect(() => { setVisibleCount(12); }, [tab, category, dealType, city]);
+  useEffect(() => { setDealType('all'); }, [tab]);
 
   // ── Data hooks (unchanged) ───────────────────────────────────
+  // Only pass server-side type filter for deal_types[] filters; discount_type is client-side
+  const serverTypeFilter = (dealType === 'dine-in' || dealType === 'pickup')
+    ? dealType as 'dine-in' | 'pickup'
+    : undefined;
+
   const { deals, loading: dealsLoading, error: dealsError, refetch } = useDeals({
     category:  category === 'all' ? undefined : category,
-    type:      dealType === 'all' ? undefined : dealType,
+    type:      serverTypeFilter,
     tab:       tab === 'all' ? 'active' : tab,
     city:      city === 'GTA Area' ? undefined : city,
   });
@@ -721,16 +719,49 @@ export default function CustomerPage() {
     [deals, liveClaimCounts]
   );
 
-  // Client-side search filter (unchanged)
+  // Client-side filter: search + discount_type-based deal filters
   const filteredDeals = useMemo(() => {
-    if (!search.trim()) return dealsWithLive;
+    let results = dealsWithLive;
+
+    // Discount-type filters applied client-side
+    if (dealType === 'bogo') {
+      results = results.filter(d => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dt = (d as any).discount_type as string | null;
+        const t = d.title.toLowerCase();
+        return dt === 'bogo' || (t.includes('buy') && t.includes('get'));
+      });
+    } else if (dealType === 'percentage') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results = results.filter(d => (d as any).discount_type === 'percentage');
+    } else if (dealType === 'free') {
+      results = results.filter(d => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dt = (d as any).discount_type as string | null;
+        return dt === 'free_item' || dt === 'free' || d.title.toLowerCase().includes('free');
+      });
+    } else if (dealType === 'combo') {
+      results = results.filter(d => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dt = (d as any).discount_type as string | null;
+        return dt === 'combo' || d.title.toLowerCase().includes('combo');
+      });
+    } else if (dealType === 'happy_hour') {
+      results = results.filter(d => {
+        const t = (d.title + ' ' + (d.description ?? '')).toLowerCase();
+        return t.includes('happy hour');
+      });
+    }
+
+    // Search filter
+    if (!search.trim()) return results;
     const q = search.toLowerCase();
-    return dealsWithLive.filter(d =>
+    return results.filter(d =>
       d.title.toLowerCase().includes(q) ||
       (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
       (d.description ?? '').toLowerCase().includes(q)
     );
-  }, [dealsWithLive, search]);
+  }, [dealsWithLive, search, dealType]);
 
   const filteredRests = useMemo(() => {
     if (!search.trim()) return restaurants;
@@ -956,15 +987,15 @@ export default function CustomerPage() {
         {/* Section 3 — Cuisine Pills */}
         <CuisinePills selected={category} onChange={setCategory} className="mb-5" />
 
-        {/* Section 4 — Filter chips */}
-        <div className="flex gap-2 flex-wrap mb-5">
-          {TYPE_FILTERS.map(({ id, label, Icon }) => (
+        {/* Section 4 — Deal type filter chips (horizontally scrollable) */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-5 -mx-5 px-5">
+          {DEAL_FILTERS.map(({ id, label, icon }) => (
             <button
               key={id}
               onClick={() => setDealType(id)}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold border-[1.5px] transition-all ${dealType === id ? 'bg-brand text-white border-brand' : 'bg-surface text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[13px] font-semibold border-[1.5px] transition-all whitespace-nowrap flex-shrink-0 ${dealType === id ? 'bg-brand text-white border-brand' : 'bg-surface text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
             >
-              {Icon && <Icon size={12} />}
+              {icon && <span className="text-[14px] leading-none">{icon}</span>}
               {label}
             </button>
           ))}

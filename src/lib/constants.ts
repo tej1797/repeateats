@@ -46,6 +46,19 @@ export const CUISINES = [
   { id: 'bubbletea', label: 'Bubble Tea', emoji: '🧋', image: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=200&q=70' },
 ] as const
 
+export const DEAL_FILTERS = [
+  { id: 'all',        label: 'All Types',   icon: null   },
+  { id: 'dine-in',    label: 'Dine-in',     icon: '🍽️'  },
+  { id: 'pickup',     label: 'Pickup',      icon: '📦'   },
+  { id: 'bogo',       label: 'BOGO',        icon: '🔥'   },
+  { id: 'percentage', label: '% Off',       icon: '💰'   },
+  { id: 'free',       label: 'Free Item',   icon: '🎁'   },
+  { id: 'combo',      label: 'Combo Deal',  icon: '🍱'   },
+  { id: 'happy_hour', label: 'Happy Hour',  icon: '🍹'   },
+] as const
+
+export type DealFilterId = typeof DEAL_FILTERS[number]['id']
+
 export const ONTARIO_CITIES = [
   'GTA Area', 'Mississauga', 'Brampton', 'Toronto',
   'Markham', 'Scarborough', 'North York', 'Etobicoke',

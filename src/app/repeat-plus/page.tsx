@@ -76,7 +76,28 @@ const FREE_FEATURES = [
 ];
 
 export default function RepeatPlusPage() {
-  const [billing, setBilling] = useState<'monthly' | 'yearly'>('yearly');
+  const [billing,  setBilling]  = useState<'monthly' | 'yearly'>('yearly');
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+
+  const handleSubscribe = async (plan: 'monthly' | 'yearly') => {
+    setLoading(true);
+    setError('');
+    try {
+      const res  = await fetch('/api/stripe/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ plan }),
+      });
+      const json = await res.json() as { url?: string; error?: string };
+      if (json.error) { setError(json.error); return; }
+      if (json.url) window.location.href = json.url;
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen" style={{ background: '#0A0A0A', color: 'white' }}>
@@ -204,13 +225,18 @@ export default function RepeatPlusPage() {
             </ul>
 
             <button
-              className="w-full h-11 rounded-xl text-[15px] font-bold transition-all hover:opacity-90 active:scale-[0.98]"
+              onClick={() => handleSubscribe(billing)}
+              disabled={loading}
+              className="w-full h-11 rounded-xl text-[15px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
               style={{ background: '#F59E0B', color: '#0A0A0A' }}
             >
-              Start 7-day free trial
+              {loading ? 'Redirecting to Stripe…' : 'Start 7-day free trial'}
             </button>
+            {error && (
+              <p className="text-center text-[12px] mt-2" style={{ color: '#f87171' }}>{error}</p>
+            )}
             <p className="text-center text-[11px] mt-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
-              Stripe payment — coming soon
+              Secured by Stripe · Apple Pay & Google Pay accepted
             </p>
           </div>
         </div>
@@ -288,13 +314,15 @@ export default function RepeatPlusPage() {
           7-day free trial. Cancel anytime. No credit card risk.
         </p>
         <button
-          className="h-14 px-10 rounded-2xl text-[16px] font-bold transition-all hover:opacity-90 active:scale-[0.98]"
+          onClick={() => handleSubscribe(billing)}
+          disabled={loading}
+          className="h-14 px-10 rounded-2xl text-[16px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
           style={{ background: '#F59E0B', color: '#0A0A0A' }}
         >
-          Start free trial — it&apos;s on us
+          {loading ? 'Redirecting…' : 'Start free trial — it\'s on us'}
         </button>
         <p className="text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          Stripe payments coming soon · Early access pricing locked in for life
+          7-day free trial · Cancel anytime · Secured by Stripe
         </p>
       </section>
 
