@@ -4,7 +4,7 @@
 // Restaurant staff enter the customer's QR code (RE-XXXXXX format) to mark the deal as redeemed.
 // Auth-protected: must be signed in as a restaurant owner.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { IconArrowLeft, IconQrcode, IconCheck, IconX, IconLoader2 } from '@tabler/icons-react';
@@ -32,6 +32,7 @@ export default function RedeemPage() {
 
   const [authChecked, setAuthChecked] = useState(false);
   const [authed,      setAuthed]      = useState(false);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
 
   const [code,     setCode]     = useState('');
   const [looking,  setLooking]  = useState(false);
@@ -42,17 +43,69 @@ export default function RedeemPage() {
   const [redeemErr,   setRedeemErr]   = useState('');
   const [redeemDone,  setRedeemDone]  = useState(false);
 
+  // Today's redemptions counter
+  const [todayCount, setTodayCount] = useState<number | null>(null);
+
   // Auth check — must be a signed-in restaurant owner
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user) {
         router.replace('/restaurant');
-      } else {
-        setAuthed(true);
-        setAuthChecked(true);
+        return;
       }
+      setAuthed(true);
+      setAuthChecked(true);
+      // Resolve restaurant for this owner (needed for the count query)
+      const { data: rest } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('owner_id', session.user.id)
+        .maybeSingle();
+      if (rest?.id) setRestaurantId(rest.id);
     });
   }, [supabase, router]);
+
+  // Fetch today's redemption count
+  const fetchCount = useCallback(async (rid: string) => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const { count } = await supabase
+      .from('claims')
+      .select('id, deals!inner(restaurant_id)', { count: 'exact', head: true })
+      .eq('status', 'redeemed')
+      .gte('redeemed_at', startOfDay.toISOString())
+      .eq('deals.restaurant_id', rid);
+    setTodayCount(count ?? 0);
+  }, [supabase]);
+
+  // Polling + Realtime once we have restaurantId
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    void fetchCount(restaurantId);
+
+    // Poll every 30 s as a fallback
+    const interval = setInterval(() => fetchCount(restaurantId), 30_000);
+
+    // Realtime: bump immediately when any claim is marked redeemed
+    const channel = supabase
+      .channel(`today-redemptions:${restaurantId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'claims' },
+        (payload) => {
+          if ((payload.new as Record<string, unknown>)?.status === 'redeemed') {
+            void fetchCount(restaurantId);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [restaurantId, fetchCount, supabase]);
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +146,8 @@ export default function RedeemPage() {
       } else {
         setRedeemDone(true);
         setPreview((p) => p ? { ...p, status: 'redeemed' } : p);
+        // Bump counter immediately without waiting for poll/realtime
+        if (restaurantId) void fetchCount(restaurantId);
       }
     } catch {
       setRedeemErr('Network error — please try again');
@@ -146,6 +201,23 @@ export default function RedeemPage() {
           <h1 className="font-display text-[26px] font-extrabold mb-2">Redeem a Deal</h1>
           <p className="text-[14px] text-t2">Enter the customer&apos;s QR code shown on their phone to mark the deal as redeemed.</p>
         </div>
+
+        {/* Today's redemptions chip */}
+        {todayCount !== null && (
+          <div
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6"
+            style={{ background: '#141414', border: '1px solid rgba(34,197,94,0.25)' }}
+          >
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#16a34a' }} />
+            <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#999', letterSpacing: '0.05em' }}>
+              TODAY
+            </span>
+            <span className="text-[18px] font-extrabold text-white leading-none">{todayCount}</span>
+            <span className="text-[12px] font-semibold" style={{ color: '#999' }}>
+              {todayCount === 1 ? 'redemption' : 'redemptions'}
+            </span>
+          </div>
+        )}
 
         {/* QR input form */}
         <form onSubmit={handleLookup} className="mb-6">
