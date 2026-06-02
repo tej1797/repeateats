@@ -38,7 +38,11 @@ export async function POST(request: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sub            = subscription as unknown as Record<string, any>;
       const priceId        = subscription.items.data[0].price.id;
-      const plan           = priceId === process.env.STRIPE_YEARLY_PRICE_ID ? 'yearly' : 'monthly';
+      const plan           = priceId === process.env.STRIPE_YEARLY_PRICE_ID
+        ? 'yearly'
+        : priceId === process.env.STRIPE_THREE_MONTHLY_PRICE_ID
+        ? 'three_monthly'
+        : 'monthly';
       const periodEnd      = sub.current_period_end as number | undefined;
 
       await supabase.from('users').update({

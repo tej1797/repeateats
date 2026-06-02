@@ -527,6 +527,10 @@ Products → + Add Product:
 - Copy the `price_id` → `STRIPE_MONTHLY_PRICE_ID`
 
 Add a second price to the same product:
+- Price: $11.99 CAD / 3 months (recurring, every 3 months)
+- Copy the `price_id` → `STRIPE_THREE_MONTHLY_PRICE_ID`
+
+Add a third price to the same product:
 - Price: $39.99 CAD / year (recurring)
 - Copy the `price_id` → `STRIPE_YEARLY_PRICE_ID`
 
@@ -556,6 +560,7 @@ npx vercel env add STRIPE_SECRET_KEY
 npx vercel env add STRIPE_PUBLISHABLE_KEY
 npx vercel env add STRIPE_WEBHOOK_SECRET
 npx vercel env add STRIPE_MONTHLY_PRICE_ID
+npx vercel env add STRIPE_THREE_MONTHLY_PRICE_ID
 npx vercel env add STRIPE_YEARLY_PRICE_ID
 ```
 
@@ -566,6 +571,7 @@ STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_MONTHLY_PRICE_ID=price_...
+STRIPE_THREE_MONTHLY_PRICE_ID=price_...
 STRIPE_YEARLY_PRICE_ID=price_...
 ```
 

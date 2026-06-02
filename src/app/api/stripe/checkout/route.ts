@@ -33,14 +33,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body  = await request.json() as { plan?: string };
-  const plan  = body.plan === 'yearly' ? 'yearly' : 'monthly';
-  const priceId = plan === 'yearly'
-    ? process.env.STRIPE_YEARLY_PRICE_ID!
-    : process.env.STRIPE_MONTHLY_PRICE_ID!;
+  const body = await request.json() as { plan?: string };
+  const plan = body.plan ?? 'monthly';
+
+  const priceMap: Record<string, string | undefined> = {
+    monthly:       process.env.STRIPE_MONTHLY_PRICE_ID,
+    three_monthly: process.env.STRIPE_THREE_MONTHLY_PRICE_ID,
+    yearly:        process.env.STRIPE_YEARLY_PRICE_ID,
+  };
+  const priceId = priceMap[plan];
 
   if (!priceId) {
-    return NextResponse.json({ error: 'Stripe price ID not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
   }
 
   // Get or create Stripe customer

@@ -76,11 +76,11 @@ const FREE_FEATURES = [
 ];
 
 export default function RepeatPlusPage() {
-  const [billing,  setBilling]  = useState<'monthly' | 'yearly'>('yearly');
+  const [billing,  setBilling]  = useState<'monthly' | 'three_monthly' | 'yearly'>('yearly');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
 
-  const handleSubscribe = async (plan: 'monthly' | 'yearly') => {
+  const handleSubscribe = async (plan: 'monthly' | 'three_monthly' | 'yearly') => {
     setLoading(true);
     setError('');
     try {
@@ -139,19 +139,23 @@ export default function RepeatPlusPage() {
           Join 2,400+ members saving big on every restaurant visit across the GTA and KW.
         </p>
 
-        {/* Billing toggle */}
+        {/* Billing toggle — 3 options */}
         <div className="inline-flex rounded-full p-1 mb-10" style={{ background: 'rgba(255,255,255,0.08)' }}>
-          {(['monthly', 'yearly'] as const).map((b) => (
+          {([
+            { id: 'monthly',       label: 'Monthly' },
+            { id: 'three_monthly', label: '3 Months' },
+            { id: 'yearly',        label: 'Yearly (Best value)' },
+          ] as const).map(({ id, label }) => (
             <button
-              key={b}
-              onClick={() => setBilling(b)}
-              className="px-5 py-2 rounded-full text-[14px] font-semibold transition-all capitalize"
-              style={billing === b
+              key={id}
+              onClick={() => setBilling(id)}
+              className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all whitespace-nowrap"
+              style={billing === id
                 ? { background: '#F59E0B', color: '#0A0A0A' }
                 : { color: 'rgba(255,255,255,0.6)' }
               }
             >
-              {b === 'yearly' ? 'Yearly (save 33%)' : 'Monthly'}
+              {label}
             </button>
           ))}
         </div>
@@ -188,28 +192,38 @@ export default function RepeatPlusPage() {
             className="rounded-2xl p-6 relative overflow-hidden border"
             style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(252,211,77,0.06) 100%)', borderColor: '#F59E0B' }}
           >
-            {/* Most popular badge */}
+            {/* Badge */}
             <div
               className="absolute top-4 right-4 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide"
               style={{ background: '#F59E0B', color: '#0A0A0A' }}
             >
-              Most popular
+              {billing === 'yearly' ? 'Best value' : billing === 'three_monthly' ? 'Save 20%' : 'Most popular'}
             </div>
 
             <p className="text-[12px] font-bold uppercase tracking-widest mb-4" style={{ color: '#F59E0B' }}>RepEAT+</p>
             <div className="mb-1">
-              {billing === 'monthly' ? (
+              {billing === 'monthly' && (
                 <>
                   <span className="font-display text-[40px] font-extrabold leading-none">$4.99</span>
                   <span className="text-[16px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/month</span>
                 </>
-              ) : (
+              )}
+              {billing === 'three_monthly' && (
+                <>
+                  <span className="font-display text-[40px] font-extrabold leading-none">$3.99</span>
+                  <span className="text-[16px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/month</span>
+                </>
+              )}
+              {billing === 'yearly' && (
                 <>
                   <span className="font-display text-[40px] font-extrabold leading-none">$3.33</span>
                   <span className="text-[16px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/month</span>
                 </>
               )}
             </div>
+            {billing === 'three_monthly' && (
+              <p className="text-[13px] mb-1" style={{ color: '#F59E0B' }}>$11.99 every 3 months — save 20%</p>
+            )}
             {billing === 'yearly' && (
               <p className="text-[13px] mb-1" style={{ color: '#F59E0B' }}>$39.99/year — save 33%</p>
             )}
