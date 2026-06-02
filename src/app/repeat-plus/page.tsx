@@ -2,10 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import {
-  IconArrowLeft, IconStar, IconBolt, IconCoin, IconBell,
-  IconCrown, IconChartBar, IconGift, IconCheck, IconChevronDown,
-} from '@tabler/icons-react';
+import { IconArrowLeft, IconCheck, IconChevronDown } from '@tabler/icons-react';
 
 // ─── FAQ data ────────────────────────────────────────────────────────────────
 const FAQS = [
@@ -58,30 +55,39 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   );
 }
 
-const PLUS_FEATURES = [
-  { icon: IconStar,     text: 'Exclusive deals from premium restaurants' },
-  { icon: IconBolt,     text: 'Early access — 24hrs before public drop' },
-  { icon: IconCoin,     text: 'Double savings tracking' },
-  { icon: IconBell,     text: 'Priority deal notifications' },
-  { icon: IconCrown,    text: 'RepEAT+ badge on profile' },
-  { icon: IconChartBar, text: 'Advanced savings analytics' },
-  { icon: IconGift,     text: 'Birthday bonus deal every year' },
-];
 
-const FREE_FEATURES = [
-  'Browse all public deals',
-  'Standard QR claims',
-  'Basic profile',
-  'All cities included',
-];
+// ─── Pricing table ────────────────────────────────────────────────────────────
+type Billing = 'monthly' | 'three_monthly' | 'yearly';
+
+const PRICES: Record<string, Record<Billing, { amount: string; sub: string }>> = {
+  starter: {
+    monthly:       { amount: '$2.99', sub: '/month' },
+    three_monthly: { amount: '$2.66', sub: '/month · $7.99 per 3 months — save 11%' },
+    yearly:        { amount: '$2.08', sub: '/month · $24.99/year — save 30%' },
+  },
+  pro: {
+    monthly:       { amount: '$3.99', sub: '/month' },
+    three_monthly: { amount: '$3.33', sub: '/month · $9.99 per 3 months — save 17%' },
+    yearly:        { amount: '$2.49', sub: '/month · $29.99/year — save 37%' },
+  },
+};
+
+const PLAN_KEYS: Record<string, Record<Billing, string>> = {
+  starter: {
+    monthly: 'starter_monthly', three_monthly: 'starter_three_monthly', yearly: 'starter_yearly',
+  },
+  pro: {
+    monthly: 'pro_monthly', three_monthly: 'pro_three_monthly', yearly: 'pro_yearly',
+  },
+};
 
 export default function RepeatPlusPage() {
-  const [billing,  setBilling]  = useState<'monthly' | 'three_monthly' | 'yearly'>('yearly');
-  const [loading,  setLoading]  = useState(false);
+  const [billing,  setBilling]  = useState<Billing>('yearly');
+  const [loading,  setLoading]  = useState<string | null>(null); // which plan is loading
   const [error,    setError]    = useState('');
 
-  const handleSubscribe = async (plan: 'monthly' | 'three_monthly' | 'yearly') => {
-    setLoading(true);
+  const handleSubscribe = async (plan: string) => {
+    setLoading(plan);
     setError('');
     try {
       const res  = await fetch('/api/stripe/checkout', {
@@ -95,7 +101,7 @@ export default function RepeatPlusPage() {
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
@@ -114,7 +120,7 @@ export default function RepeatPlusPage() {
           <IconArrowLeft size={16} />
           Back to deals
         </Link>
-        <Link href="/" className="font-display text-[20px] font-extrabold tracking-tight">
+        <Link href="/customer" className="font-display text-[20px] font-extrabold tracking-tight">
           Rep<span style={{ color: '#E85D04' }}>EAT</span>
         </Link>
         <div style={{ width: 100 }} />
@@ -139,121 +145,98 @@ export default function RepeatPlusPage() {
           Join 2,400+ members saving big on every restaurant visit across the GTA and KW.
         </p>
 
-        {/* Billing toggle — 3 options */}
+        {/* Billing toggle */}
         <div className="inline-flex rounded-full p-1 mb-10" style={{ background: 'rgba(255,255,255,0.08)' }}>
           {([
-            { id: 'monthly',       label: 'Monthly' },
-            { id: 'three_monthly', label: '3 Months' },
-            { id: 'yearly',        label: 'Yearly (Best value)' },
+            { id: 'monthly',       label: 'Monthly'            },
+            { id: 'three_monthly', label: '3 Months'           },
+            { id: 'yearly',        label: 'Yearly (Best value)'},
           ] as const).map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setBilling(id)}
+            <button key={id} onClick={() => setBilling(id)}
               className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all whitespace-nowrap"
-              style={billing === id
-                ? { background: '#F59E0B', color: '#0A0A0A' }
-                : { color: 'rgba(255,255,255,0.6)' }
-              }
-            >
-              {label}
-            </button>
+              style={billing === id ? { background: '#F59E0B', color: '#0A0A0A' } : { color: 'rgba(255,255,255,0.6)' }}
+            >{label}</button>
           ))}
         </div>
 
-        {/* Pricing cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left max-w-2xl mx-auto">
+        {/* Pricing cards — 3 tiers */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left max-w-4xl mx-auto">
 
-          {/* Free plan */}
-          <div
-            className="rounded-2xl p-6 border"
-            style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.12)' }}
-          >
-            <p className="text-[12px] font-bold uppercase tracking-widest mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>Free</p>
-            <p className="font-display text-[40px] font-extrabold leading-none mb-1">$0</p>
-            <p className="text-[14px] mb-6" style={{ color: 'rgba(255,255,255,0.5)' }}>Free forever</p>
-            <ul className="space-y-3 mb-6">
-              {FREE_FEATURES.map((f) => (
-                <li key={f} className="flex items-center gap-2.5 text-[14px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                  <IconCheck size={15} style={{ color: 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
-                  {f}
+          {/* Free */}
+          <div className="rounded-2xl p-6 border flex flex-col" style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.12)' }}>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>Free</p>
+            <div className="mb-1">
+              <span className="font-display text-[36px] font-extrabold leading-none">$0</span>
+            </div>
+            <p className="text-[13px] mb-5" style={{ color: 'rgba(255,255,255,0.5)' }}>Free forever</p>
+            <ul className="space-y-2 mb-6 flex-1">
+              {['3 deals/month', '1 deal/day max', 'Browse all public deals', 'Standard QR claims', 'Basic profile'].map(f => (
+                <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                  <IconCheck size={13} style={{ color: 'rgba(255,255,255,0.35)', flexShrink: 0, marginTop: 2 }} />{f}
                 </li>
               ))}
             </ul>
-            <div
-              className="w-full h-11 rounded-xl flex items-center justify-center text-[14px] font-semibold border"
-              style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.4)' }}
-            >
+            <div className="w-full h-10 rounded-xl flex items-center justify-center text-[13px] font-semibold border"
+              style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.4)' }}>
               Current plan
             </div>
           </div>
 
-          {/* RepEAT+ plan */}
-          <div
-            className="rounded-2xl p-6 relative overflow-hidden border"
-            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(252,211,77,0.06) 100%)', borderColor: '#F59E0B' }}
-          >
-            {/* Badge */}
-            <div
-              className="absolute top-4 right-4 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide"
-              style={{ background: '#F59E0B', color: '#0A0A0A' }}
-            >
-              {billing === 'yearly' ? 'Best value' : billing === 'three_monthly' ? 'Save 20%' : 'Most popular'}
+          {/* Starter */}
+          <div className="rounded-2xl p-6 border flex flex-col" style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.2)' }}>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#60a5fa' }}>Starter</p>
+            <div className="mb-0.5">
+              <span className="font-display text-[36px] font-extrabold leading-none">{PRICES.starter[billing].amount}</span>
+              <span className="text-[14px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/mo</span>
             </div>
-
-            <p className="text-[12px] font-bold uppercase tracking-widest mb-4" style={{ color: '#F59E0B' }}>RepEAT+</p>
-            <div className="mb-1">
-              {billing === 'monthly' && (
-                <>
-                  <span className="font-display text-[40px] font-extrabold leading-none">$4.99</span>
-                  <span className="text-[16px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/month</span>
-                </>
-              )}
-              {billing === 'three_monthly' && (
-                <>
-                  <span className="font-display text-[40px] font-extrabold leading-none">$3.99</span>
-                  <span className="text-[16px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/month</span>
-                </>
-              )}
-              {billing === 'yearly' && (
-                <>
-                  <span className="font-display text-[40px] font-extrabold leading-none">$3.33</span>
-                  <span className="text-[16px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/month</span>
-                </>
-              )}
-            </div>
-            {billing === 'three_monthly' && (
-              <p className="text-[13px] mb-1" style={{ color: '#F59E0B' }}>$11.99 every 3 months — save 20%</p>
-            )}
-            {billing === 'yearly' && (
-              <p className="text-[13px] mb-1" style={{ color: '#F59E0B' }}>$39.99/year — save 33%</p>
-            )}
-            <p className="text-[13px] mb-5" style={{ color: 'rgba(255,255,255,0.5)' }}>7-day free trial, cancel anytime</p>
-
-            <ul className="space-y-3 mb-6">
-              {PLUS_FEATURES.map(({ icon: Icon, text }) => (
-                <li key={text} className="flex items-center gap-2.5 text-[14px]" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                  <Icon size={15} style={{ color: '#F59E0B', flexShrink: 0 }} />
-                  {text}
+            <p className="text-[12px] mb-5" style={{ color: '#60a5fa' }}>{PRICES.starter[billing].sub}</p>
+            <ul className="space-y-2 mb-6 flex-1">
+              {['20 deals/month', '3 deals/day max', 'Save favourite deals', 'Deal expiry reminders', 'Basic savings tracking'].map(f => (
+                <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                  <IconCheck size={13} style={{ color: '#60a5fa', flexShrink: 0, marginTop: 2 }} />{f}
                 </li>
               ))}
             </ul>
-
-            <button
-              onClick={() => handleSubscribe(billing)}
-              disabled={loading}
-              className="w-full h-11 rounded-xl text-[15px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
-              style={{ background: '#F59E0B', color: '#0A0A0A' }}
-            >
-              {loading ? 'Redirecting to Stripe…' : 'Start 7-day free trial'}
+            <button onClick={() => handleSubscribe(PLAN_KEYS.starter[billing])}
+              disabled={!!loading}
+              className="w-full h-10 rounded-xl text-[14px] font-bold transition-all hover:opacity-90 disabled:opacity-60 border"
+              style={{ borderColor: '#60a5fa', color: '#60a5fa' }}>
+              {loading === PLAN_KEYS.starter[billing] ? 'Redirecting…' : 'Start free trial'}
             </button>
-            {error && (
-              <p className="text-center text-[12px] mt-2" style={{ color: '#f87171' }}>{error}</p>
-            )}
-            <p className="text-center text-[11px] mt-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
-              Secured by Stripe · Apple Pay & Google Pay accepted
-            </p>
+          </div>
+
+          {/* Pro */}
+          <div className="rounded-2xl p-6 relative overflow-hidden border flex flex-col"
+            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(252,211,77,0.06) 100%)', borderColor: '#F59E0B' }}>
+            <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+              style={{ background: '#F59E0B', color: '#0A0A0A' }}>
+              {billing === 'yearly' ? 'Best value' : 'Most popular'}
+            </div>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#F59E0B' }}>Pro</p>
+            <div className="mb-0.5">
+              <span className="font-display text-[36px] font-extrabold leading-none">{PRICES.pro[billing].amount}</span>
+              <span className="text-[14px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/mo</span>
+            </div>
+            <p className="text-[12px] mb-5" style={{ color: '#F59E0B' }}>{PRICES.pro[billing].sub}</p>
+            <ul className="space-y-2 mb-6 flex-1">
+              {['30 deals/month', '3 deals/day max', 'Early access (24hrs early)', 'RepEAT+ badge on profile', 'Advanced savings analytics', 'Birthday bonus deal', 'Priority notifications'].map(f => (
+                <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.9)' }}>
+                  <IconCheck size={13} style={{ color: '#F59E0B', flexShrink: 0, marginTop: 2 }} />{f}
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
+              disabled={!!loading}
+              className="w-full h-10 rounded-xl text-[14px] font-bold transition-all hover:opacity-90 disabled:opacity-60"
+              style={{ background: '#F59E0B', color: '#0A0A0A' }}>
+              {loading === PLAN_KEYS.pro[billing] ? 'Redirecting…' : 'Start 7-day free trial'}
+            </button>
           </div>
         </div>
+        {error && <p className="text-center text-[13px] mt-4" style={{ color: '#f87171' }}>{error}</p>}
+        <p className="text-center text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          Secured by Stripe · Apple Pay & Google Pay · Cancel anytime
+        </p>
       </section>
 
       {/* ── Benefits ─────────────────────────────────────────────────── */}
@@ -328,8 +311,8 @@ export default function RepeatPlusPage() {
           7-day free trial. Cancel anytime. No credit card risk.
         </p>
         <button
-          onClick={() => handleSubscribe(billing)}
-          disabled={loading}
+          onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
+          disabled={!!loading}
           className="h-14 px-10 rounded-2xl text-[16px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
           style={{ background: '#F59E0B', color: '#0A0A0A' }}
         >

@@ -12,20 +12,21 @@ async function getPreviewDeals(): Promise<{ featured: DealWithRestaurant[]; tota
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
-  const { data: allDeals, count } = await supabase
+  const { data: allDeals } = await supabase
     .from('deals')
     .select(`
       *,
       restaurant:restaurants(id, name, city, cuisine, address, rating, is_paused)
-    `, { count: 'exact' })
+    `)
     .eq('is_active', true)
     .eq('is_coming', false)
-    .or('restaurants.is_paused.eq.false,restaurants.is_paused.is.null')
     .order('current_claims', { ascending: false })
-    .limit(50);
+    .limit(80);
 
-  const deals = (allDeals ?? []) as DealWithRestaurant[];
-  const total  = count ?? deals.length;
+  // Filter paused restaurants client-side (PostgREST can't filter on joined table columns)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const deals = ((allDeals ?? []) as DealWithRestaurant[]).filter(d => !(d.restaurant as any)?.is_paused);
+  const total  = deals.length;
 
   // Variety selection: 2 highest claimed + 2 newest + 2 from different cuisines
   const seen = new Set<string>();

@@ -505,12 +505,13 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 // ─── Main CustomerPage ────────────────────────────────────────────────────
 export default function CustomerPage() {
   // ── Filter state ────────────────────────────────────────────
-  const [category, setCategory] = useState('all');
-  const [dealType, setDealType] = useState<DealFilterId>('all');
-  const [tab,      setTab]      = useState<Tab>('active');
-  const [search,   setSearch]   = useState('');
-  const [city,     setCity]     = useState('GTA Area');
-  const [radius,   setRadius]   = useState(30);
+  const [category,   setCategory]   = useState('all');
+  const [dealType,   setDealType]   = useState<DealFilterId>('all');
+  const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'egg' | 'nonveg'>('all');
+  const [tab,        setTab]        = useState<Tab>('active');
+  const [search,     setSearch]     = useState('');
+  const [city,       setCity]       = useState('GTA Area');
+  const [radius,     setRadius]     = useState(30);
 
   // ── Pagination ──────────────────────────────────────────────
   const [visibleCount, setVisibleCount] = useState(12);
@@ -524,6 +525,7 @@ export default function CustomerPage() {
   // ── Modal state ─────────────────────────────────────────────
   const [activeDeal,   setActiveDeal]   = useState<DealWithRestaurant | null>(null);
   const [qrCode,       setQrCode]       = useState<string | null>(null);
+  const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
   const [showLocation, setShowLocation] = useState(false);
   const [showSignIn,   setShowSignIn]   = useState(false);
   const [showDrawer,   setShowDrawer]   = useState(false);
@@ -531,6 +533,9 @@ export default function CustomerPage() {
 
   // ── Active claims banner ─────────────────────────────────────
   const [claimsBannerDismissed, setClaimsBannerDismissed] = useState(false);
+
+  // ── Claim usage counters (daily + monthly) ───────────────────
+  const [claimUsage, setClaimUsage] = useState<{ daily: number; monthly: number } | null>(null);
 
   // ── Favorites & recently viewed ─────────────────────────────
   const [favorites,      setFavorites]      = useState<Set<string>>(new Set());
@@ -582,22 +587,27 @@ export default function CustomerPage() {
     };
   }, [supabase, router]);
 
-  // Fetch user's existing claims — store status + expires_at for cooldown logic
+  // Fetch user's existing claims — store status + expires_at; compute daily/monthly usage
   useEffect(() => {
     if (!authChecked || !user) return;
     fetch('/api/claims')
       .then(r => r.json())
-      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string; expires_at: string | null }> }) => {
+      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string; expires_at: string | null; claimed_at: string }> }) => {
         if (!data) return;
         const map: Record<string, ClaimInfo> = {};
+        let daily = 0; let monthly = 0;
+        const todayStr    = new Date().toISOString().split('T')[0];
+        const monthStart  = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
         for (const c of data) {
           if (!c.deal_id) continue;
-          // Track claimed (active), redeemed. Skip expired/reverted.
           if (c.status === 'claimed' || c.status === 'redeemed') {
             map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
+            if (c.claimed_at >= todayStr) daily++;
+            if (new Date(c.claimed_at) >= monthStart) monthly++;
           }
         }
         setUserClaimMap(map);
+        setClaimUsage({ daily, monthly });
       })
       .catch(() => {});
   }, [authChecked, user]);
@@ -807,14 +817,27 @@ export default function CustomerPage() {
         [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
+      // Store claim ID for dynamic QR (comes from the API response if available)
+      if ((result as { claim_id?: string }).claim_id) {
+        setActiveClaimId((result as { claim_id?: string }).claim_id!);
+      }
     } else {
       setClaimError('Could not claim this deal. Please try again.');
     }
   };
 
   // ── Derived booleans ─────────────────────────────────────────
+  // Diet filter (veg = veg only; egg = veg+egg; nonveg/all = everything)
+  const dietFilteredDeals = dietFilter === 'veg'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? filteredDeals.filter(d => (d as any).diet_type === 'veg')
+    : dietFilter === 'egg'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? filteredDeals.filter(d => ['veg', 'egg'].includes((d as any).diet_type ?? 'nonveg'))
+    : filteredDeals;
+
   // Hide deals the user has already redeemed from the main feed
-  const visibleFilteredDeals = filteredDeals.filter(d => !isRedeemed(d.id));
+  const visibleFilteredDeals = dietFilteredDeals.filter(d => !isRedeemed(d.id));
 
   const loading    = tab === 'all' ? restsLoading : dealsLoading;
   const tabDeals   = tab === 'all' ? [] : visibleFilteredDeals;
@@ -957,6 +980,29 @@ export default function CustomerPage() {
         </div>
       </header>
 
+      {/* ── Claim usage bar ────────────────────────────────────────── */}
+      {claimUsage && user && (
+        <div className="border-b border-[var(--bd)] bg-surface2">
+          <div className="max-w-[1100px] mx-auto px-5 py-2 flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-[12px] text-t2">
+              🎟️{' '}
+              <span className={claimUsage.daily >= 1 ? 'font-bold text-brand' : 'font-semibold'}>
+                {claimUsage.daily}/1 today
+              </span>
+              {' · '}
+              <span className={claimUsage.monthly >= 3 ? 'font-bold text-brand' : 'font-semibold'}>
+                {claimUsage.monthly}/3 this month
+              </span>
+            </p>
+            {claimUsage.monthly >= 3 && (
+              <Link href="/repeat-plus" className="text-[11px] font-bold text-brand hover:text-brand2 transition-colors whitespace-nowrap">
+                Upgrade for more →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Active claims banner ───────────────────────────────────── */}
       {(() => {
         const activeCount = Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length;
@@ -983,6 +1029,28 @@ export default function CustomerPage() {
 
         {/* Section 2 — Hero Banner (active tab, not searching) */}
         {tab === 'active' && !isSearching && <HeroBanner />}
+
+        {/* Section 2b — Diet preference toggle */}
+        <div className="flex items-center gap-2 mb-4">
+          {([
+            { id: 'veg',    label: 'Veg',     dot: '#16a34a' },
+            { id: 'egg',    label: 'Egg',     dot: '#ca8a04' },
+            { id: 'nonveg', label: 'Non-Veg', dot: '#dc2626' },
+          ] as const).map(({ id, label, dot }) => {
+            const active = dietFilter === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setDietFilter(active ? 'all' : id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold border transition-all ${active ? 'text-tx border-transparent shadow-sm' : 'text-t2 border-[var(--bd2)] hover:border-t2'}`}
+                style={active ? { background: `${dot}18`, borderColor: dot } : {}}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dot }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Section 3 — Cuisine Pills */}
         <CuisinePills selected={category} onChange={setCategory} className="mb-5" />
@@ -1237,7 +1305,8 @@ export default function CustomerPage() {
           code={qrCode}
           dealTitle={activeDeal.title}
           restaurantName={activeDeal.restaurant?.name}
-          onClose={() => { setQrCode(null); setActiveDeal(null); }}
+          claimId={activeClaimId ?? undefined}
+          onClose={() => { setQrCode(null); setActiveDeal(null); setActiveClaimId(null); }}
         />
       )}
 

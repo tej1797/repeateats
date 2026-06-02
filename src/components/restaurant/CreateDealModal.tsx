@@ -45,10 +45,12 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
   const [maxClaims,      setMaxClaims]      = useState(existingDeal?.max_claims?.toString() ?? '');
   const [validFrom,      setValidFrom]      = useState(existingDeal?.valid_from ?? '');
   const [validUntil,     setValidUntil]     = useState(existingDeal?.valid_until ?? '');
-  const [isComing,       setIsComing]       = useState(existingDeal?.is_coming ?? false);
-  const [submitting,     setSubmitting]     = useState(false);
-  const [error,          setError]          = useState('');
-  const [done,           setDone]           = useState(false);
+  const [isComing,  setIsComing]  = useState(existingDeal?.is_coming ?? false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [dietType,  setDietType]  = useState<'veg'|'egg'|'nonveg'>((existingDeal as any)?.diet_type ?? 'nonveg');
+  const [submitting, setSubmitting] = useState(false);
+  const [error,      setError]      = useState('');
+  const [done,       setDone]       = useState(false);
 
   const toggleType = (t: DealTypeKey) => {
     setSelectedTypes(prev => {
@@ -75,9 +77,12 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
     setError('');
     setSubmitting(true);
 
+    if (!dietType) { setError('Diet type is required'); return; }
+
     const payload = {
       restaurant_id:  restaurantId,
       emoji:          emoji.trim() || '🍽️',
+      diet_type:      dietType,
       title:          title.trim(),
       description:    description.trim() || null,
       discount_type:  discountType,
@@ -325,6 +330,30 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onChange={(e) => setValidUntil(e.target.value)}
                   className="w-full h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)] transition-colors"
                 />
+              </div>
+            </div>
+
+            {/* Diet type — required */}
+            <div className="pt-2 border-t border-[var(--bd)]">
+              <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-2">
+                Diet type <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                {([
+                  { id: 'veg',    label: '🟢 Vegetarian',     dot: '#16a34a' },
+                  { id: 'egg',    label: '🟡 Contains Egg',   dot: '#ca8a04' },
+                  { id: 'nonveg', label: '🔴 Non-Vegetarian', dot: '#dc2626' },
+                ] as const).map(({ id, label, dot }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setDietType(id)}
+                    className={`flex-1 py-2 text-[12px] font-semibold rounded-brands border-2 transition-all ${dietType === id ? 'text-tx' : 'text-t2 border-[var(--bd2)]'}`}
+                    style={dietType === id ? { borderColor: dot, background: `${dot}12` } : {}}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 

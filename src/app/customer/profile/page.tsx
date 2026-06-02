@@ -371,10 +371,21 @@ export default function CustomerProfilePage() {
 
   const handleSavePrefs = async () => {
     setSavingPrefs(true);
-    await fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ city: prefCity, radius_km: prefRadius, favourite_cuisine: prefCuisine }) });
-    setSavingPrefs(false);
-    setPrefSaved(true);
-    setTimeout(() => setPrefSaved(false), 2000);
+    try {
+      const res  = await fetch('/api/profile', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ city: prefCity, radius_km: prefRadius, favourite_cuisine: prefCuisine }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok || json.error) throw new Error(json.error ?? 'Failed to save');
+      setPrefSaved(true);
+      setTimeout(() => setPrefSaved(false), 2000);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to save preferences');
+    } finally {
+      setSavingPrefs(false);
+    }
   };
 
   const handleSignOut = async () => {

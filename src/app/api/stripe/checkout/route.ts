@@ -37,14 +37,23 @@ export async function POST(request: NextRequest) {
   const plan = body.plan ?? 'monthly';
 
   const priceMap: Record<string, string | undefined> = {
-    monthly:       process.env.STRIPE_MONTHLY_PRICE_ID,
-    three_monthly: process.env.STRIPE_THREE_MONTHLY_PRICE_ID,
-    yearly:        process.env.STRIPE_YEARLY_PRICE_ID,
+    // Legacy single-tier keys (kept for backwards compat)
+    monthly:                 process.env.STRIPE_MONTHLY_PRICE_ID,
+    three_monthly:           process.env.STRIPE_THREE_MONTHLY_PRICE_ID,
+    yearly:                  process.env.STRIPE_YEARLY_PRICE_ID,
+    // Starter tier
+    starter_monthly:         process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+    starter_three_monthly:   process.env.STRIPE_STARTER_THREE_MONTHLY_PRICE_ID,
+    starter_yearly:          process.env.STRIPE_STARTER_YEARLY_PRICE_ID,
+    // Pro tier
+    pro_monthly:             process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+    pro_three_monthly:       process.env.STRIPE_PRO_THREE_MONTHLY_PRICE_ID,
+    pro_yearly:              process.env.STRIPE_PRO_YEARLY_PRICE_ID,
   };
   const priceId = priceMap[plan];
 
   if (!priceId) {
-    return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid plan or Stripe price ID not configured' }, { status: 400 });
   }
 
   // Get or create Stripe customer

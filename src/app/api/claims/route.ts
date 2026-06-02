@@ -66,6 +66,55 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'deal_id is required' }, { status: 400 });
   }
 
+  // ── Fetch user's plan for limit checks ────────────────────────
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('is_repeat_plus, repeat_plus_tier')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const tier = userRow?.repeat_plus_tier ?? (userRow?.is_repeat_plus ? 'pro' : 'free');
+
+  // Daily limits: free=1, starter=3, pro=3
+  const dailyLimit = tier === 'free' ? 1 : 3;
+  const today = new Date().toISOString().split('T')[0];
+  const { count: dailyCount } = await supabase
+    .from('claims')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('claimed_at', `${today}T00:00:00`)
+    .in('status', ['claimed', 'redeemed']);
+
+  if ((dailyCount ?? 0) >= dailyLimit) {
+    return NextResponse.json({
+      error: `Daily limit reached (${dailyLimit}/day). ${tier === 'free' ? 'Upgrade to RepEAT+ for 3 deals/day!' : 'Come back tomorrow!'}`,
+      limitReached: true,
+      upgradeUrl: '/repeat-plus',
+    }, { status: 429 });
+  }
+
+  // Monthly limits: free=3, starter=20, pro=30
+  const monthlyLimits: Record<string, number> = { free: 3, starter: 20, pro: 30 };
+  const monthlyLimit = monthlyLimits[tier] ?? 3;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const { count: monthlyCount } = await supabase
+    .from('claims')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('claimed_at', monthStart.toISOString())
+    .in('status', ['claimed', 'redeemed']);
+
+  if ((monthlyCount ?? 0) >= monthlyLimit) {
+    const upgradeMsg = tier === 'free' ? 'Upgrade to Starter or Pro for more!' : tier === 'starter' ? 'Upgrade to Pro for 30/month!' : 'Limit reached for this month.';
+    return NextResponse.json({
+      error: `Monthly limit reached (${monthlyLimit}/month). ${upgradeMsg}`,
+      limitReached: true,
+      upgradeUrl: '/repeat-plus',
+    }, { status: 429 });
+  }
+
   // ── Check for any existing claim for this deal ─────────────
   const { data: existingClaim } = await supabase
     .from('claims')
@@ -163,5 +212,5 @@ export async function POST(request: NextRequest) {
     .update({ current_claims: deal.current_claims + 1 })
     .eq('id', body.deal_id);
 
-  return NextResponse.json({ data: claim }, { status: 201 });
+  return NextResponse.json({ data: { ...claim, claim_id: claim.id } }, { status: 201 });
 }

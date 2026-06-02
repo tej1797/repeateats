@@ -5,7 +5,8 @@ import { useState } from 'react';
 import type { Claim, ClaimWithDeal } from '@/types/index';
 
 interface ClaimResult {
-  qr_code: string;
+  qr_code:        string;
+  claim_id?:      string;
   alreadyClaimed?: boolean;
 }
 
@@ -31,7 +32,7 @@ export function useClaims(): UseClaimsResult {
         body:    JSON.stringify({ deal_id: dealId }),
       });
       const json = await res.json() as {
-        data?: Claim & { qr_code: string };
+        data?: Claim & { qr_code: string; claim_id?: string };
         error?: string;
         alreadyClaimed?: boolean;
       };
@@ -48,7 +49,7 @@ export function useClaims(): UseClaimsResult {
       const qrCode = json.data?.qr_code;
       if (!qrCode) return null;
 
-      return { qr_code: qrCode, alreadyClaimed: json.alreadyClaimed };
+      return { qr_code: qrCode, claim_id: json.data?.claim_id, alreadyClaimed: json.alreadyClaimed };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       return null;
