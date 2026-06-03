@@ -19,8 +19,8 @@ const FAQS = [
     a: 'You lose access to RepEAT+ exclusive deals immediately upon cancellation. All your claimed deals and QR codes remain valid through their original expiry dates.',
   },
   {
-    q: 'Is the 7-day free trial available for the yearly plan too?',
-    a: 'Yes! The 7-day free trial applies to both monthly and yearly plans. You won\'t be charged until the trial ends, and you can cancel before then with no charge.',
+    q: 'Is the 3-day free trial available for the yearly plan too?',
+    a: 'Yes! The 3-day free trial applies to both monthly and yearly plans. You won\'t be charged until the trial ends, and you can cancel before then with no charge.',
   },
   {
     q: 'Which restaurants have RepEAT+ exclusive deals?',
@@ -229,11 +229,24 @@ export default function RepeatPlusPage() {
               disabled={!!loading}
               className="w-full h-10 rounded-xl text-[14px] font-bold transition-all hover:opacity-90 disabled:opacity-60"
               style={{ background: '#F59E0B', color: '#0A0A0A' }}>
-              {loading === PLAN_KEYS.pro[billing] ? 'Redirecting…' : 'Start 7-day free trial'}
+              {loading === PLAN_KEYS.pro[billing] ? 'Redirecting…' : 'Start 3-day free trial'}
             </button>
           </div>
         </div>
-        {error && <p className="text-center text-[13px] mt-4" style={{ color: '#f87171' }}>{error}</p>}
+        {error && (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.35)' }}>
+            <p className="text-[13px] font-semibold text-left" style={{ color: '#fca5a5' }}>
+              {error}
+            </p>
+            <button
+              onClick={() => { setError(''); }}
+              className="text-[12px] font-bold whitespace-nowrap underline"
+              style={{ color: '#fca5a5' }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <p className="text-center text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
           Secured by Stripe · Apple Pay & Google Pay · Cancel anytime
         </p>
@@ -308,7 +321,7 @@ export default function RepeatPlusPage() {
       <section className="text-center px-6 py-16">
         <p className="font-display text-[28px] font-bold mb-3">Ready to start saving more?</p>
         <p className="text-[15px] mb-8" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          7-day free trial. Cancel anytime. No credit card risk.
+          3-day free trial. Cancel anytime. No credit card risk.
         </p>
         <button
           onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
@@ -319,7 +332,7 @@ export default function RepeatPlusPage() {
           {loading ? 'Redirecting…' : 'Start free trial — it\'s on us'}
         </button>
         <p className="text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          7-day free trial · Cancel anytime · Secured by Stripe
+          3-day free trial · Cancel anytime · Secured by Stripe
         </p>
       </section>
 

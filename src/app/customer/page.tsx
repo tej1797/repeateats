@@ -13,6 +13,7 @@ import {
   IconHeart, IconClock,
 } from '@tabler/icons-react';
 import { DEAL_FILTERS, type DealFilterId } from '@/lib/constants';
+import { usePlan } from '@/hooks/usePlan';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
@@ -534,8 +535,8 @@ export default function CustomerPage() {
   // ── Active claims banner ─────────────────────────────────────
   const [claimsBannerDismissed, setClaimsBannerDismissed] = useState(false);
 
-  // ── Claim usage counters (daily + monthly) ───────────────────
-  const [claimUsage, setClaimUsage] = useState<{ daily: number; monthly: number } | null>(null);
+  // ── Plan + quota (replaces local claimUsage state) ──────────
+  const plan = usePlan();
 
   // ── Favorites & recently viewed ─────────────────────────────
   const [favorites,      setFavorites]      = useState<Set<string>>(new Set());
@@ -587,7 +588,7 @@ export default function CustomerPage() {
     };
   }, [supabase, router]);
 
-  // Fetch user's existing claims — store status + expires_at; compute daily/monthly usage
+  // Fetch user's existing claims — store status + expires_at in the claim map
   useEffect(() => {
     if (!authChecked || !user) return;
     fetch('/api/claims')
@@ -595,19 +596,13 @@ export default function CustomerPage() {
       .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string; expires_at: string | null; claimed_at: string }> }) => {
         if (!data) return;
         const map: Record<string, ClaimInfo> = {};
-        let daily = 0; let monthly = 0;
-        const todayStr    = new Date().toISOString().split('T')[0];
-        const monthStart  = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
         for (const c of data) {
           if (!c.deal_id) continue;
           if (c.status === 'claimed' || c.status === 'redeemed') {
             map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
-            if (c.claimed_at >= todayStr) daily++;
-            if (new Date(c.claimed_at) >= monthStart) monthly++;
           }
         }
         setUserClaimMap(map);
-        setClaimUsage({ daily, monthly });
       })
       .catch(() => {});
   }, [authChecked, user]);
@@ -817,7 +812,8 @@ export default function CustomerPage() {
         [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
-      // Store claim ID for dynamic QR (comes from the API response if available)
+      // Optimistically decrement quota counter without waiting for a refetch
+      plan.optimisticClaim();
       if ((result as { claim_id?: string }).claim_id) {
         setActiveClaimId((result as { claim_id?: string }).claim_id!);
       }
@@ -980,21 +976,26 @@ export default function CustomerPage() {
         </div>
       </header>
 
-      {/* ── Claim usage bar ────────────────────────────────────────── */}
-      {claimUsage && user && (
+      {/* ── Quota bar — plan-aware, updates optimistically after each claim ── */}
+      {user && !plan.loading && (
         <div className="border-b border-[var(--bd)] bg-surface2">
           <div className="max-w-[1100px] mx-auto px-5 py-2 flex items-center justify-between gap-4 flex-wrap">
             <p className="text-[12px] text-t2">
               🎟️{' '}
-              <span className={claimUsage.daily >= 1 ? 'font-bold text-brand' : 'font-semibold'}>
-                {claimUsage.daily}/1 today
+              <span className={plan.dailyHit ? 'font-bold text-brand' : 'font-semibold'}>
+                {plan.daily_used}/{plan.daily_limit} today
               </span>
               {' · '}
-              <span className={claimUsage.monthly >= 3 ? 'font-bold text-brand' : 'font-semibold'}>
-                {claimUsage.monthly}/3 this month
+              <span className={plan.monthlyHit ? 'font-bold text-brand' : 'font-semibold'}>
+                {plan.monthly_used}/{plan.monthly_limit} this month
               </span>
+              {plan.tier !== 'free' && (
+                <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: plan.accent }}>
+                  {plan.planLabel}
+                </span>
+              )}
             </p>
-            {claimUsage.monthly >= 3 && (
+            {plan.monthlyHit && (
               <Link href="/repeat-plus" className="text-[11px] font-bold text-brand hover:text-brand2 transition-colors whitespace-nowrap">
                 Upgrade for more →
               </Link>

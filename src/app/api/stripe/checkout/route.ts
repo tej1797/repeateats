@@ -78,12 +78,18 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id);
   }
 
+  // payment_method_types omitted → Stripe auto-enables all methods activated in the
+  // Dashboard (card, Link, etc.). Apple Pay + Google Pay appear automatically for
+  // card-eligible sessions once the domain is verified in Dashboard → Apple Pay.
+  //
+  // Appearance (dark theme, gold accent) must be configured in:
+  // Stripe Dashboard → Settings → Branding → Background / Button colour
+  // The Hosted Checkout page does not accept client-side appearance options.
   const session = await stripe.checkout.sessions.create({
     customer:                   stripeCustomerId,
-    payment_method_types:       ['card'],
     mode:                       'subscription',
     line_items:                 [{ price: priceId, quantity: 1 }],
-    subscription_data:          { trial_period_days: 7 },
+    subscription_data:          { trial_period_days: 3 },
     success_url:                `${process.env.NEXT_PUBLIC_SITE_URL}/repeat-plus/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url:                 `${process.env.NEXT_PUBLIC_SITE_URL}/repeat-plus`,
     allow_promotion_codes:      true,

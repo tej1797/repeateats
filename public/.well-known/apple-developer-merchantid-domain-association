@@ -1,1 +1,8 @@
-REPLACE_WITH_FILE_FROM_STRIPE_DASHBOARD
+PLACEHOLDER — replace with the real token from Stripe Dashboard.
+
+Steps:
+1. Stripe Dashboard → Settings → Payment methods → Apple Pay
+2. "Add domain" → repeateats.ca
+3. Download the domain association file Stripe provides
+4. Replace this file's contents with that token (keep same filename, no .txt extension)
+5. Deploy — Stripe verifies at https://repeateats.ca/.well-known/apple-developer-merchantid-domain-association
