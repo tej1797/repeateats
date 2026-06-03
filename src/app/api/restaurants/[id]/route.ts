@@ -3,33 +3,48 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { USE_SEED_DATA } from '@/lib/seedData';
 import type { UpdateRestaurantBody } from '@/types/api';
 
-// In Next.js App Router, dynamic segment values come via the second argument.
 type RouteParams = { params: { id: string } };
 
 // ─── GET ─────────────────────────────────────────────────────
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const supabase = createClient();
 
-  // Fetch the restaurant and all its active deals in one query.
-  // Supabase lets you join related tables inline using "deals(*)" syntax.
   const { data, error } = await supabase
     .from('restaurants')
-    .select(`
-      *,
-      deals ( * )
-    `)
+    .select('*, deals ( * )')
     .eq('id', params.id)
-    .eq('deals.is_active', true)  // only include active deals
-    .single();                    // .single() returns one object instead of an array
+    .eq('deals.is_active', true)
+    .single();
 
-  if (error) {
-    const status = error.code === 'PGRST116' ? 404 : 500; // PGRST116 = row not found
-    return NextResponse.json({ error: error.message }, { status });
+  // Found in real table — return immediately
+  if (!error) return NextResponse.json({ data });
+
+  // Real table 500 — don't fall through to seed
+  if (error.code !== 'PGRST116') {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ data });
+  // Row not found (PGRST116) — try restaurants_seed in dev mode
+  if (USE_SEED_DATA) {
+    const { data: seedData, error: seedErr } = await supabase
+      .from('restaurants_seed')
+      .select('*, deals_seed ( * )')
+      .eq('id', params.id)
+      .eq('deals_seed.is_active', true)
+      .single();
+
+    if (!seedErr && seedData) {
+      // Normalize the shape: expose seed deals under the 'deals' key so
+      // callers don't need to distinguish between real and seed restaurants.
+      const normalized = { ...seedData, deals: seedData.deals_seed ?? [] };
+      return NextResponse.json({ data: normalized });
+    }
+  }
+
+  return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
 }
 
 // ─── PATCH ───────────────────────────────────────────────────

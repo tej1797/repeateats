@@ -3,37 +3,53 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { USE_SEED_DATA } from '@/lib/seedData';
 import type { CreateRestaurantBody } from '@/types/api';
 
 // ─── GET ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const supabase = createClient();
 
-  // Pull query params from the URL: /api/restaurants?city=Mississauga&radius_km=30
   const { searchParams } = new URL(request.url);
   const city = searchParams.get('city');
-  // radius_km param accepted but filtering done client-side (PostGIS not yet enabled)
 
-  // Start a query against the restaurants table
-  let query = supabase
+  // Real restaurants query
+  let realQuery = supabase
     .from('restaurants')
     .select('*')
-    .eq('is_live', true)          // only show published restaurants
-    .or('is_paused.eq.false,is_paused.is.null')  // exclude paused restaurants
+    .eq('is_live', true)
+    .or('is_paused.eq.false,is_paused.is.null')
     .order('created_at', { ascending: false });
 
-  // Optional city filter — "GTA Area" shows all GTA cities
   if (city && city !== 'GTA Area') {
-    query = query.eq('city', city);
+    realQuery = realQuery.eq('city', city);
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!USE_SEED_DATA) {
+    // Production: real restaurants only
+    const { data, error } = await realQuery;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
   }
 
-  return NextResponse.json({ data });
+  // Development: union real + seed so the app looks populated
+  let seedQuery = supabase
+    .from('restaurants_seed')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (city && city !== 'GTA Area') {
+    seedQuery = seedQuery.eq('city', city);
+  }
+
+  const [{ data: real, error: realErr }, { data: seed }] = await Promise.all([
+    realQuery,
+    seedQuery,
+  ]);
+
+  if (realErr) return NextResponse.json({ error: realErr.message }, { status: 500 });
+
+  return NextResponse.json({ data: [...(real ?? []), ...(seed ?? [])] });
 }
 
 // ─── POST ────────────────────────────────────────────────────

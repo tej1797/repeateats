@@ -1,8 +1,9 @@
 // Deal preview page — server-rendered, no auth required.
-// Shows real deals to convince visitors to sign up.
+// Shows real deals (+ seed deals in dev) to convince visitors to sign up.
 
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
+import { USE_SEED_DATA } from '@/lib/seedData';
 import type { DealWithRestaurant } from '@/types/index';
 
 // ─── Server-side data fetch ───────────────────────────────────────────────────
@@ -12,20 +13,33 @@ async function getPreviewDeals(): Promise<{ featured: DealWithRestaurant[]; tota
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
-  const { data: allDeals } = await supabase
+  const realQuery = supabase
     .from('deals')
-    .select(`
-      *,
-      restaurant:restaurants(id, name, city, cuisine, address, rating, is_paused)
-    `)
+    .select('*, restaurant:restaurants(id, name, city, cuisine, address, rating, is_paused)')
     .eq('is_active', true)
     .eq('is_coming', false)
     .order('current_claims', { ascending: false })
     .limit(80);
 
+  const [{ data: realDeals }, { data: seedDeals }] = await Promise.all([
+    realQuery,
+    USE_SEED_DATA
+      ? supabase
+          .from('deals_seed')
+          .select('*, restaurant:restaurants_seed(id, name, city, cuisine, address, rating)')
+          .eq('is_active', true)
+          .eq('is_coming', false)
+          .order('current_claims', { ascending: false })
+          .limit(80)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const allDeals = [...(realDeals ?? []), ...(seedDeals ?? [])];
+
   // Filter paused restaurants client-side (PostgREST can't filter on joined table columns)
+  // Seed restaurants don't have is_paused, so the check safely falls through as undefined (falsy).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deals = ((allDeals ?? []) as DealWithRestaurant[]).filter(d => !(d.restaurant as any)?.is_paused);
+  const deals = (allDeals as DealWithRestaurant[]).filter(d => !(d.restaurant as any)?.is_paused);
   const total  = deals.length;
 
   // Variety selection: 2 highest claimed + 2 newest + 2 from different cuisines

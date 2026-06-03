@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { USE_SEED_DATA } from '@/lib/seedData';
 import type { CreateDealBody } from '@/types/api';
 
 // Local shape of the joined row returned by Supabase
@@ -16,62 +17,65 @@ type RestaurantInfo = {
   rating: number;
 } | null;
 
+// ─── Shared deal filter helper ───────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyClientFilters(
+  rows: Array<{ restaurant: RestaurantInfo & { is_paused?: boolean } }>,
+  { category, city }: { category: string | null; city: string | null },
+) {
+  let r = rows.filter((d) => !(d.restaurant as unknown as Record<string, unknown>)?.is_paused);
+  if (category && category !== 'all') r = r.filter((d) => d.restaurant?.category === category);
+  if (city && city !== 'GTA Area')    r = r.filter((d) => d.restaurant?.city === city);
+  return r;
+}
+
 // ─── GET ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const supabase = createClient();
   const { searchParams } = new URL(request.url);
 
   const city          = searchParams.get('city');
-  const category      = searchParams.get('category');  // e.g. "indian"
-  const type          = searchParams.get('type');       // e.g. "dine-in"
+  const category      = searchParams.get('category');
+  const type          = searchParams.get('type');
   const tab           = searchParams.get('tab') ?? 'active';
   const restaurant_id = searchParams.get('restaurant_id');
 
-  // Include category + is_paused in the restaurant join
-  let query = supabase
-    .from('deals')
-    .select(`
-      *,
-      restaurant:restaurants (
-        id, name, cuisine, category, city, address, rating, is_paused
-      )
-    `)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false });
+  // Build a query for either the real or seed deals table
+  function buildQuery(table: 'deals' | 'deals_seed', join: 'restaurants' | 'restaurants_seed') {
+    const select = `*, restaurant:${join} ( id, name, cuisine, category, city, address, rating${join === 'restaurants' ? ', is_paused' : ''} )`;
+    let q = supabase
+      .from(table)
+      .select(select)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
 
-  // Tab filter (done at DB level — efficient)
-  if (tab === 'active')  query = query.eq('is_coming', false);
-  if (tab === 'coming')  query = query.eq('is_coming', true);
+    if (tab === 'active') q = q.eq('is_coming', false);
+    if (tab === 'coming') q = q.eq('is_coming', true);
+    if (restaurant_id)    q = q.eq('restaurant_id', restaurant_id);
+    if (type && type !== 'all') q = q.contains('deal_types', [type]);
 
-  // restaurant_id and deal_type filters are reliable on the deals table itself
-  if (restaurant_id) query = query.eq('restaurant_id', restaurant_id);
-  if (type && type !== 'all') {
-    // deal_types is a Postgres text[] column; @> checks array containment
-    query = query.contains('deal_types', [type]);
+    return q;
   }
 
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!USE_SEED_DATA) {
+    // Production: real deals only
+    const { data, error } = await buildQuery('deals', 'restaurants');
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return NextResponse.json({ data: applyClientFilters((data ?? []) as any[], { category, city }) });
   }
 
-  // Category and city filters applied after fetch.
-  // Filtering on joined/aliased tables via .eq() has inconsistent behaviour
-  // across Supabase SDK versions, so we do it in JS — the dataset is small.
+  // Development: union real + seed deals so the app looks populated
+  const [{ data: real, error: realErr }, { data: seed }] = await Promise.all([
+    buildQuery('deals', 'restaurants'),
+    buildQuery('deals_seed', 'restaurants_seed'),
+  ]);
+
+  if (realErr) return NextResponse.json({ error: realErr.message }, { status: 500 });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let results = (data ?? []) as Array<typeof data[number] & { restaurant: RestaurantInfo & { is_paused?: boolean } }>;
-
-  // Always exclude deals from paused restaurants (customer-facing)
-  results = results.filter((d) => !(d.restaurant as unknown as Record<string, unknown>)?.is_paused);
-
-  if (category && category !== 'all') {
-    results = results.filter((d) => d.restaurant?.category === category);
-  }
-  if (city && city !== 'GTA Area') {
-    results = results.filter((d) => d.restaurant?.city === city);
-  }
-
-  return NextResponse.json({ data: results });
+  const merged = applyClientFilters([...(real ?? []), ...(seed ?? [])] as any[], { category, city });
+  return NextResponse.json({ data: merged });
 }
 
 // ─── POST ────────────────────────────────────────────────────
