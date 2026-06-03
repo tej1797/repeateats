@@ -193,21 +193,36 @@ function TrendingCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: ()
 }
 
 // ─── RestaurantScrollCard — for the Featured Restaurants row ──────────────
+// Image priority: stored cover_url → proxy (Google Places) → cuisine Unsplash fallback
 function RestaurantScrollCard({ r, dealCount }: { r: Restaurant; dealCount: number }) {
   const router = useRouter();
+
+  // Build the initial src using the best available source
+  const cuisine = (r.category ?? r.cuisine ?? 'default').toLowerCase();
+  const initialSrc = r.cover_url
+    ?? `/api/restaurant-photo?name=${encodeURIComponent(r.name)}&city=${encodeURIComponent(r.city)}&cuisine=${encodeURIComponent(cuisine)}`;
+
+  const [imgSrc, setImgSrc] = useState(initialSrc);
+
   return (
     <button
       onClick={() => router.push(`/customer/restaurant/${r.id}`)}
       className="flex-shrink-0 w-[185px] bg-surface rounded-brand shadow-brand border border-[var(--bd)] overflow-hidden hover:-translate-y-0.5 hover:shadow-brand2 transition-all duration-150 text-left cursor-pointer"
     >
-      <div
-        className="h-[105px] bg-cover bg-center"
-        style={{
-          background: r.cover_url
-            ? `url(${r.cover_url}) center/cover no-repeat`
-            : 'linear-gradient(135deg, #E85D04 0%, #A03C01 100%)',
-        }}
-      />
+      <div className="h-[105px] relative overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imgSrc}
+          alt={r.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => {
+            // Final fallback if both proxy and cover_url fail
+            const fallback = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
+            if (imgSrc !== fallback) setImgSrc(fallback);
+          }}
+        />
+      </div>
       <div className="p-3">
         <div className="flex items-start justify-between gap-1 mb-1">
           <p className="font-bold text-[13px] text-tx line-clamp-1 flex-1">{r.name}</p>

@@ -360,6 +360,18 @@ export default function RestaurantPage() {
         }
       }
 
+      // If the owner didn't upload a photo, kick off a background backfill to
+      // fetch one from Google Places and store it in Supabase Storage.
+      // Fire-and-forget — don't block the publish flow. The browser session
+      // cookie is sent automatically so the route can verify ownership.
+      if (!coverUrl) {
+        fetch('/api/admin/backfill-photos', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ id: newRest.id }),
+        }).catch(() => { /* non-critical */ });
+      }
+
       // Mark live + save cover URL
       const updateFields: Record<string, unknown> = { is_live: true };
       if (coverUrl) updateFields.cover_url = coverUrl;
@@ -2044,10 +2056,13 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
     instagram:  ((restaurant as unknown) as Record<string, unknown>).instagram as string ?? '',
     description:((restaurant as unknown) as Record<string, unknown>).description as string ?? '',
   });
-  const [saving,   setSaving]   = useState(false);
-  const [saved,    setSaved]    = useState(false);
-  const [isLive,   setIsLive]   = useState(restaurant.is_live);
-  const [collabs,  setCollabs]  = useState(((restaurant as unknown) as Record<string, unknown>).open_to_collabs as boolean ?? false);
+  const [saving,        setSaving]        = useState(false);
+  const [saved,         setSaved]         = useState(false);
+  const [isLive,        setIsLive]        = useState(restaurant.is_live);
+  const [collabs,       setCollabs]       = useState(((restaurant as unknown) as Record<string, unknown>).open_to_collabs as boolean ?? false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverPreview,   setCoverPreview]   = useState<string | null>(restaurant.cover_url ?? null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const GREEN = '#065F46';
 
@@ -2065,9 +2080,89 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleCoverUpload = async (file: File) => {
+    setCoverUploading(true);
+    try {
+      const preview = URL.createObjectURL(file);
+      setCoverPreview(preview);
+
+      const ext  = file.name.split('.').pop() ?? 'jpg';
+      const path = `covers/${restaurant.id}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('restaurant-photos')
+        .upload(path, file, { upsert: true });
+
+      if (upErr) { setCoverPreview(restaurant.cover_url ?? null); return; }
+
+      const { data: pub } = supabase.storage
+        .from('restaurant-photos')
+        .getPublicUrl(path);
+
+      if (!pub.publicUrl) return;
+
+      const { data: updated } = await supabase
+        .from('restaurants')
+        .update({ cover_url: pub.publicUrl })
+        .eq('id', restaurant.id)
+        .select()
+        .single();
+
+      if (updated) { setRestaurant(updated as Restaurant); setCoverPreview(pub.publicUrl); }
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="font-display text-xl font-bold">Restaurant Profile</h2>
+
+      {/* ── Cover photo ──────────────────────────────────────────────────── */}
+      <div className="bg-surface rounded-brand shadow-brand p-5">
+        <h3 className="font-semibold text-base mb-3">Cover Photo</h3>
+        <div className="flex items-start gap-4">
+          {/* Preview */}
+          <div className="w-28 h-20 rounded-brands overflow-hidden bg-surface2 border border-[var(--bd)] flex-shrink-0">
+            {coverPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <IconPhoto size={24} className="text-t3" />
+              </div>
+            )}
+          </div>
+          {/* Upload controls */}
+          <div className="flex-1">
+            <p className="text-[13px] text-t2 mb-3">
+              Your cover photo appears on deal cards and your restaurant listing.
+              JPG, PNG, or WebP · max 5 MB.
+            </p>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleCoverUpload(f);
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={coverUploading}
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-brands border border-[var(--bd2)] text-[13px] font-semibold text-t2 hover:border-[#065F46] hover:text-[#065F46] transition-colors disabled:opacity-50"
+            >
+              {coverUploading ? (
+                <><IconLoader2 size={14} className="animate-spin" /> Uploading…</>
+              ) : (
+                <><IconUpload size={14} /> {coverPreview ? 'Change photo' : 'Upload photo'}</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Restaurant details */}
       <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
