@@ -178,11 +178,35 @@ export default function RestaurantPage() {
     const resolveSession = async (userId: string) => {
       setUser({ id: userId } as SupabaseUser);
       try {
-        const { data: rest } = await supabase
+        // Primary: look up by owner_id (Supabase Auth UUID — always prefer this)
+        let { data: rest } = await supabase
           .from('restaurants')
           .select('*')
           .eq('owner_id', userId)
           .maybeSingle();
+
+        // Fallback: if no row found by UUID, try by email (handles pre-migration rows)
+        // and write the correct owner_id so future logins don't need the fallback.
+        if (!rest) {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser?.email) {
+            const { data: byEmail } = await supabase
+              .from('restaurants')
+              .select('*')
+              .eq('owner_email', authUser.email)
+              .maybeSingle();
+
+            if (byEmail) {
+              // Repair the missing owner_id so next login hits the primary path
+              await supabase
+                .from('restaurants')
+                .update({ owner_id: userId })
+                .eq('id', byEmail.id);
+              rest = { ...byEmail, owner_id: userId } as typeof byEmail;
+            }
+          }
+        }
+
         if (!mounted) return;
         if (rest) { setRestaurant(rest as Restaurant); setView('dashboard'); }
         else { setView('onboarding'); }

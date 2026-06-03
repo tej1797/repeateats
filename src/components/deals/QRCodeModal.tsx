@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { QRCode } from 'react-qrcode-logo';
+import { useState, useEffect, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { IconDownload, IconX, IconCircleCheck, IconInfoCircle, IconRefresh } from '@tabler/icons-react';
 
-const QR_CANVAS_ID = 'repeateats-qr-canvas';
-
 interface QRCodeModalProps {
-  code:           string;  // static fallback code
+  code:           string;  // raw qr_code string from DB (e.g. "RE-4A7X2B")
   dealTitle:      string;
   restaurantName?: string;
   claimId?:       string;  // if provided, uses dynamic rotating token
@@ -16,10 +14,10 @@ interface QRCodeModalProps {
 
 export default function QRCodeModal({ code, dealTitle, restaurantName, claimId, onClose }: QRCodeModalProps) {
   const [displayCode, setDisplayCode] = useState(code);
-  const [qrUrl,       setQrUrl]       = useState(`https://repeateats.ca/redeem/${code}`);
   const [secsLeft,    setSecsLeft]    = useState<number | null>(null);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch and refresh dynamic token every 55s (token valid for ~60s)
+  // Fetch and refresh dynamic token every 55s (token valid ~60s)
   useEffect(() => {
     if (!claimId) return;
 
@@ -27,31 +25,45 @@ export default function QRCodeModal({ code, dealTitle, restaurantName, claimId, 
       try {
         const res  = await fetch(`/api/claims/token/${claimId}`);
         if (!res.ok) return;
-        const data = await res.json() as { code?: string; qr_url?: string; seconds_left?: number };
+        const data = await res.json() as { code?: string; seconds_left?: number };
         if (data.code) setDisplayCode(data.code);
-        if (data.qr_url) setQrUrl(data.qr_url);
         if (data.seconds_left !== undefined) setSecsLeft(data.seconds_left);
       } catch { /* keep showing current code */ }
     };
 
     void fetchToken();
     const interval = setInterval(() => { void fetchToken(); }, 55_000);
-
-    // Countdown ticker
-    const tick = setInterval(() => {
+    const tick     = setInterval(() => {
       setSecsLeft(s => (s !== null && s > 0) ? s - 1 : s);
     }, 1000);
 
     return () => { clearInterval(interval); clearInterval(tick); };
   }, [claimId]);
 
+  // Convert the rendered SVG to a PNG and trigger download
   const handleDownload = () => {
-    const canvas = document.getElementById(QR_CANVAS_ID) as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const link   = document.createElement('a');
-    link.download = `repeateats-${displayCode}.png`;
-    link.href     = canvas.toDataURL('image/png');
-    link.click();
+    const svgEl = svgContainerRef.current?.querySelector('svg');
+    if (!svgEl) return;
+
+    const xml  = new XMLSerializer().serializeToString(svgEl);
+    const size = 232; // canvas size for high-res download
+    const canvas = document.createElement('canvas');
+    canvas.width  = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      const a = document.createElement('a');
+      a.download = `repeateats-${displayCode}.png`;
+      a.href     = canvas.toDataURL('image/png');
+      a.click();
+    };
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(xml)))}`;
   };
 
   return (
@@ -76,17 +88,15 @@ export default function QRCodeModal({ code, dealTitle, restaurantName, claimId, 
         {restaurantName && <p className="text-[12px] text-t3 mb-0.5">{restaurantName}</p>}
         <p className="text-[13px] text-t2 mb-4 px-2 line-clamp-2">{dealTitle}</p>
 
-        {/* QR code */}
-        <div className="flex justify-center mb-1">
-          <div className="bg-white p-3 rounded-[12px] border border-gray-100 shadow-sm inline-block">
-            <QRCode
-              id={QR_CANVAS_ID}
-              value={qrUrl}
+        {/* QR code — standard matrix format, scannable by any QR reader */}
+        <div className="flex justify-center mb-1" ref={svgContainerRef}>
+          <div className="inline-block" style={{ background: '#fff', borderRadius: 12, padding: 16 }}>
+            <QRCodeSVG
+              value={displayCode}
               size={180}
+              level="L"
+              fgColor="#FF7A00"
               bgColor="#ffffff"
-              fgColor="#E85D04"
-              qrStyle="dots"
-              eyeRadius={8}
             />
           </div>
         </div>
@@ -100,7 +110,7 @@ export default function QRCodeModal({ code, dealTitle, restaurantName, claimId, 
         )}
 
         <p className="font-display text-[20px] font-extrabold tracking-[0.12em] text-brand mb-0.5">
-          {code}
+          {displayCode}
         </p>
         <p className="text-[12px] text-t3 mb-4">Show this to restaurant staff at checkout</p>
 

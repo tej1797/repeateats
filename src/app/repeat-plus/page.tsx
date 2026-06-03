@@ -43,7 +43,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         <IconChevronDown
           size={18}
           className="flex-shrink-0 transition-transform duration-200"
-          style={{ color: '#F59E0B', transform: open ? 'rotate(180deg)' : 'none' }}
+          style={{ color: '#D4AF37', transform: open ? 'rotate(180deg)' : 'none' }}
         />
       </button>
       {open && (
@@ -154,7 +154,7 @@ export default function RepeatPlusPage() {
           ] as const).map(({ id, label }) => (
             <button key={id} onClick={() => setBilling(id)}
               className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all whitespace-nowrap"
-              style={billing === id ? { background: '#F59E0B', color: '#0A0A0A' } : { color: 'rgba(255,255,255,0.6)' }}
+              style={billing === id ? { background: '#D4AF37', color: '#0A0A0A' } : { color: 'rgba(255,255,255,0.6)' }}
             >{label}</button>
           ))}
         </div>
@@ -170,7 +170,7 @@ export default function RepeatPlusPage() {
             </div>
             <p className="text-[13px] mb-5" style={{ color: 'rgba(255,255,255,0.5)' }}>Free forever</p>
             <ul className="space-y-2 mb-6 flex-1">
-              {['3 deals/month', '1 deal/day max', 'Browse all public deals', 'Standard QR claims', 'Basic profile'].map(f => (
+              {['3 deals/month · 1 per day', 'Today\'s deals only', 'Standard QR claims', 'Browse all restaurants', 'Basic profile'].map(f => (
                 <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.65)' }}>
                   <IconCheck size={13} style={{ color: 'rgba(255,255,255,0.35)', flexShrink: 0, marginTop: 2 }} />{f}
                 </li>
@@ -183,52 +183,52 @@ export default function RepeatPlusPage() {
           </div>
 
           {/* Starter */}
-          <div className="rounded-2xl p-6 border flex flex-col" style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.2)' }}>
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#60a5fa' }}>Starter</p>
+          <div className="rounded-2xl p-6 border flex flex-col" style={{ background: 'rgba(55,138,221,0.06)', borderColor: 'rgba(55,138,221,0.35)' }}>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#378ADD' }}>Starter</p>
             <div className="mb-0.5">
               <span className="font-display text-[36px] font-extrabold leading-none">{PRICES.starter[billing].amount}</span>
               <span className="text-[14px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/mo</span>
             </div>
-            <p className="text-[12px] mb-5" style={{ color: '#60a5fa' }}>{PRICES.starter[billing].sub}</p>
+            <p className="text-[12px] mb-5" style={{ color: '#378ADD' }}>{PRICES.starter[billing].sub}</p>
             <ul className="space-y-2 mb-6 flex-1">
-              {['20 deals/month', '3 deals/day max', 'Save favourite deals', 'Deal expiry reminders', 'Basic savings tracking'].map(f => (
+              {['20 deals/month · 3 per day', 'Today + tomorrow — 24hr early access', 'Deal expiry reminders', 'Save favourite deals', 'Basic savings tracking'].map(f => (
                 <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.8)' }}>
-                  <IconCheck size={13} style={{ color: '#60a5fa', flexShrink: 0, marginTop: 2 }} />{f}
+                  <IconCheck size={13} style={{ color: '#378ADD', flexShrink: 0, marginTop: 2 }} />{f}
                 </li>
               ))}
             </ul>
             <button onClick={() => handleSubscribe(PLAN_KEYS.starter[billing])}
               disabled={!!loading}
               className="w-full h-10 rounded-xl text-[14px] font-bold transition-all hover:opacity-90 disabled:opacity-60 border"
-              style={{ borderColor: '#60a5fa', color: '#60a5fa' }}>
+              style={{ borderColor: '#378ADD', color: '#378ADD' }}>
               {loading === PLAN_KEYS.starter[billing] ? 'Redirecting…' : 'Start free trial'}
             </button>
           </div>
 
           {/* Pro */}
           <div className="rounded-2xl p-6 relative overflow-hidden border flex flex-col"
-            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(252,211,77,0.06) 100%)', borderColor: '#F59E0B' }}>
+            style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0.04) 100%)', borderColor: '#D4AF37' }}>
             <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-              style={{ background: '#F59E0B', color: '#0A0A0A' }}>
+              style={{ background: '#D4AF37', color: '#1a1100' }}>
               {billing === 'yearly' ? 'Best value' : 'Most popular'}
             </div>
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#F59E0B' }}>Pro</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#D4AF37' }}>Pro</p>
             <div className="mb-0.5">
               <span className="font-display text-[36px] font-extrabold leading-none">{PRICES.pro[billing].amount}</span>
               <span className="text-[14px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/mo</span>
             </div>
-            <p className="text-[12px] mb-5" style={{ color: '#F59E0B' }}>{PRICES.pro[billing].sub}</p>
+            <p className="text-[12px] mb-5" style={{ color: '#D4AF37' }}>{PRICES.pro[billing].sub}</p>
             <ul className="space-y-2 mb-6 flex-1">
-              {['30 deals/month', '3 deals/day max', 'Early access (24hrs early)', 'RepEAT+ badge on profile', 'Advanced savings analytics', 'Birthday bonus deal', 'Priority notifications'].map(f => (
+              {['30 deals/month · 3 per day', 'Full 7-day week preview', 'Week calendar on Discover', 'RepEAT+ badge on profile', 'Advanced savings analytics', 'Birthday bonus deal', 'Priority notifications'].map(f => (
                 <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.9)' }}>
-                  <IconCheck size={13} style={{ color: '#F59E0B', flexShrink: 0, marginTop: 2 }} />{f}
+                  <IconCheck size={13} style={{ color: '#D4AF37', flexShrink: 0, marginTop: 2 }} />{f}
                 </li>
               ))}
             </ul>
             <button onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
               disabled={!!loading}
               className="w-full h-10 rounded-xl text-[14px] font-bold transition-all hover:opacity-90 disabled:opacity-60"
-              style={{ background: '#F59E0B', color: '#0A0A0A' }}>
+              style={{ background: '#D4AF37', color: '#1a1100' }}>
               {loading === PLAN_KEYS.pro[billing] ? 'Redirecting…' : 'Start 3-day free trial'}
             </button>
           </div>
@@ -250,6 +250,43 @@ export default function RepeatPlusPage() {
         <p className="text-center text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
           Accepts Visa, Mastercard, Apple Pay &amp; Google Pay. Payments processed securely by Stripe.
         </p>
+
+        {/* ── 7-day access timeline ───────────────────────────────────── */}
+        <div className="mt-10 max-w-2xl mx-auto">
+          <p className="text-center text-[12px] font-semibold uppercase tracking-widest mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Which days you can see deals
+          </p>
+          <div className="flex gap-2 justify-center">
+            {[
+              { label: 'Today',  color: '#FF7A00', text: '#fff',    plans: 'All'     },
+              { label: 'Tmrw',   color: '#378ADD', text: '#fff',    plans: 'Starter+'},
+              { label: 'Day 3',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 4',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 5',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 6',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 7',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
+            ].map(({ label, color, text }) => (
+              <div key={label} className="flex flex-col items-center gap-1.5 flex-1">
+                <div className="w-full h-9 rounded-lg flex items-center justify-center text-[11px] font-bold"
+                  style={{ background: color, color: text }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 justify-center mt-3 flex-wrap">
+            {[
+              { color: '#FF7A00', label: 'All plans'  },
+              { color: '#378ADD', label: 'Starter+'   },
+              { color: '#D4AF37', label: 'Pro only'   },
+            ].map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                <div className="w-3 h-3 rounded-sm" style={{ background: color }} />
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ── Benefits ─────────────────────────────────────────────────── */}
@@ -291,7 +328,7 @@ export default function RepeatPlusPage() {
       {/* ── Social proof ─────────────────────────────────────────────── */}
       <section
         className="py-10 text-center"
-        style={{ background: 'rgba(245,158,11,0.08)', borderTop: '1px solid rgba(245,158,11,0.2)', borderBottom: '1px solid rgba(245,158,11,0.2)' }}
+        style={{ background: 'rgba(212,175,55,0.08)', borderTop: '1px solid rgba(212,175,55,0.2)', borderBottom: '1px solid rgba(212,175,55,0.2)' }}
       >
         <div className="max-w-2xl mx-auto px-6">
           <div className="flex justify-center gap-10 flex-wrap">
@@ -301,7 +338,7 @@ export default function RepeatPlusPage() {
               { num: '47',     label: 'Exclusive restaurant partners' },
             ].map(({ num, label }) => (
               <div key={label} className="text-center">
-                <p className="font-display text-[36px] font-extrabold" style={{ color: '#F59E0B' }}>{num}</p>
+                <p className="font-display text-[36px] font-extrabold" style={{ color: '#D4AF37' }}>{num}</p>
                 <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{label}</p>
               </div>
             ))}
@@ -327,7 +364,7 @@ export default function RepeatPlusPage() {
           onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
           disabled={!!loading}
           className="h-14 px-10 rounded-2xl text-[16px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
-          style={{ background: '#F59E0B', color: '#0A0A0A' }}
+          style={{ background: '#D4AF37', color: '#0A0A0A' }}
         >
           {loading ? 'Redirecting…' : 'Start free trial — it\'s on us'}
         </button>

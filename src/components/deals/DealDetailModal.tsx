@@ -10,6 +10,7 @@ import type { User } from '@supabase/supabase-js';
 interface DealDetailModalProps {
   deal:            DealWithRestaurant;
   user:            User | null;
+  planTier?:       'free' | 'starter' | 'pro'; // gates schedule visibility
   onClose:         () => void;
   onClaim:         () => void;
   claiming?:       boolean;
@@ -24,6 +25,7 @@ interface DealDetailModalProps {
 export default function DealDetailModal({
   deal,
   user,
+  planTier       = 'free',
   onClose,
   onClaim,
   claiming       = false,
@@ -34,8 +36,9 @@ export default function DealDetailModal({
   onViewExisting,
   onShare,
 }: DealDetailModalProps) {
-  const spotsLeft = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
-  const soldOut   = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
+  const spotsLeft       = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
+  const soldOut         = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
+  const canSeeSchedule  = planTier === 'starter' || planTier === 'pro';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -90,7 +93,8 @@ export default function DealDetailModal({
             <span className="font-display text-[34px] font-extrabold text-brand leading-none">
               {deal.discount_value}
             </span>
-            {deal.valid_until && (
+            {/* valid_until is gated — free users don't see expiry dates */}
+            {canSeeSchedule && deal.valid_until && (
               <span className="text-[13px] text-t2">Ends {deal.valid_until}</span>
             )}
           </div>
@@ -117,10 +121,29 @@ export default function DealDetailModal({
               <IconMapPin size={15} className="text-brand flex-shrink-0" />
               <span>{deal.restaurant?.address ?? deal.restaurant?.city}</span>
             </div>
-            {deal.available_days && deal.available_days[0] !== 'all' && (
-              <div className="flex items-center gap-2 text-[13px] text-t2">
-                <span className="text-t3 text-[15px]">📅</span>
-                <span>{deal.available_days.join(', ')}</span>
+
+            {/* Schedule — Starter/Pro only. Free users see a locked upgrade prompt. */}
+            {canSeeSchedule ? (
+              deal.available_days && deal.available_days[0] !== 'all' && (
+                <div className="flex items-center gap-2 text-[13px] text-t2">
+                  <span className="text-t3 text-[15px]">📅</span>
+                  <span>{deal.available_days.join(', ')}</span>
+                </div>
+              )
+            ) : (
+              <div
+                className="flex items-center gap-2 text-[13px] cursor-pointer group"
+                onClick={() => { window.location.href = '/repeat-plus'; }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter') window.location.href = '/repeat-plus'; }}
+              >
+                <span className="text-[15px]">📅</span>
+                <span className="text-t2">Available today</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full ml-auto"
+                  style={{ background: 'rgba(212,175,55,0.12)', color: '#B8971F' }}>
+                  🔒 Upgrade to see full schedule
+                </span>
               </div>
             )}
           </div>

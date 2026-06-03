@@ -22,6 +22,7 @@ import SharedDealCard from '@/components/deals/DealCard';
 import CuisinePills from '@/components/deals/CuisinePills';
 import DealDetailModal from '@/components/deals/DealDetailModal';
 import QRCodeModal from '@/components/deals/QRCodeModal';
+import WeekStrip from '@/components/deals/WeekStrip';
 import Skeleton from '@/components/ui/Skeleton';
 import MobileNav from '@/components/layout/MobileNav';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
@@ -870,6 +871,26 @@ export default function CustomerPage() {
     );
   }, [restaurants, search]);
 
+  // Deal counts per DOW — fetched once for WeekStrip (Pro) and Starter locked preview
+  const [dealCountsByDay, setDealCountsByDay] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (plan.tier === 'free' || plan.loading) return;
+    fetch('/api/deals/counts-by-day?days=7')
+      .then(r => r.json())
+      .then((d: Record<string, number>) => setDealCountsByDay(d))
+      .catch(() => {});
+  }, [plan.tier, plan.loading]);
+
+  // Total deal count across future days (days 2-6 for Starter locked preview)
+  const futureDayCount = useMemo(() => {
+    if (plan.tier !== 'starter') return 0;
+    const todayDowKey = DOW_KEYS[new Date().getDay()];
+    const tomorrowDowKey = DOW_KEYS[(new Date().getDay() + 1) % 7];
+    return Object.entries(dealCountsByDay)
+      .filter(([d]) => d !== todayDowKey && d !== tomorrowDowKey)
+      .reduce((sum, [, c]) => sum + c, 0);
+  }, [dealCountsByDay, plan.tier]);
+
   // Preview of tomorrow's deals — shown blurred to Free users as upgrade hook
   const tomorrowPreviewDeals = useMemo(
     () => dealsWithLive
@@ -1192,6 +1213,18 @@ export default function CustomerPage() {
           })}
         </div>
 
+        {/* Week calendar strip — Pro: full 7-day; Starter: today + tomorrow cells */}
+        {!plan.loading && plan.tier !== 'free' && !isSearching && (
+          <div className="mb-4">
+            <WeekStrip
+              selectedDay={tab === 'all' ? 'today' : (tab as Parameters<typeof WeekStrip>[0]['selectedDay'])}
+              onDaySelect={(day) => setTab(day)}
+              dealCountsByDay={dealCountsByDay}
+              variant={plan.tier === 'pro' ? 'pro' : 'starter'}
+            />
+          </div>
+        )}
+
         {/* Section 3 — Cuisine Pills */}
         <CuisinePills selected={category} onChange={setCategory} className="mb-5" />
 
@@ -1410,6 +1443,25 @@ export default function CustomerPage() {
           </section>
         )}
 
+        {/* Starter locked-future-days teaser — shows below Tomorrow deals */}
+        {tab === 'tomorrow' && plan.tier === 'starter' && !isSearching && !dealsLoading && futureDayCount > 0 && (
+          <div className="my-6 rounded-brands border border-[var(--bd)] bg-surface2 px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-semibold text-[14px]">
+                🔒 {futureDayCount} more deals this week
+              </p>
+              <p className="text-[12px] text-t2 mt-0.5">See the full 7-day calendar — upgrade to Pro</p>
+            </div>
+            <Link
+              href="/repeat-plus"
+              className="inline-flex items-center h-9 px-4 rounded-brands text-[13px] font-bold transition-all hover:opacity-90 flex-shrink-0"
+              style={{ background: '#D4AF37', color: '#1a1100' }}
+            >
+              Unlock with Pro →
+            </Link>
+          </div>
+        )}
+
         {/* Section 7 — Featured Restaurants (any day tab, after deal grid, not searching) */}
         {tab !== 'all' && !dealsLoading && restaurants.length > 0 && !isSearching && (
           <section className="mt-10 mb-8">
@@ -1469,6 +1521,7 @@ export default function CustomerPage() {
         <DealDetailModal
           deal={activeDeal}
           user={user}
+          planTier={plan.tier}
           onClose={() => setActiveDeal(null)}
           onClaim={handleClaim}
           claiming={claiming}
