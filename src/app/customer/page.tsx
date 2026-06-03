@@ -28,8 +28,56 @@ import type { DealWithRestaurant, Restaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────
-type Tab = 'active' | 'coming' | 'all';
+type DayKey = 'today' | 'tomorrow' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type Tab    = DayKey | 'all';
+interface DayTabDef { key: DayKey; label: string; earlyAccess?: boolean }
 interface ClaimInfo { qr_code: string; status: string; expires_at: string | null }
+
+// ─── Day-tab utilities ────────────────────────────────────────────────────
+// DOW index matches JS Date.getDay() — 0 = Sunday
+const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+const todayDow    = (): string => DOW_KEYS[new Date().getDay()];
+const tomorrowDow = (): string => DOW_KEYS[(new Date().getDay() + 1) % 7];
+
+// Map 'mon' → 'Mon' to match available_days[] values stored in the DB
+const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Returns the DOW key (e.g. 'tue') for a given tab key
+function tabToDow(key: string): string {
+  if (key === 'today')    return todayDow();
+  if (key === 'tomorrow') return tomorrowDow();
+  return key;
+}
+
+// True if the deal runs on the day corresponding to tabKey
+function dealAvailableOnTab(deal: DealWithRestaurant, tabKey: string): boolean {
+  const days = deal.available_days ?? ['all'];
+  if (!days.length || days.includes('all')) return true;
+  const dow = tabToDow(tabKey);           // e.g. 'tue'
+  return days.some(d => d.toLowerCase() === dow || d === capFirst(dow));
+}
+
+// Returns which tabs to render based on the user's plan tier
+function getVisibleTabs(tier: string): DayTabDef[] {
+  if (tier === 'free') return [{ key: 'today', label: 'Today' }];
+
+  if (tier === 'starter') return [
+    { key: 'today',    label: 'Today' },
+    { key: 'tomorrow', label: 'Tomorrow', earlyAccess: true },
+  ];
+
+  // Pro: today + next 6 days (full week view)
+  const tabs: DayTabDef[] = [{ key: 'today', label: 'Today' }];
+  const todayIdx = DOW_KEYS.indexOf(todayDow() as typeof DOW_KEYS[number]);
+  for (let i = 1; i <= 6; i++) {
+    const dow   = DOW_KEYS[(todayIdx + i) % 7] as DayKey;
+    const key   = i === 1 ? 'tomorrow' as DayKey : dow;
+    const label = i === 1 ? 'Tomorrow' : capFirst(dow);
+    tabs.push({ key, label, earlyAccess: true });
+  }
+  return tabs;
+}
 
 interface SearchResult {
   restaurants: Array<{ id: string; name: string; cuisine: string | null; city: string }>;
@@ -524,7 +572,7 @@ export default function CustomerPage() {
   const [category,   setCategory]   = useState('all');
   const [dealType,   setDealType]   = useState<DealFilterId>('all');
   const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'egg' | 'nonveg'>('all');
-  const [tab,        setTab]        = useState<Tab>('active');
+  const [tab,        setTab]        = useState<Tab>('today');
   const [search,     setSearch]     = useState('');
   const [city,       setCity]       = useState('GTA Area');
   const [radius,     setRadius]     = useState(30);
@@ -664,11 +712,16 @@ export default function CustomerPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Read ?tab= from URL on first load (supports MobileNav deep links)
+  // Read ?tab= from URL on first load — supports MobileNav deep links + old URLs
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab');
-    if (t === 'coming' || t === 'active' || t === 'all') setTab(t as Tab);
+    if (!t) return;
+    if (t === 'all') setTab('all');
+    else if (t === 'active' || t === 'today') setTab('today');
+    else if (t === 'coming' || t === 'tomorrow') setTab('tomorrow');
+    // day-key tabs (mon, tue, …) set directly
+    else if (['mon','tue','wed','thu','fri','sat','sun'].includes(t)) setTab(t as DayKey);
   }, []);
 
   // ── Claim status helpers ─────────────────────────────────────
@@ -714,9 +767,15 @@ export default function CustomerPage() {
     } catch { /* user cancelled share */ }
   };
 
-  // Reset visible count + deal type filter when tab changes
+  // Reset visible count + deal type filter when filters change
   useEffect(() => { setVisibleCount(12); }, [tab, category, dealType, city]);
   useEffect(() => { setDealType('all'); }, [tab]);
+  // Snap back to 'today' if plan loads and the current tab is no longer visible
+  useEffect(() => {
+    if (plan.loading) return;
+    const allowed = [...visibleTabs.map(t => t.key), 'all' as const];
+    if (!allowed.includes(tab as DayKey)) setTab('today');
+  }, [plan.tier, plan.loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Data hooks (unchanged) ───────────────────────────────────
   // Only pass server-side type filter for deal_types[] filters; discount_type is client-side
@@ -724,10 +783,12 @@ export default function CustomerPage() {
     ? dealType as 'dine-in' | 'pickup'
     : undefined;
 
+  // Always fetch active deals — day filtering happens client-side so we can
+  // switch tabs without extra network requests.
   const { deals, loading: dealsLoading, error: dealsError, refetch } = useDeals({
     category:  category === 'all' ? undefined : category,
     type:      serverTypeFilter,
-    tab:       tab === 'all' ? 'active' : tab,
+    tab:       'active',
     city:      city === 'GTA Area' ? undefined : city,
   });
   const { restaurants, loading: restsLoading } = useRestaurants({ city: city === 'GTA Area' ? undefined : city });
@@ -739,9 +800,27 @@ export default function CustomerPage() {
     [deals, liveClaimCounts]
   );
 
-  // Client-side filter: search + discount_type-based deal filters
+  // Visible tabs for the current plan (recalculates when plan tier loads)
+  const visibleTabs = useMemo(
+    () => plan.loading ? [{ key: 'today' as DayKey, label: 'Today' }] : getVisibleTabs(plan.tier),
+    [plan.tier, plan.loading],
+  );
+
+  // Client-side filter: expiry guard + day filter + search + discount-type filters
   const filteredDeals = useMemo(() => {
     let results = dealsWithLive;
+
+    // (4) Expiry guard — belt-and-suspenders on top of API filtering
+    results = results.filter(d => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const endDate = d.valid_until ?? (d as any).end_date ?? null;
+      return !endDate || new Date(endDate) >= new Date();
+    });
+
+    // Day filter — show only deals available on the selected tab's day
+    if (tab !== 'all') {
+      results = results.filter(d => dealAvailableOnTab(d, tab));
+    }
 
     // Discount-type filters applied client-side
     if (dealType === 'bogo') {
@@ -781,7 +860,7 @@ export default function CustomerPage() {
       (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
       (d.description ?? '').toLowerCase().includes(q)
     );
-  }, [dealsWithLive, search, dealType]);
+  }, [dealsWithLive, search, dealType, tab]);
 
   const filteredRests = useMemo(() => {
     if (!search.trim()) return restaurants;
@@ -790,6 +869,14 @@ export default function CustomerPage() {
       r.name.toLowerCase().includes(q) || (r.cuisine ?? '').toLowerCase().includes(q)
     );
   }, [restaurants, search]);
+
+  // Preview of tomorrow's deals — shown blurred to Free users as upgrade hook
+  const tomorrowPreviewDeals = useMemo(
+    () => dealsWithLive
+      .filter(d => dealAvailableOnTab(d, 'tomorrow'))
+      .slice(0, 4),
+    [dealsWithLive],
+  );
 
   // ── Derived data for new sections ───────────────────────────
   const trendingDeals = useMemo(
@@ -977,17 +1064,54 @@ export default function CustomerPage() {
           )}
         </div>
 
-        {/* Tab switcher */}
-        <div className="max-w-[1100px] mx-auto px-5 border-t border-[var(--bd)] flex overflow-x-auto scrollbar-none">
-          {(['active', 'coming', 'all'] as Tab[]).map(t => (
+        {/* ── Day-based tab switcher ─────────────────────────────────── */}
+        <div className="max-w-[1100px] mx-auto px-5 border-t border-[var(--bd)] flex overflow-x-auto scrollbar-none gap-0">
+          {/* Plan-gated day tabs */}
+          {visibleTabs.map(t => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all ${tab === t ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`relative px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all flex items-center gap-1.5 ${tab === t.key ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
             >
-              {t === 'active' ? 'Deals This Week' : t === 'coming' ? 'Coming Next Week' : 'All Restaurants'}
+              {t.label}
+              {t.earlyAccess && (
+                <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(212,175,55,0.15)', color: '#B8971F' }}>
+                  Early
+                </span>
+              )}
             </button>
           ))}
+
+          {/* Teaser: locked tabs for plans that don't have access yet */}
+          {plan.tier === 'free' && (
+            <Link
+              href="/repeat-plus"
+              className="px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] border-transparent text-t3 flex items-center gap-1.5 hover:text-t2 transition-colors"
+              title="Upgrade to see tomorrow's deals"
+            >
+              <IconCrown size={13} className="text-t3" />
+              Tomorrow
+            </Link>
+          )}
+          {plan.tier === 'starter' && (
+            <Link
+              href="/repeat-plus"
+              className="px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] border-transparent text-t3 flex items-center gap-1.5 hover:text-t2 transition-colors"
+              title="Upgrade to Pro for full week view"
+            >
+              <IconCrown size={13} className="text-t3" />
+              Mon–Sun
+            </Link>
+          )}
+
+          {/* Divider + Restaurants tab (always visible) */}
+          <div className="w-px bg-[var(--bd)] self-stretch my-1.5 mx-1 flex-shrink-0" />
+          <button
+            onClick={() => setTab('all')}
+            className={`px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all ${tab === 'all' ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
+          >
+            🏪 Restaurants
+          </button>
         </div>
       </header>
 
@@ -1043,8 +1167,8 @@ export default function CustomerPage() {
       {/* ── Main content ───────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-5 py-5 pb-28">
 
-        {/* Section 2 — Hero Banner (active tab, not searching) */}
-        {tab === 'active' && !isSearching && <HeroBanner />}
+        {/* Section 2 — Hero Banner (today tab only) */}
+        {tab === 'today' && !isSearching && <HeroBanner />}
 
         {/* Section 2b — Diet preference toggle */}
         <div className="flex items-center gap-2 mb-4">
@@ -1088,11 +1212,11 @@ export default function CustomerPage() {
         {/* Results header */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-[20px] font-bold">
-            {tab === 'active'
+            {tab === 'all'
+              ? 'All restaurants'
+              : tab === 'today'
               ? `Deals near you${!dealsLoading && filteredDeals.length > 0 ? ` (${filteredDeals.length})` : ''}`
-              : tab === 'coming'
-              ? 'Coming next week'
-              : 'All restaurants'}
+              : `${visibleTabs.find(t => t.key === tab)?.label ?? capFirst(tab)} deals`}
           </h2>
           {dealsError && (
             <button onClick={refetch} className="flex items-center gap-1.5 text-[13px] text-t2 hover:text-brand transition-colors">
@@ -1101,8 +1225,8 @@ export default function CustomerPage() {
           )}
         </div>
 
-        {/* Section 4b — Saved Deals (favorites, active tab, not searching) */}
-        {tab === 'active' && !isSearching && favorites.size > 0 && (() => {
+        {/* Section 4b — Saved Deals (today tab, not searching) */}
+        {tab === 'today' && !isSearching && favorites.size > 0 && (() => {
           const savedDeals = dealsWithLive.filter(d => favorites.has(d.id));
           if (savedDeals.length === 0) return null;
           return (
@@ -1132,8 +1256,8 @@ export default function CustomerPage() {
           );
         })()}
 
-        {/* Section 4c — Recently Viewed (active tab, not searching, has items) */}
-        {tab === 'active' && !isSearching && recentlyViewed.length > 0 && (
+        {/* Section 4c — Recently Viewed (today tab, not searching) */}
+        {tab === 'today' && !isSearching && recentlyViewed.length > 0 && (
           <section className="mb-8">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[16px] font-bold">🕐 Recently Viewed</h3>
@@ -1153,8 +1277,8 @@ export default function CustomerPage() {
           </section>
         )}
 
-        {/* Section 5 — Trending Now (active tab, has claimed deals, not searching) */}
-        {tab === 'active' && !dealsLoading && trendingDeals.length > 0 && !isSearching && (
+        {/* Section 5 — Trending Now (today tab only) */}
+        {tab === 'today' && !dealsLoading && trendingDeals.length > 0 && !isSearching && (
           <section className="mb-8">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[16px] font-bold">🔥 Trending Now</h3>
@@ -1189,7 +1313,7 @@ export default function CustomerPage() {
         {isEmpty && !loading && (
           <div className="text-center py-20 text-t2">
             <p className="text-5xl mb-3">🔍</p>
-            <p className="text-[18px] font-bold mb-2">No {tab === 'all' ? 'restaurants' : 'deals'} found</p>
+            <p className="text-[18px] font-bold mb-2">No {tab === 'all' ? 'restaurants' : 'deals'} found{tab !== 'all' && tab !== 'today' ? ` on ${visibleTabs.find(t => t.key === tab)?.label ?? tab}` : ''}</p>
             <p className="text-[14px]">Try a different category, type, or location</p>
           </div>
         )}
@@ -1209,6 +1333,13 @@ export default function CustomerPage() {
                     onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
                   />
+                  {/* (2) Early access badge — shown on future-day tabs for Starter/Pro */}
+                  {tab !== 'today' && (
+                    <span className="absolute top-2 left-2 z-20 pointer-events-none flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm"
+                      style={{ background: 'rgba(212,175,55,0.18)', color: '#B8971F', border: '1px solid rgba(212,175,55,0.4)' }}>
+                      ⚡ Early access
+                    </span>
+                  )}
                   {/* Heart / save button */}
                   <button
                     onClick={e => { e.stopPropagation(); toggleFavorite(deal.id); }}
@@ -1246,8 +1377,41 @@ export default function CustomerPage() {
           </div>
         )}
 
-        {/* Section 7 — Featured Restaurants (active tab, after deal grid, not searching) */}
-        {tab === 'active' && !dealsLoading && restaurants.length > 0 && !isSearching && (
+        {/* (3) Blurred tomorrow preview — Free users on Today tab */}
+        {tab === 'today' && plan.tier === 'free' && !isSearching && !dealsLoading && tomorrowPreviewDeals.length > 0 && (
+          <section className="mt-8 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <h3 className="text-[16px] font-bold">🔮 Tomorrow&apos;s Deals</h3>
+              <span className="text-[11px] font-semibold text-t3">Starter &amp; Pro only</span>
+            </div>
+            <div className="relative">
+              {/* Blurred deal cards — pointer-events off so they can't be clicked */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 select-none pointer-events-none" style={{ filter: 'blur(4px)', opacity: 0.55 }}>
+                {tomorrowPreviewDeals.map(deal => (
+                  <DealCard key={deal.id} deal={deal} onClick={() => {}} claimed={false} />
+                ))}
+              </div>
+              {/* Upgrade overlay */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="bg-surface border border-[var(--bd)] rounded-brand shadow-brand2 p-5 mx-4 text-center max-w-xs w-full">
+                  <div className="text-2xl mb-2">🔒</div>
+                  <p className="font-display font-bold text-[15px] mb-1">Unlock tomorrow&apos;s deals</p>
+                  <p className="text-[13px] text-t2 mb-4">Upgrade to Starter from $2.99/mo for early access</p>
+                  <Link
+                    href="/repeat-plus"
+                    className="inline-flex items-center justify-center h-10 px-5 rounded-brands text-[14px] font-bold transition-all hover:opacity-90"
+                    style={{ background: '#D4AF37', color: '#1a1100' }}
+                  >
+                    Upgrade to Starter →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Section 7 — Featured Restaurants (any day tab, after deal grid, not searching) */}
+        {tab !== 'all' && !dealsLoading && restaurants.length > 0 && !isSearching && (
           <section className="mt-10 mb-8">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[16px] font-bold">🏪 Featured Restaurants</h3>
@@ -1256,6 +1420,7 @@ export default function CustomerPage() {
                 className="text-[12px] text-brand font-semibold flex items-center gap-0.5 hover:underline"
               >
                 View all <IconChevronRight size={13} />
+
               </button>
             </div>
             <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
@@ -1266,8 +1431,8 @@ export default function CustomerPage() {
           </section>
         )}
 
-        {/* Section 8 — Recently Added (active tab, not searching) */}
-        {tab === 'active' && !dealsLoading && recentDeals.length > 0 && !isSearching && (
+        {/* Section 8 — Recently Added (today tab only) */}
+        {tab === 'today' && !dealsLoading && recentDeals.length > 0 && !isSearching && (
           <section className="mb-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[16px] font-bold">✨ Recently Added</h3>
