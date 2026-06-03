@@ -62,6 +62,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Duplicate guard — one restaurant per owner account.
+  // Always key on owner_id (Supabase Auth UUID), never email, because emails can change.
+  const { data: existing } = await supabase
+    .from('restaurants')
+    .select('id, name')
+    .eq('owner_id', user.id)
+    .maybeSingle();
+
+  if (existing) {
+    return NextResponse.json(
+      {
+        error: 'A restaurant is already registered to your account.',
+        restaurant: existing,
+      },
+      { status: 409 },
+    );
+  }
+
   const { data, error } = await supabase
     .from('restaurants')
     .insert({

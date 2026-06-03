@@ -152,8 +152,10 @@ export default function RestaurantPage() {
   const [user,        setUser]       = useState<SupabaseUser | null>(null);
   const [restaurant,  setRestaurant] = useState<Restaurant | null>(null);
   const [step,        setStep]       = useState(1);
-  const [publishing,  setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState('');
+  const [publishing,        setPublishing]        = useState(false);
+  const [publishError,      setPublishError]      = useState('');
+  // Set when the user already has a restaurant — shows conflict UI instead of generic error
+  const [conflictRestaurant, setConflictRestaurant] = useState<Restaurant | null>(null);
 
   const [wizard, setWizard] = useState<WizardData>({
     name: '', address: '', city: 'Toronto', phone: '', website: '', placeRating: 0,
@@ -318,10 +320,21 @@ export default function RestaurantPage() {
           .single();
         if (insertError) {
           clearTimeout(timeoutId);
-          // 23505 = unique violation — owner already has a restaurant (race condition)
+          // 23505 = unique constraint — this owner already has a restaurant row.
+          // Surface a friendly conflict UI instead of a generic error so the user
+          // knows exactly what happened and can navigate to their existing dashboard.
           if (insertError.code === '23505') {
-            const { data: raceRest } = await supabase.from('restaurants').select('*').eq('owner_id', freshUser.id).maybeSingle();
-            if (raceRest) { setRestaurant(raceRest as Restaurant); setView('dashboard'); return; }
+            const { data: raceRest } = await supabase
+              .from('restaurants')
+              .select('*')
+              .eq('owner_id', freshUser.id)
+              .maybeSingle();
+            if (raceRest) {
+              setConflictRestaurant(raceRest as Restaurant);
+              setPublishError('conflict');
+              setPublishing(false);
+              return;
+            }
           }
           setPublishError(
             insertError.message.includes('permission') || insertError.code === '42501'
@@ -447,6 +460,13 @@ export default function RestaurantPage() {
               publishing={publishing}
               publishError={publishError}
               onPublish={handlePublish}
+              conflictRestaurant={conflictRestaurant}
+              onGoToDashboard={() => {
+                if (conflictRestaurant) {
+                  setRestaurant(conflictRestaurant);
+                  setView('dashboard');
+                }
+              }}
             />
           )}
 
@@ -1452,13 +1472,15 @@ function MenuImportMode({ onImport }: { onImport: (items: string[]) => void }) {
 // ─── Step 5: Photo upload ─────────────────────────────────────────────────────
 
 function Step5Photo({
-  wizard, patch, publishing, publishError, onPublish,
+  wizard, patch, publishing, publishError, onPublish, conflictRestaurant, onGoToDashboard,
 }: {
   wizard: WizardData;
   patch: (p: Partial<WizardData>) => void;
   publishing: boolean;
   publishError: string;
   onPublish: () => void;
+  conflictRestaurant?: Restaurant | null;
+  onGoToDashboard?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -1519,25 +1541,45 @@ function Step5Photo({
         />
       </div>
 
-      {publishError && (
-        <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2 mb-4">
-          {publishError}
-        </p>
+      {/* 409 conflict — existing restaurant found for this account */}
+      {publishError === 'conflict' && conflictRestaurant ? (
+        <div className="rounded-brands border border-amber-200 bg-amber-50 px-4 py-4 mb-4">
+          <p className="text-[14px] font-bold text-amber-800 mb-1">
+            An account already exists for this email.
+          </p>
+          <p className="text-[13px] text-amber-700 mb-3">
+            <strong>{conflictRestaurant.name}</strong> is already registered to your account.
+            You don&apos;t need to create another one.
+          </p>
+          <button
+            onClick={onGoToDashboard}
+            className="h-10 px-5 bg-brand hover:bg-brand2 text-white text-[13px] font-bold rounded-brands transition-colors"
+          >
+            Go to my dashboard →
+          </button>
+        </div>
+      ) : (
+        <>
+          {publishError && (
+            <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2 mb-4">
+              {publishError}
+            </p>
+          )}
+          <button
+            onClick={onPublish}
+            disabled={publishing}
+            className="w-full h-12 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-bold text-[15px] rounded-brands transition-colors flex items-center justify-center gap-2"
+          >
+            {publishing
+              ? <><IconLoader2 size={18} className="animate-spin" /> Publishing…</>
+              : '🚀 Go live now!'
+            }
+          </button>
+          <p className="text-center text-[12px] text-t3 mt-2">
+            Your listing goes live instantly. Pause or edit deals at any time.
+          </p>
+        </>
       )}
-
-      <button
-        onClick={onPublish}
-        disabled={publishing}
-        className="w-full h-12 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-bold text-[15px] rounded-brands transition-colors flex items-center justify-center gap-2"
-      >
-        {publishing
-          ? <><IconLoader2 size={18} className="animate-spin" /> Publishing…</>
-          : '🚀 Go live now!'
-        }
-      </button>
-      <p className="text-center text-[12px] text-t3 mt-2">
-        Your listing goes live instantly. Pause or edit deals at any time.
-      </p>
     </div>
   );
 }
