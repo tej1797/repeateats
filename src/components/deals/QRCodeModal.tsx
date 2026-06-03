@@ -59,7 +59,6 @@ export default function QRCodeModal({ code, dealTitle, restaurantName, claimId, 
       <div
         className="absolute inset-0 bg-black/55 backdrop-blur-sm"
         onClick={onClose}
-        aria-hidden
       />
       <div className="relative bg-surface rounded-t-[20px] sm:rounded-brand shadow-brand2 w-full max-w-[310px] p-6 text-center animate-[slideUp_0.22s_ease]">
         <button

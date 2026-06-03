@@ -78,13 +78,24 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id);
   }
 
-  // Apple Pay + Google Pay appear automatically on Stripe Hosted Checkout when:
-  //   • "Apple Pay" is enabled in Dashboard → Settings → Payment methods → Apple Pay
-  //     AND the domain is registered there (repeateats.ca).
-  //   • "Google Pay" is enabled in Dashboard → Settings → Payment methods → Google Pay.
-  // Both wallet buttons only appear on HTTPS (not localhost).
+  // payment_method_types: ['card'] is the correct value for Stripe Hosted Checkout.
+  // 'apple_pay' and 'google_pay' are NOT valid enum values here — passing them causes
+  // a 400 API error. Apple Pay and Google Pay appear automatically inside the 'card'
+  // flow based on the user's device/browser:
+  //   • Safari / iOS / macOS  → Apple Pay button shown (requires domain registration)
+  //   • Chrome / Android      → Google Pay button shown
+  // Enable both in Stripe Dashboard → Settings → Payment methods.
+  // For Apple Pay: also register repeateats.ca under Settings → Apple Pay domains.
   //
-  // Appearance: configure in Stripe Dashboard → Settings → Branding.
+  // The "billingAgreement is not a recognized parameter" warning is emitted by Stripe's
+  // hosted checkout page itself (inside their iframe). It is a Stripe-side deprecation
+  // in their Apple Pay recurring config — there is nothing to change in our code.
+  //
+  // Interac e-Transfer cannot be used here: Stripe only supports Interac for one-time
+  // payments, not recurring subscriptions. Card, Apple Pay, and Google Pay are the
+  // correct Canadian payment methods for this subscription flow.
+  //
+  // Appearance: Stripe Dashboard → Settings → Branding (background, button colour).
   // Hosted Checkout does not accept client-side appearance options via API.
   const session = await stripe.checkout.sessions.create({
     customer:                   stripeCustomerId,
@@ -92,7 +103,7 @@ export async function POST(request: NextRequest) {
     client_reference_id:        user.id,
     metadata:                   { userId: user.id },
     mode:                       'subscription',
-    payment_method_types:       ['card'],   // card includes Apple Pay + Google Pay when enabled
+    payment_method_types:       ['card'],   // Apple Pay + Google Pay included automatically
     payment_method_collection:  'always',   // collect card before trial — charged when trial ends
     line_items:                 [{ price: priceId, quantity: 1 }],
     subscription_data:          { trial_period_days: 3 },

@@ -248,7 +248,7 @@ export default function RepeatPlusPage() {
           </div>
         )}
         <p className="text-center text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          Secured by Stripe · Apple Pay & Google Pay · Cancel anytime
+          Accepts Visa, Mastercard, Apple Pay &amp; Google Pay. Payments processed securely by Stripe.
         </p>
       </section>
 
@@ -332,7 +332,7 @@ export default function RepeatPlusPage() {
           {loading ? 'Redirecting…' : 'Start free trial — it\'s on us'}
         </button>
         <p className="text-[12px] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          3-day free trial · Cancel anytime · Secured by Stripe
+          3-day free trial · Cancel anytime · Visa, Mastercard, Apple Pay &amp; Google Pay
         </p>
       </section>
 
