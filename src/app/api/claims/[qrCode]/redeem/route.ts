@@ -1,5 +1,5 @@
 // GET  /api/claims/[qrCode]/redeem  — preview claim details for staff (auth required, ownership check)
-// POST /api/claims/[qrCode]/redeem  — mark as redeemed
+// POST /api/claims/[qrCode]/redeem  — mark as redeemed and consume one daily quota slot
 // QR code format: RE-XXXXXX  (e.g. RE-4A7X2B)
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -92,6 +92,34 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'QR code has expired' }, { status: 409 });
   }
 
+  // ── Check the customer's daily quota before consuming it ──────────────────
+  // Now that we're about to redeem, check if the customer has already hit their
+  // limit from other redeemed deals today. Fetch their plan tier first.
+  const { data: customerRow } = await supabase
+    .from('users')
+    .select('is_repeat_plus, repeat_plus_tier')
+    .eq('id', claim.user_id)
+    .maybeSingle();
+
+  const customerTier = customerRow?.repeat_plus_tier ?? (customerRow?.is_repeat_plus ? 'pro' : 'free');
+  const dailyLimit = customerTier === 'free' ? 1 : 3;
+  const today = new Date().toISOString().split('T')[0];
+
+  const { count: todayRedeemed } = await supabase
+    .from('claims')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', claim.user_id)
+    .eq('status', 'redeemed')
+    .eq('counted_against_limit', true)
+    .gte('redeemed_at', `${today}T00:00:00`);
+
+  if ((todayRedeemed ?? 0) >= dailyLimit) {
+    return NextResponse.json({
+      error: `Customer has already reached their daily limit of ${dailyLimit} deal${dailyLimit !== 1 ? 's' : ''} today.`,
+      limitReached: true,
+    }, { status: 403 });
+  }
+
   // Estimate savings based on discount type
   const moneySavedCents = (() => {
     if (!deal) return 1000;
@@ -107,13 +135,14 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return 1000;
   })();
 
-  // Mark as redeemed
+  // Mark as redeemed and consume the daily quota slot
   const { data: updated, error: updateError } = await supabase
     .from('claims')
     .update({
-      status:            'redeemed',
-      redeemed_at:       new Date().toISOString(),
-      money_saved_cents: moneySavedCents,
+      status:                'redeemed',
+      redeemed_at:           new Date().toISOString(),
+      money_saved_cents:     moneySavedCents,
+      counted_against_limit: true,
     })
     .eq('id', claim.id)
     .select()

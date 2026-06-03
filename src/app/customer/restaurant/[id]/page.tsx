@@ -27,6 +27,24 @@ import {
 // ─── Hour entry shape (from the restaurant onboarding wizard) ─────────────
 interface HoursEntry { open: string; close: string; closed: boolean }
 
+// Unsplash fallback images per cuisine category
+const CATEGORY_IMAGES: Record<string, string> = {
+  indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80',
+  bbq:       'https://images.unsplash.com/photo-1558030006-450675393462?w=800&q=80',
+  italian:   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80',
+  bar:       'https://images.unsplash.com/photo-1575444758702-4a6b9222336e?w=800&q=80',
+  canadian:  'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=80',
+  bubbletea: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=800&q=80',
+  pizza:     'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80',
+  burgers:   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80',
+  sushi:     'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&q=80',
+  desserts:  'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=800&q=80',
+  vegan:     'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80',
+  chinese:   'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80',
+  seafood:   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80',
+  default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
+};
+
 // ─── SignInModal (inline, no external deps) ───────────────────────────────
 function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u: User) => void }) {
   const [email, setEmail] = useState('');
@@ -96,6 +114,7 @@ export default function RestaurantDetailPage() {
   const [error,        setError]        = useState<string | null>(null);
   const [showHours,    setShowHours]    = useState(false);
   const [similarRests, setSimilarRests] = useState<Restaurant[]>([]);
+  const [heroSrc,      setHeroSrc]      = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -103,8 +122,12 @@ export default function RestaurantDetailPage() {
     fetch(`/api/restaurants/${id}`)
       .then(r => r.json())
       .then(({ data, error: e }: { data?: RestaurantWithDeals; error?: string }) => {
-        if (e || !data) setError('Restaurant not found');
-        else setRestaurant(data);
+        if (e || !data) { setError('Restaurant not found'); return; }
+        setRestaurant(data);
+        // Build hero src: stored cover → Google Places proxy → cuisine Unsplash
+        const cuisine = (data.category ?? data.cuisine ?? 'default').toLowerCase();
+        const proxyUrl = `/api/restaurant-photo?name=${encodeURIComponent(data.name)}&city=${encodeURIComponent(data.city)}&cuisine=${encodeURIComponent(cuisine)}`;
+        setHeroSrc(data.cover_url ?? proxyUrl);
       })
       .catch(() => setError('Failed to load restaurant'))
       .finally(() => setLoading(false));
@@ -144,7 +167,8 @@ export default function RestaurantDetailPage() {
         const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
           if (!c.deal_id) continue;
-          if (c.status === 'claimed' || c.status === 'redeemed') {
+          // 'pending' = new status; 'claimed' = legacy rows pre-migration
+          if (c.status === 'pending' || c.status === 'claimed' || c.status === 'redeemed') {
             map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
           }
         }
@@ -155,7 +179,8 @@ export default function RestaurantDetailPage() {
 
   const isActiveClaim = (dealId: string): boolean => {
     const c = userClaimMap[dealId];
-    if (!c || c.status !== 'claimed') return false;
+    // Accept both 'pending' (new) and 'claimed' (legacy rows pre-migration)
+    if (!c || (c.status !== 'pending' && c.status !== 'claimed')) return false;
     if (!c.expires_at) return true;
     return new Date(c.expires_at) > new Date();
   };
@@ -169,7 +194,7 @@ export default function RestaurantDetailPage() {
       const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
-        [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
+        [activeDeal.id]: { qr_code: result.qr_code, status: 'pending', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
     } else {
@@ -246,14 +271,20 @@ export default function RestaurantDetailPage() {
       </div>
 
       {/* ── Hero ──────────────────────────────────────────────────── */}
-      <div
-        className="h-[240px] md:h-[320px] relative flex items-end"
-        style={{
-          background: restaurant.cover_url
-            ? `url(${restaurant.cover_url}) center/cover no-repeat`
-            : 'linear-gradient(135deg, #E85D04 0%, #A03C01 100%)',
-        }}
-      >
+      <div className="h-[240px] md:h-[320px] relative flex items-end overflow-hidden">
+        {heroSrc && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={heroSrc}
+            alt={restaurant.name}
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => {
+              const cuisine = (restaurant.category ?? restaurant.cuisine ?? 'default').toLowerCase();
+              const fallback = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
+              if (heroSrc !== fallback) setHeroSrc(fallback);
+            }}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
         <div className="relative z-10 max-w-[900px] mx-auto px-5 pb-6 w-full">
           {/* Pills */}

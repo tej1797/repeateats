@@ -76,21 +76,25 @@ export async function POST(request: NextRequest) {
   const tier = userRow?.repeat_plus_tier ?? (userRow?.is_repeat_plus ? 'pro' : 'free');
 
   // Daily limits: free=1, starter=3, pro=3
+  // Count only REDEEMED claims that have been counted against the limit.
+  // Pending claims (not yet scanned) do NOT consume the daily slot.
   const dailyLimit = tier === 'free' ? 1 : 3;
   const today = new Date().toISOString().split('T')[0];
+
   const { count: dailyCount } = await supabase
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('claimed_at', `${today}T00:00:00`)
-    .in('status', ['claimed', 'redeemed']);
+    .eq('status', 'redeemed')
+    .eq('counted_against_limit', true)
+    .gte('redeemed_at', `${today}T00:00:00`);
 
   if ((dailyCount ?? 0) >= dailyLimit) {
     return NextResponse.json({
       error: `Daily limit reached (${dailyLimit}/day). ${tier === 'free' ? 'Upgrade to RepEAT+ for 3 deals/day!' : 'Come back tomorrow!'}`,
       limitReached: true,
       upgradeUrl: '/repeat-plus',
-    }, { status: 429 });
+    }, { status: 403 });
   }
 
   // Monthly limits: free=3, starter=20, pro=30
@@ -99,12 +103,14 @@ export async function POST(request: NextRequest) {
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
+
   const { count: monthlyCount } = await supabase
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('claimed_at', monthStart.toISOString())
-    .in('status', ['claimed', 'redeemed']);
+    .eq('status', 'redeemed')
+    .eq('counted_against_limit', true)
+    .gte('redeemed_at', monthStart.toISOString());
 
   if ((monthlyCount ?? 0) >= monthlyLimit) {
     const upgradeMsg = tier === 'free' ? 'Upgrade to Starter or Pro for more!' : tier === 'starter' ? 'Upgrade to Pro for 30/month!' : 'Limit reached for this month.';
@@ -112,10 +118,10 @@ export async function POST(request: NextRequest) {
       error: `Monthly limit reached (${monthlyLimit}/month). ${upgradeMsg}`,
       limitReached: true,
       upgradeUrl: '/repeat-plus',
-    }, { status: 429 });
+    }, { status: 403 });
   }
 
-  // ── Check for any existing claim for this deal ─────────────
+  // ── Check for any existing active claim for this deal ─────────────
   const { data: existingClaim } = await supabase
     .from('claims')
     .select('id, status, expires_at, qr_code')
@@ -133,8 +139,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Active 'claimed' — check if it has expired
-    if (existingClaim.status === 'claimed') {
+    // Active 'pending' claim — check if it has expired
+    if (existingClaim.status === 'pending' || existingClaim.status === 'claimed') {
       const isExpired = existingClaim.expires_at
         ? new Date(existingClaim.expires_at) < new Date()
         : false;
@@ -187,16 +193,18 @@ export async function POST(request: NextRequest) {
     qr_code = generateQrCode();
   }
 
-  // ── Insert the claim — expires 45 minutes from now ─────────
+  // ── Insert the claim — status 'pending', expires 45 minutes from now ──
+  // counted_against_limit stays FALSE until the restaurant scans and redeems.
   const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
   const { data: claim, error: claimError } = await supabase
     .from('claims')
     .insert({
-      deal_id:    body.deal_id,
-      user_id:    user.id,
+      deal_id:                body.deal_id,
+      user_id:                user.id,
       qr_code,
-      status:     'claimed',
-      expires_at: expiresAt,
+      status:                 'pending',
+      expires_at:             expiresAt,
+      counted_against_limit:  false,
     })
     .select()
     .single();
@@ -206,7 +214,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: claimError.message }, { status: 500 });
   }
 
-  // Increment claim counter
+  // Increment deal's display claim counter (cosmetic — shows social proof)
   await supabase
     .from('deals')
     .update({ current_claims: deal.current_claims + 1 })

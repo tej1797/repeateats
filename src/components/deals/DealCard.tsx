@@ -3,6 +3,7 @@
 import StarRating from '@/components/StarRating';
 import ProgressBar from '@/components/ui/ProgressBar';
 import type { DealWithRestaurant } from '@/types/index';
+import { formatDiscountValue } from '@/lib/utils';
 
 // Food image map by cuisine category (Unsplash)
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -110,7 +111,7 @@ export default function DealCard({ deal, onClick, compact = false, claimed = fal
             className="font-display text-[22px] font-extrabold text-white leading-none"
             style={{ textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}
           >
-            {deal.discount_value ?? '—'}
+            {formatDiscountValue(deal.discount_value)}
           </p>
         </div>
       </div>

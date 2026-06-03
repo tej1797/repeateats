@@ -1,6 +1,7 @@
 // GET /api/user/quota
 // Returns the authenticated user's claim usage + plan-based limits.
-// Used by both the web customer page and mobile app to show the quota chip.
+// Counts only REDEEMED claims (counted_against_limit = true) — pending
+// claims that haven't been scanned yet don't consume a quota slot.
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
@@ -28,16 +29,17 @@ export async function GET() {
 
   const limits = PLAN_LIMITS[tier];
 
-  // Count today's claims
+  // Count today's redeemed claims only (pending = not yet consumed)
   const todayStr = new Date().toISOString().split('T')[0];
   const { count: dailyUsed } = await supabase
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('claimed_at', `${todayStr}T00:00:00`)
-    .in('status', ['claimed', 'redeemed']);
+    .eq('status', 'redeemed')
+    .eq('counted_against_limit', true)
+    .gte('redeemed_at', `${todayStr}T00:00:00`);
 
-  // Count this month's claims
+  // Count this month's redeemed claims
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
@@ -45,8 +47,9 @@ export async function GET() {
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .gte('claimed_at', monthStart.toISOString())
-    .in('status', ['claimed', 'redeemed']);
+    .eq('status', 'redeemed')
+    .eq('counted_against_limit', true)
+    .gte('redeemed_at', monthStart.toISOString());
 
   return NextResponse.json({
     tier,
