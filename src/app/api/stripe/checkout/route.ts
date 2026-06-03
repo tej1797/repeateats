@@ -78,23 +78,28 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id);
   }
 
-  // payment_method_types omitted → Stripe auto-enables all methods activated in the
-  // Dashboard (card, Link, etc.). Apple Pay + Google Pay appear automatically for
-  // card-eligible sessions once the domain is verified in Dashboard → Apple Pay.
+  // Apple Pay + Google Pay appear automatically on Stripe Hosted Checkout when:
+  //   • "Apple Pay" is enabled in Dashboard → Settings → Payment methods → Apple Pay
+  //     AND the domain is registered there (repeateats.ca).
+  //   • "Google Pay" is enabled in Dashboard → Settings → Payment methods → Google Pay.
+  // Both wallet buttons only appear on HTTPS (not localhost).
   //
-  // Appearance (dark theme, gold accent) must be configured in:
-  // Stripe Dashboard → Settings → Branding → Background / Button colour
-  // The Hosted Checkout page does not accept client-side appearance options.
+  // Appearance: configure in Stripe Dashboard → Settings → Branding.
+  // Hosted Checkout does not accept client-side appearance options via API.
   const session = await stripe.checkout.sessions.create({
     customer:                   stripeCustomerId,
+    // Attach user IDs so /api/subscription/sync can locate the row without cookies
+    client_reference_id:        user.id,
+    metadata:                   { userId: user.id },
     mode:                       'subscription',
+    payment_method_types:       ['card'],   // card includes Apple Pay + Google Pay when enabled
+    payment_method_collection:  'always',   // collect card before trial — charged when trial ends
     line_items:                 [{ price: priceId, quantity: 1 }],
     subscription_data:          { trial_period_days: 3 },
     success_url:                `${process.env.NEXT_PUBLIC_SITE_URL}/repeat-plus/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url:                 `${process.env.NEXT_PUBLIC_SITE_URL}/repeat-plus`,
     allow_promotion_codes:      true,
     billing_address_collection: 'required',
-    payment_method_collection:  'if_required',
   });
 
   return NextResponse.json({ url: session.url });
