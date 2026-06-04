@@ -10,11 +10,11 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import {
   IconEdit, IconCrown, IconMapPin, IconTrophy,
   IconX, IconLogout, IconCheck, IconAlertTriangle,
-  IconQrcode, IconBan,
+  IconQrcode,
 } from '@tabler/icons-react';
-import QRCode from 'react-qrcode-logo';
 import { createClient } from '@/lib/supabase/client';
 import StarRating from '@/components/StarRating';
+import { VanishingQR } from '@/components/deals/VanishingQR';
 import PortalHeader from '@/components/layout/PortalHeader';
 import MobileNav from '@/components/layout/MobileNav';
 
@@ -188,63 +188,59 @@ function ClaimCountdown({ expiresAt, claimedAt, onExpired }: {
   );
 }
 
-// ─── QR modal for profile page ────────────────────────────────────────────────
-function ProfileQrModal({ claim, onClose, onRevert }: {
+// ─── Format deal title for display ───────────────────────────────────────────
+function formatDealTitle(deal: FullClaim['deals']): string {
+  if (!deal) return 'Deal';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = deal as any;
+  if (d.deal_category === 'bogo' || d.discount_type === 'bogo') return 'BUY 1 GET 1';
+  if (d.discount_type === 'percentage' && d.discount_value) return `${d.discount_value}% OFF`;
+  if (d.discount_type === 'fixed' && d.discount_value) {
+    const num = parseFloat(String(d.discount_value).replace(/[^0-9.]/g, ''));
+    return isNaN(num) ? deal.title : `$${num} OFF`;
+  }
+  return deal.title;
+}
+
+// ─── QR modal — uses VanishingQR, no raw code display, no cancel button ──────
+function ProfileQrModal({ claim, onClose }: {
   claim: FullClaim;
   onClose: () => void;
-  onRevert: (id: string) => void;
 }) {
-  const [revoking, setRevoking] = useState(false);
-
-  const handleRevert = async () => {
-    if (!confirm('Cancel this claim? You can re-claim the deal later.')) return;
-    setRevoking(true);
-    await fetch(`/api/claims/revert/${claim.id}`, { method: 'PATCH' });
-    onRevert(claim.id);
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[340px] p-6 animate-[slideUp_0.22s_ease]">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="font-display text-[18px] font-bold">{claim.deals?.emoji} {claim.deals?.title}</h3>
-            <p className="text-[13px] text-t2">{claim.deals?.restaurants?.name}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[340px] pt-6 pb-5 text-center animate-[slideUp_0.22s_ease]">
+        <div className="flex justify-between items-center mb-3 px-5">
+          <div className="text-left">
+            <h3 className="font-display text-[17px] font-bold leading-tight">
+              {claim.deals?.emoji} {formatDealTitle(claim.deals)}
+            </h3>
+            <p className="text-[12px] text-t2">{claim.deals?.restaurants?.name}</p>
           </div>
-          <button onClick={onClose} className="p-1 text-t2 hover:text-tx"><IconX size={18} /></button>
+          <button onClick={onClose} className="p-1 text-t2 hover:text-tx flex-shrink-0">
+            <IconX size={18} />
+          </button>
         </div>
-
-        <div className="flex justify-center mb-4">
-          <div className="p-3 bg-white rounded-brands border border-[var(--bd)]">
-            <QRCode
-              value={claim.qr_code}
-              size={180}
-              logoImage="/icon.png"
-              logoWidth={36}
-              logoHeight={36}
-              qrStyle="dots"
-              eyeRadius={6}
-            />
-          </div>
-        </div>
-
-        <p className="text-center text-[22px] font-mono font-bold text-tx tracking-widest mb-2">{claim.qr_code}</p>
-        <p className="text-center text-[12px] text-t3 mb-4">Show this QR code at the restaurant to redeem your deal</p>
 
         {claim.status === 'claimed' && (
-          <div className="mb-4 flex justify-center">
+          <div className="flex justify-center mb-3">
             <ClaimCountdown expiresAt={claim.expires_at} claimedAt={claim.claimed_at} />
           </div>
         )}
 
-        <button
-          onClick={handleRevert}
-          disabled={revoking}
-          className="w-full h-10 border border-red-200 text-red-600 text-[13px] font-semibold rounded-brands hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          <IconBan size={14} /> {revoking ? 'Cancelling…' : 'Cancel claim'}
-        </button>
+        <VanishingQR claimId={claim.id} />
+
+        <div className="px-5 mt-4">
+          <button
+            onClick={onClose}
+            className="w-full h-11 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors text-[14px]"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -615,7 +611,7 @@ export default function CustomerProfilePage() {
                       {c.deals?.emoji ?? '🍽️'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[14px] truncate">{c.deals?.title ?? 'Deal'}</p>
+                      <p className="font-semibold text-[14px] truncate">{formatDealTitle(c.deals)}</p>
                       <p className="text-[12px] text-t2 truncate">
                         {c.deals?.restaurants?.name} · {new Date(c.claimed_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
@@ -635,9 +631,9 @@ export default function CustomerProfilePage() {
                           />
                           <button
                             onClick={() => setQrClaim(c)}
-                            className="flex items-center gap-1 text-[12px] font-bold text-brand hover:text-brand2 transition-colors"
+                            className="flex items-center gap-1.5 text-[12px] font-bold text-white bg-brand hover:bg-brand2 transition-colors px-2.5 py-1 rounded-brands"
                           >
-                            <IconQrcode size={13} /> Show QR
+                            <IconQrcode size={13} /> Show QR to redeem
                           </button>
                         </>
                       ) : (
@@ -780,10 +776,6 @@ export default function CustomerProfilePage() {
         <ProfileQrModal
           claim={qrClaim}
           onClose={() => setQrClaim(null)}
-          onRevert={(id) => {
-            setAllClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'reverted', reverted_at: new Date().toISOString() } : c));
-            setQrClaim(null);
-          }}
         />
       )}
     </div>

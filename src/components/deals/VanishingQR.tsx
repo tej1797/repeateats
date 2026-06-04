@@ -4,19 +4,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface VanishingQRProps {
-  claimId:      string;
-  customerName: string;
-  customerId:   string;
+  claimId: string;
 }
 
 type QRState = 'hidden' | 'visible' | 'exhausted';
 
-export function VanishingQR({ claimId, customerName, customerId }: VanishingQRProps) {
-  const [state,             setState]             = useState<QRState>('hidden');
-  const [qrToken,           setQrToken]           = useState<string | null>(null);
-  const [revealsRemaining,  setRevealsRemaining]  = useState(2);
-  const [secondsLeft,       setSecondsLeft]       = useState(0);
-  const [loading,           setLoading]           = useState(false);
+export function VanishingQR({ claimId }: VanishingQRProps) {
+  const [state,            setState]            = useState<QRState>('hidden');
+  const [qrToken,          setQrToken]          = useState<string | null>(null);
+  const [revealsRemaining, setRevealsRemaining] = useState(2);
+  const [secondsLeft,      setSecondsLeft]      = useState(0);
+  const [loading,          setLoading]          = useState(false);
 
   const timerRef     = useRef<ReturnType<typeof setTimeout>>();
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
@@ -34,7 +32,6 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
     if (document.hidden) hideQR();
   }, [hideQR]);
 
-  // Hide on window blur (e.g. app switcher, screenshot tools)
   useEffect(() => {
     if (state !== 'visible') return;
     const handleBlur = () => hideQR();
@@ -91,23 +88,18 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
     }
   };
 
-  const firstName  = customerName.split(' ')[0] || customerName;
-  const watermark  = `${firstName} ···${customerId.slice(-4)}`;
-
   return (
     <div style={{ textAlign: 'center', padding: '0 16px' }}>
 
-      {/* QR tap area */}
+      {/* QR tap area — height auto so token text doesn't overflow */}
       <div
         onClick={state !== 'exhausted' ? revealQR : undefined}
         style={{
-          position:         'relative',
-          width:            220,
-          height:           220,
-          margin:           '0 auto 12px',
+          display:          'inline-block',
+          margin:           '0 auto 4px',
           borderRadius:     16,
           background:       '#fff',
-          padding:          10,
+          padding:          16,
           cursor:           state === 'exhausted' ? 'default' : 'pointer',
           userSelect:       'none',
           WebkitUserSelect: 'none',
@@ -118,16 +110,16 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
           <>
             <QRCodeSVG
               value={qrToken}
-              size={200}
+              size={180}
               level="L"
               fgColor="#FF7A00"
               bgColor="#ffffff"
               style={{ display: 'block' }}
             />
             <div style={{
-              marginTop:        10,
+              marginTop:        12,
               fontFamily:       'monospace',
-              fontSize:         16,
+              fontSize:         15,
               fontWeight:       700,
               color:            '#FF7A00',
               letterSpacing:    '0.15em',
@@ -137,21 +129,21 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
             }}>
               {qrToken}
             </div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 3, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#aaa', marginTop: 4, textAlign: 'center' }}>
               Enter manually if scan fails
             </div>
           </>
         ) : (
           <div style={{
-            width:           200,
-            height:          200,
-            display:         'flex',
-            flexDirection:   'column',
-            alignItems:      'center',
-            justifyContent:  'center',
-            background:      state === 'exhausted' ? '#f5f5f5' : '#fff',
-            borderRadius:    8,
-            gap:             8,
+            width:          180,
+            height:         180,
+            display:        'flex',
+            flexDirection:  'column',
+            alignItems:     'center',
+            justifyContent: 'center',
+            background:     state === 'exhausted' ? '#f5f5f5' : '#fff',
+            borderRadius:   8,
+            gap:            8,
           }}>
             {state === 'exhausted' ? (
               <>
@@ -163,13 +155,13 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
             ) : (
               <>
                 <div style={{
-                  width:           64,
-                  height:          64,
-                  borderRadius:    '50%',
-                  background:      'rgba(255,122,0,0.10)',
-                  display:         'flex',
-                  alignItems:      'center',
-                  justifyContent:  'center',
+                  width:          64,
+                  height:         64,
+                  borderRadius:   '50%',
+                  background:     'rgba(255,122,0,0.10)',
+                  display:        'flex',
+                  alignItems:     'center',
+                  justifyContent: 'center',
                 }}>
                   <span style={{ fontSize: loading ? 20 : 28 }}>
                     {loading ? '⏳' : '👁'}
@@ -187,40 +179,37 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
         )}
       </div>
 
-      {/* Countdown badge */}
+      {/* Timer pill — outside the white box */}
       {state === 'visible' && (
         <div style={{
           background:   'rgba(255,122,0,0.10)',
           border:       '1px solid rgba(255,122,0,0.30)',
           borderRadius: 8,
-          padding:      '6px 12px',
+          padding:      '6px 14px',
+          marginTop:    10,
           marginBottom: 8,
           fontSize:     13,
           color:        '#FF7A00',
           fontWeight:   500,
+          textAlign:    'center',
         }}>
           Visible for {secondsLeft}s · {revealsRemaining} reveal{revealsRemaining !== 1 ? 's' : ''} left
         </div>
       )}
 
-      {/* Personalised watermark */}
-      <div style={{ fontSize: 13, color: '#666', fontWeight: 500, marginBottom: 4, letterSpacing: '0.05em' }}>
-        {watermark}
-      </div>
-      <div style={{ fontSize: 12, color: '#999' }}>
+      <div style={{ fontSize: 12, color: '#999', marginTop: state === 'visible' ? 0 : 10 }}>
         Show to restaurant staff at checkout
       </div>
-
-      {/* Footer note */}
       <div style={{
         fontSize:     11,
         color:        '#aaa',
-        marginTop:    8,
-        padding:      '6px 12px',
+        marginTop:    6,
+        padding:      '5px 12px',
         background:   'rgba(0,0,0,0.03)',
         borderRadius: 8,
+        display:      'inline-block',
       }}>
-        Single use · Expires in 1 hour · Screenshot protected
+        Single use · Expires in 1 hour · Identity watermarked
       </div>
     </div>
   );

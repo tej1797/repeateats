@@ -1571,8 +1571,6 @@ export default function CustomerPage() {
           claimId={activeClaimId}
           dealTitle={activeDeal.title}
           restaurantName={activeDeal.restaurant?.name}
-          customerName={(user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? user?.email ?? 'Guest') as string}
-          customerId={user?.id ?? '0000'}
           onClose={() => { setQrCode(null); setActiveDeal(null); setActiveClaimId(null); }}
         />
       )}
