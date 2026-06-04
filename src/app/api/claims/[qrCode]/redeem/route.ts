@@ -30,7 +30,13 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         restaurant:restaurants ( name, owner_id )
       )
     `)
-    .or(`qr_token_current.eq.${token},qr_token_previous.eq.${token},qr_code.eq.${token}`)
+    .or(
+      [
+        `qr_token_current.eq.${token}`,
+        `qr_token_previous.eq.${token}`,
+        `qr_code.eq.${token}`,
+      ].join(',')
+    )
     .maybeSingle();
 
   if (claimError || !claim) {
@@ -72,7 +78,13 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         restaurant:restaurants ( owner_id )
       )
     `)
-    .or(`qr_token_current.eq.${token},qr_token_previous.eq.${token},qr_code.eq.${token}`)
+    .or(
+      [
+        `qr_token_current.eq.${token}`,
+        `qr_token_previous.eq.${token}`,
+        `qr_code.eq.${token}`,
+      ].join(',')
+    )
     .maybeSingle();
 
   if (!claimAny) {
