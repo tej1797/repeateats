@@ -178,18 +178,21 @@ export default function RestaurantPage() {
     const resolveSession = async (userId: string) => {
       setUser({ id: userId } as SupabaseUser);
       try {
-        // Primary: look up by owner_id (Supabase Auth UUID — always prefer this)
+        // Primary: always look up by owner_id — never trust any cached restaurant_id
         let { data: rest } = await supabase
           .from('restaurants')
           .select('*')
           .eq('owner_id', userId)
           .maybeSingle();
 
-        // Fallback: if no row found by UUID, try by email (handles pre-migration rows)
-        // and write the correct owner_id so future logins don't need the fallback.
+        // Fallback: if no row found by UUID, try by owner_email (handles rows created before
+        // the owner_id column was populated). Critically: only repair ownership when the fresh
+        // JWT user ID matches the userId we were called with — prevents a stale getSession()
+        // token from corrupting a different user's restaurant.
         if (!rest) {
           const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser?.email) {
+          // Guard: confirmed JWT user must match the session userId we received
+          if (authUser?.id === userId && authUser.email) {
             const { data: byEmail } = await supabase
               .from('restaurants')
               .select('*')
@@ -197,11 +200,12 @@ export default function RestaurantPage() {
               .maybeSingle();
 
             if (byEmail) {
-              // Repair the missing owner_id so next login hits the primary path
+              // Repair: write owner_id so primary path works on future logins
               await supabase
                 .from('restaurants')
                 .update({ owner_id: userId })
-                .eq('id', byEmail.id);
+                .eq('id', byEmail.id)
+                .eq('owner_email', authUser.email); // extra guard: only touch this exact row
               rest = { ...byEmail, owner_id: userId } as typeof byEmail;
             }
           }
@@ -215,14 +219,13 @@ export default function RestaurantPage() {
 
     const init = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // Use getUser() (validates JWT server-side) instead of getSession() (reads localStorage).
+        // This prevents a stale cached session from loading the wrong restaurant.
+        const { data: { user: verifiedUser } } = await supabase.auth.getUser();
         if (!mounted) return;
-        // If session found immediately (email/password login or warm cookie), proceed.
-        // If not, do NOT set 'auth' — let onAuthStateChange + timeout handle the race.
-        if (session?.user) await resolveSession(session.user.id);
+        if (verifiedUser) await resolveSession(verifiedUser.id);
       } catch (err) {
         console.error('[RestaurantPage] init error:', err);
-        // Don't change view — let the timeout fall back to 'auth'
       }
     };
 
@@ -442,6 +445,8 @@ export default function RestaurantPage() {
   }, [user, wizard, supabase]);
 
   const handleSignOut = useCallback(async () => {
+    // Clear any per-restaurant localStorage state so the next user starts clean
+    localStorage.removeItem('repeateats.manager_locked');
     await supabase.auth.signOut();
   }, [supabase]);
 
