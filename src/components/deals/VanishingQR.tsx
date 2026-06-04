@@ -12,9 +12,10 @@ type QRState = 'hidden' | 'visible' | 'exhausted';
 export function VanishingQR({ claimId }: VanishingQRProps) {
   const [state,            setState]            = useState<QRState>('hidden');
   const [qrToken,          setQrToken]          = useState<string | null>(null);
-  const [revealsRemaining, setRevealsRemaining] = useState(2);
+  const [revealsRemaining, setRevealsRemaining] = useState<number | null>(null);
   const [secondsLeft,      setSecondsLeft]      = useState(0);
   const [loading,          setLoading]          = useState(false);
+  const [initialising,     setInitialising]     = useState(true);
 
   const timerRef     = useRef<ReturnType<typeof setTimeout>>();
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
@@ -32,6 +33,66 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
     if (document.hidden) hideQR();
   }, [hideQR]);
 
+  // Fetch real reveal state from DB on every mount
+  useEffect(() => {
+    const fetchClaimState = async () => {
+      try {
+        const res  = await fetch(`/api/claims/state?claim_id=${claimId}`);
+        const data = await res.json() as {
+          reveals_used?:     number;
+          last_revealed_at?: string | null;
+          qr_token_current?: string | null;
+          status?:           string;
+          expires_at?:       string | null;
+        };
+
+        if (!res.ok) {
+          setRevealsRemaining(0);
+          setState('exhausted');
+          return;
+        }
+
+        const remaining = Math.max(0, 2 - (data.reveals_used ?? 0));
+        setRevealsRemaining(remaining);
+
+        if (remaining === 0) {
+          setState('exhausted');
+          return;
+        }
+
+        // Restore visible state if the 2-min window is still open
+        const lastReveal    = data.last_revealed_at ? new Date(data.last_revealed_at).getTime() : null;
+        const visibleUntil  = lastReveal ? lastReveal + 2 * 60 * 1000 : null;
+
+        if (visibleUntil && visibleUntil > Date.now()) {
+          setQrToken(data.qr_token_current ?? null);
+          setState('visible');
+
+          const msLeft = visibleUntil - Date.now();
+          setSecondsLeft(Math.ceil(msLeft / 1000));
+
+          clearTimeout(timerRef.current);
+          clearInterval(countdownRef.current);
+
+          timerRef.current = setTimeout(hideQR, msLeft);
+          countdownRef.current = setInterval(() => {
+            setSecondsLeft(s => {
+              if (s <= 1) { clearInterval(countdownRef.current); return 0; }
+              return s - 1;
+            });
+          }, 1000);
+        }
+      } catch {
+        setRevealsRemaining(0);
+      } finally {
+        setInitialising(false);
+      }
+    };
+
+    void fetchClaimState();
+  }, [claimId, hideQR]);
+
+  // Hide on window blur (e.g. app switcher, screenshot tools)
   useEffect(() => {
     if (state !== 'visible') return;
     const handleBlur = () => hideQR();
@@ -45,7 +106,7 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
   }, []);
 
   const revealQR = async () => {
-    if (loading || state === 'exhausted') return;
+    if (loading || state === 'exhausted' || initialising) return;
     setLoading(true);
 
     try {
@@ -55,13 +116,13 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
         body:    JSON.stringify({ claim_id: claimId }),
       });
       const data = await res.json() as {
-        qr_token?: string;
+        qr_token?:         string;
         reveals_remaining?: number;
-        visible_until?: string;
-        error?: string;
+        visible_until?:    string;
+        error?:            string;
       };
 
-      if (res.status === 403) { setState('exhausted'); return; }
+      if (res.status === 403) { setState('exhausted'); setRevealsRemaining(0); return; }
       if (!res.ok)             return;
 
       setQrToken(data.qr_token ?? null);
@@ -91,16 +152,16 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
   return (
     <div style={{ textAlign: 'center', padding: '0 16px' }}>
 
-      {/* QR tap area — height auto so token text doesn't overflow */}
+      {/* QR tap area */}
       <div
-        onClick={state !== 'exhausted' ? revealQR : undefined}
+        onClick={(!initialising && state !== 'exhausted') ? revealQR : undefined}
         style={{
           display:          'inline-block',
           margin:           '0 auto 4px',
           borderRadius:     16,
           background:       '#fff',
           padding:          16,
-          cursor:           state === 'exhausted' ? 'default' : 'pointer',
+          cursor:           (initialising || state === 'exhausted') ? 'default' : 'pointer',
           userSelect:       'none',
           WebkitUserSelect: 'none',
           boxShadow:        '0 2px 12px rgba(0,0,0,0.10)',
@@ -145,7 +206,9 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
             borderRadius:   8,
             gap:            8,
           }}>
-            {state === 'exhausted' ? (
+            {initialising ? (
+              <span style={{ fontSize: 13, color: '#aaa' }}>Loading…</span>
+            ) : state === 'exhausted' ? (
               <>
                 <span style={{ fontSize: 32 }}>🚫</span>
                 <span style={{ fontSize: 13, color: '#888', textAlign: 'center', padding: '0 16px' }}>
@@ -171,7 +234,10 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
                   {loading ? 'Loading…' : 'Tap to reveal'}
                 </span>
                 <span style={{ fontSize: 12, color: '#888' }}>
-                  {revealsRemaining} reveal{revealsRemaining !== 1 ? 's' : ''} remaining
+                  {revealsRemaining === null
+                    ? '…'
+                    : `${revealsRemaining} reveal${revealsRemaining !== 1 ? 's' : ''} remaining`
+                  }
                 </span>
               </>
             )}
