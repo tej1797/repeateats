@@ -115,14 +115,32 @@ export function VanishingQR({ claimId, customerName, customerId }: VanishingQRPr
         }}
       >
         {state === 'visible' && qrToken ? (
-          <QRCodeSVG
-            value={qrToken}
-            size={200}
-            level="L"
-            fgColor="#FF7A00"
-            bgColor="#ffffff"
-            style={{ display: 'block' }}
-          />
+          <>
+            <QRCodeSVG
+              value={qrToken}
+              size={200}
+              level="L"
+              fgColor="#FF7A00"
+              bgColor="#ffffff"
+              style={{ display: 'block' }}
+            />
+            <div style={{
+              marginTop:        10,
+              fontFamily:       'monospace',
+              fontSize:         16,
+              fontWeight:       700,
+              color:            '#FF7A00',
+              letterSpacing:    '0.15em',
+              textAlign:        'center',
+              userSelect:       'none',
+              WebkitUserSelect: 'none',
+            }}>
+              {qrToken}
+            </div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 3, textAlign: 'center' }}>
+              Enter manually if scan fails
+            </div>
+          </>
         ) : (
           <div style={{
             width:           200,

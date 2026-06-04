@@ -1,7 +1,7 @@
 'use client';
 
 // /restaurant/redeem — Staff QR code redemption terminal
-// Restaurant staff enter the customer's QR code (RE-XXXXXX format) to mark the deal as redeemed.
+// Staff enter or scan the customer's QR token (RE-XXXX-XXXX format) shown during the 2-min reveal window.
 // Auth-protected: must be signed in as a restaurant owner.
 
 import { useState, useEffect, useRef, useCallback } from 'react';
