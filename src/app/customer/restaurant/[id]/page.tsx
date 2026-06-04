@@ -150,10 +150,11 @@ export default function RestaurantDetailPage() {
   }, [restaurant]);
 
   // ── Claim state ───────────────────────────────────────────────────────
-  const [activeDeal,   setActiveDeal]   = useState<DealWithRestaurant | null>(null);
-  const [qrCode,       setQrCode]       = useState<string | null>(null);
-  const [claimError,   setClaimError]   = useState<string | null>(null);
-  const [showSignIn,   setShowSignIn]   = useState(false);
+  const [activeDeal,    setActiveDeal]    = useState<DealWithRestaurant | null>(null);
+  const [qrCode,        setQrCode]        = useState<string | null>(null);
+  const [activeClaimId, setActiveClaimId] = useState<string | null>(null);
+  const [claimError,    setClaimError]    = useState<string | null>(null);
+  const [showSignIn,    setShowSignIn]    = useState(false);
   interface ClaimInfo { qr_code: string; status: string; expires_at: string | null }
   const [userClaimMap, setUserClaimMap] = useState<Record<string, ClaimInfo>>({});
   const { claimDeal, loading: claiming } = useClaims();
@@ -189,12 +190,15 @@ export default function RestaurantDetailPage() {
     setClaimError(null);
     const result = await claimDeal(activeDeal.id);
     if (result) {
-      const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
         [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
+      if ((result as { claim_id?: string }).claim_id) {
+        setActiveClaimId((result as { claim_id?: string }).claim_id!);
+      }
     } else {
       setClaimError('Could not claim this deal. Please try again.');
     }
@@ -499,12 +503,14 @@ export default function RestaurantDetailPage() {
         />
       )}
 
-      {qrCode && activeDeal && (
+      {qrCode && activeDeal && activeClaimId && (
         <QRCodeModal
-          code={qrCode}
+          claimId={activeClaimId}
           dealTitle={activeDeal.title}
           restaurantName={restaurant.name}
-          onClose={() => { setQrCode(null); setActiveDeal(null); }}
+          customerName={(user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? user?.email ?? 'Guest') as string}
+          customerId={user?.id ?? '0000'}
+          onClose={() => { setQrCode(null); setActiveDeal(null); setActiveClaimId(null); }}
         />
       )}
 

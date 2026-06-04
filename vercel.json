@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/claims/rotate-tokens",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

@@ -5,12 +5,23 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { CreateClaimBody } from '@/types/api';
 
-// ─── Generates a short, readable QR code like "RE-4A7X2B" ───
+// ─── Token generators ────────────────────────────────────────
+// Legacy short code for display (kept as qr_code column)
 function generateQrCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1
   let code = 'RE-';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
+}
+
+// Vanishing token: "RE-XXXX-YYYY" — rotated every 5 min by cron
+function generateQrToken(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let t = 'RE-';
+  for (let i = 0; i < 4; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  t += '-';
+  for (let i = 0; i < 4; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  return t;
 }
 
 // ─── GET ─────────────────────────────────────────────────────
@@ -171,8 +182,10 @@ export async function POST(request: NextRequest) {
 
   // ── Insert the claim ────────────────────────────────────────
   // status = 'claimed' (active QR, timer running)
-  // counted_against_limit = false until the restaurant scans and redeems it
-  const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
+  // expires 60 minutes from now
+  // qr_token_current starts equal to the token; rotated by cron every 5 min
+  const token     = generateQrToken();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const { data: claim, error: claimError } = await supabase
     .from('claims')
     .insert({
@@ -182,6 +195,10 @@ export async function POST(request: NextRequest) {
       status:                'claimed',
       expires_at:            expiresAt,
       counted_against_limit: false,
+      reveals_used:          0,
+      last_revealed_at:      null,
+      qr_token_current:      token,
+      qr_token_previous:     null,
     })
     .select()
     .single();

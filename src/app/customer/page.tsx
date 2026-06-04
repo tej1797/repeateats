@@ -959,7 +959,7 @@ export default function CustomerPage() {
     setClaimError(null);
     const result = await claimDeal(activeDeal.id);
     if (result) {
-      const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
         [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
@@ -1562,12 +1562,13 @@ export default function CustomerPage() {
         />
       )}
 
-      {qrCode && activeDeal && (
+      {qrCode && activeDeal && activeClaimId && (
         <QRCodeModal
-          code={qrCode}
+          claimId={activeClaimId}
           dealTitle={activeDeal.title}
           restaurantName={activeDeal.restaurant?.name}
-          claimId={activeClaimId ?? undefined}
+          customerName={(user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? user?.email ?? 'Guest') as string}
+          customerId={user?.id ?? '0000'}
           onClose={() => { setQrCode(null); setActiveDeal(null); setActiveClaimId(null); }}
         />
       )}
