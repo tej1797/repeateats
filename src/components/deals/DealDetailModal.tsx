@@ -25,32 +25,90 @@ const CATEGORY_IMAGES: Record<string, string> = {
   default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80',
 };
 
+// ─── Soft upsell shown when the daily limit is hit ────────────────────────────
+function DailyLimitReached({ plan }: { plan: string }) {
+  const router = useRouter();
+
+  const messages: Record<string, { title: string; sub: string; cta: string }> = {
+    free: {
+      title: "You've used your 1 free claim for today",
+      sub:   'Upgrade to Starter to claim up to 3 deals per day, or Pro for full week access.',
+      cta:   'See RepEAT+ plans →',
+    },
+    starter: {
+      title: "You've used all 3 claims for today",
+      sub:   'Upgrade to Pro for 30 deals/month and full week deal previews.',
+      cta:   'Upgrade to Pro →',
+    },
+  };
+
+  const msg = messages[plan] ?? messages.free;
+
+  return (
+    <div
+      style={{
+        background:    'rgba(255, 122, 0, 0.08)',
+        border:        '1px solid rgba(255, 122, 0, 0.25)',
+        borderRadius:  12,
+        padding:       '14px 16px',
+      }}
+    >
+      <p style={{ fontSize: 14, fontWeight: 500, color: '#FF7A00', margin: '0 0 4px' }}>
+        {msg.title}
+      </p>
+      <p style={{ fontSize: 13, color: 'var(--t2)', margin: '0 0 10px', lineHeight: 1.5 }}>
+        {msg.sub}
+      </p>
+      <button
+        onClick={() => router.push('/repeat-plus')}
+        style={{
+          display:        'inline-flex',
+          alignItems:     'center',
+          gap:            6,
+          background:     '#FF7A00',
+          color:          '#fff',
+          border:         'none',
+          borderRadius:   8,
+          padding:        '8px 14px',
+          fontSize:       13,
+          fontWeight:     500,
+          cursor:         'pointer',
+        }}
+      >
+        {msg.cta}
+      </button>
+    </div>
+  );
+}
+
 interface DealDetailModalProps {
-  deal:            DealWithRestaurant;
-  user:            User | null;
-  planTier?:       'free' | 'starter' | 'pro';
-  onClose:         () => void;
-  onClaim:         () => void;
-  claiming?:       boolean;
-  claimError?:     string | null;
-  alreadyClaimed?: boolean;
-  existingQrCode?: string;
-  isRedeemed?:     boolean;
-  onViewExisting?: (code: string) => void;
-  onShare?:        () => void;
+  deal:               DealWithRestaurant;
+  user:               User | null;
+  planTier?:          'free' | 'starter' | 'pro';
+  onClose:            () => void;
+  onClaim:            () => void;
+  claiming?:          boolean;
+  claimError?:        string | null;
+  alreadyClaimed?:    boolean;
+  existingQrCode?:    string;
+  isRedeemed?:        boolean;
+  dailyLimitReached?: boolean;
+  onViewExisting?:    (code: string) => void;
+  onShare?:           () => void;
 }
 
 export default function DealDetailModal({
   deal,
   user,
-  planTier       = 'free',
+  planTier           = 'free',
   onClose,
   onClaim,
-  claiming       = false,
-  claimError     = null,
-  alreadyClaimed = false,
+  claiming           = false,
+  claimError         = null,
+  alreadyClaimed     = false,
   existingQrCode,
-  isRedeemed     = false,
+  isRedeemed         = false,
+  dailyLimitReached  = false,
   onViewExisting,
   onShare,
 }: DealDetailModalProps) {
@@ -62,13 +120,14 @@ export default function DealDetailModal({
   const progressPct    = deal.max_claims ? Math.min(100, (deal.current_claims / deal.max_claims) * 100) : 0;
 
   // Header image: deal photo → cuisine Unsplash fallback
-  const cuisine = (deal.restaurant?.category ?? deal.restaurant?.cuisine ?? 'default').toLowerCase();
+  const cuisine   = (deal.restaurant?.category ?? deal.restaurant?.cuisine ?? 'default').toLowerCase();
   const headerImg = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
 
-  // Deal type badge text (uppercase first type)
-  const badgeLabel = deal.deal_types?.length > 0
-    ? deal.deal_types[0].toUpperCase()
-    : null;
+  // Deal type badge text
+  const badgeLabel = deal.deal_types?.length > 0 ? deal.deal_types[0].toUpperCase() : null;
+
+  // Show the upsell block when daily limit hit and no pending claim already active
+  const showLimitUpsell = dailyLimitReached && !alreadyClaimed && !isRedeemed && user;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -87,7 +146,6 @@ export default function DealDetailModal({
             alt={deal.restaurant?.name ?? ''}
             className="w-full h-full object-cover"
           />
-          {/* Dark gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/20" />
 
           {/* Large emoji centre */}
@@ -104,7 +162,7 @@ export default function DealDetailModal({
             <IconX size={16} />
           </button>
 
-          {/* Share button top-right-ish (only if onShare provided) */}
+          {/* Share button */}
           {onShare && (
             <button
               onClick={onShare}
@@ -153,13 +211,12 @@ export default function DealDetailModal({
             </p>
           </div>
 
-          {/* Restaurant row — tappable, links to /customer/restaurant/[id] */}
+          {/* Restaurant row — tappable */}
           {deal.restaurant?.id && (
             <button
               onClick={() => { onClose(); router.push(`/customer/restaurant/${deal.restaurant!.id}`); }}
               className="flex items-center gap-3 w-full bg-surface2 rounded-brands px-3 py-2.5 hover:bg-[var(--bd)] transition-colors text-left"
             >
-              {/* Avatar circle */}
               <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center flex-shrink-0 text-white font-bold text-[16px]">
                 {deal.emoji ?? '🍽️'}
               </div>
@@ -202,12 +259,15 @@ export default function DealDetailModal({
             <p className="text-[12px] text-t3">Ends {deal.valid_until}</p>
           )}
 
-          {/* Error */}
-          {claimError && (
+          {/* API error (non-limit errors only) */}
+          {claimError && !dailyLimitReached && (
             <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2">
               {claimError}
             </p>
           )}
+
+          {/* Daily limit upsell — shown instead of the error string when limit is hit */}
+          {showLimitUpsell && <DailyLimitReached plan={planTier} />}
 
           {/* CTA */}
           {deal.is_coming ? (
@@ -237,10 +297,12 @@ export default function DealDetailModal({
               <IconCheck size={18} /> Already claimed — View QR Code
             </button>
           ) : (
+            // Normal claim button — muted + non-interactive when daily limit reached
             <button
-              onClick={onClaim}
-              disabled={claiming}
-              className="w-full h-12 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-semibold rounded-brands transition-colors text-[15px]"
+              onClick={dailyLimitReached ? undefined : onClaim}
+              disabled={claiming || dailyLimitReached}
+              className="w-full h-12 bg-brand text-white font-semibold rounded-brands transition-colors text-[15px]"
+              style={dailyLimitReached ? { opacity: 0.4, cursor: 'default' } : {}}
             >
               {claiming ? 'Claiming…' : 'Claim Deal'}
             </button>

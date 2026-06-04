@@ -145,6 +145,35 @@ const HERO_SLIDES = [
   },
 ] as const;
 
+// ─── QuotaChip ────────────────────────────────────────────────────────────
+function QuotaChip({
+  used, limit, label, onClick,
+}: { used: number; limit: number; label: string; onClick?: () => void }) {
+  const isFull = used >= limit;
+  return (
+    <button
+      onClick={isFull ? onClick : undefined}
+      style={{
+        background:  isFull ? 'rgba(136,135,128,0.15)' : 'rgba(232,93,4,0.12)',
+        border:      `1px solid ${isFull ? '#888880' : '#E85D04'}`,
+        borderRadius: 20,
+        padding:     '4px 10px',
+        fontSize:    12,
+        fontWeight:  600,
+        color:       isFull ? '#88887A' : '#E85D04',
+        cursor:      isFull ? 'pointer' : 'default',
+        display:     'inline-flex',
+        alignItems:  'center',
+        gap:         4,
+        transition:  'opacity 0.15s',
+        lineHeight:  1,
+      }}
+    >
+      🎟️ {used}/{limit} {label}{isFull && <span style={{ fontSize: 13 }}>→</span>}
+    </button>
+  );
+}
+
 // ─── HeroBanner ───────────────────────────────────────────────────────────
 function HeroBanner() {
   const [slide, setSlide] = useState(0);
@@ -1139,29 +1168,26 @@ export default function CustomerPage() {
         </div>
       </header>
 
-      {/* ── Quota bar — plan-aware, updates optimistically after each claim ── */}
+      {/* ── Quota chips ─────────────────────────────────────────────────── */}
       {user && !plan.loading && (
         <div className="border-b border-[var(--bd)] bg-surface2">
-          <div className="max-w-[1100px] mx-auto px-5 py-2 flex items-center justify-between gap-4 flex-wrap">
-            <p className="text-[12px] text-t2">
-              🎟️{' '}
-              <span className={plan.dailyHit ? 'font-bold text-brand' : 'font-semibold'}>
-                {plan.daily_used}/{plan.daily_limit} today
+          <div className="max-w-[1100px] mx-auto px-5 py-2 flex items-center gap-2 flex-wrap">
+            <QuotaChip
+              used={plan.daily_used}
+              limit={plan.daily_limit}
+              label="today"
+              onClick={() => router.push('/repeat-plus')}
+            />
+            <QuotaChip
+              used={plan.monthly_used}
+              limit={plan.monthly_limit}
+              label="this month"
+              onClick={() => router.push('/repeat-plus')}
+            />
+            {plan.tier !== 'free' && (
+              <span className="text-[10px] font-bold uppercase tracking-wide ml-0.5" style={{ color: plan.accent }}>
+                {plan.planLabel}
               </span>
-              {' · '}
-              <span className={plan.monthlyHit ? 'font-bold text-brand' : 'font-semibold'}>
-                {plan.monthly_used}/{plan.monthly_limit} this month
-              </span>
-              {plan.tier !== 'free' && (
-                <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: plan.accent }}>
-                  {plan.planLabel}
-                </span>
-              )}
-            </p>
-            {plan.monthlyHit && (
-              <Link href="/repeat-plus" className="text-[11px] font-bold text-brand hover:text-brand2 transition-colors whitespace-nowrap">
-                Upgrade for more →
-              </Link>
             )}
           </div>
         </div>
@@ -1532,6 +1558,7 @@ export default function CustomerPage() {
           alreadyClaimed={isActiveClaim(activeDeal.id)}
           existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
           isRedeemed={isRedeemed(activeDeal.id)}
+          dailyLimitReached={plan.dailyHit}
           onViewExisting={code => setQrCode(code)}
           onShare={() => handleShare(activeDeal)}
         />
