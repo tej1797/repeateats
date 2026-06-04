@@ -139,14 +139,17 @@ export default function RedeemPage() {
     setRedeemErr('');
 
     try {
-      const res  = await fetch(`/api/claims/${encodeURIComponent(preview.qr_code)}/redeem`, { method: 'POST' });
-      const json = await res.json() as { error?: string };
+      const res = await fetch('/api/claims/redeem', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ qr_token: preview.qr_code }),
+      });
+      const json = await res.json() as { success?: boolean; message?: string; error?: string };
       if (!res.ok) {
         setRedeemErr(json.error ?? 'Failed to redeem');
       } else {
         setRedeemDone(true);
         setPreview((p) => p ? { ...p, status: 'redeemed' } : p);
-        // Bump counter immediately without waiting for poll/realtime
         if (restaurantId) void fetchCount(restaurantId);
       }
     } catch {

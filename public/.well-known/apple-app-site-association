@@ -1,0 +1,31 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["YOURTEAMID.ca.repeateats.app"],
+        "components": [
+          {
+            "/#": "restaurant/*",
+            "comment": "Only open restaurant routes in app"
+          },
+          {
+            "/#": "deals/*",
+            "comment": "Only open deal routes in app"
+          },
+          {
+            "/": "NOT /",
+            "comment": "Exclude homepage"
+          },
+          {
+            "/": "NOT /repeat-plus*",
+            "comment": "Exclude pricing page"
+          },
+          {
+            "/": "NOT /customer*",
+            "comment": "Customer web stays in browser"
+          }
+        ]
+      }
+    ]
+  }
+}

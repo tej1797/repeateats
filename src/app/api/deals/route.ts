@@ -133,6 +133,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const title         = (body.title as string).trim();
+  const discountType  = body.discount_type as string | undefined;
+  const discountValue = typeof body.discount_value === 'number'
+    ? body.discount_value
+    : parseFloat(String(body.discount_value ?? '0').replace(/[^0-9.]/g, ''));
+
+  if (title.length < 3) {
+    return NextResponse.json(
+      { error: 'Deal title must be at least 3 characters' },
+      { status: 400 },
+    );
+  }
+  if (title.length > 80) {
+    return NextResponse.json(
+      { error: 'Deal title must be under 80 characters' },
+      { status: 400 },
+    );
+  }
+  if (discountType === 'percentage' && !isNaN(discountValue) && discountValue > 100) {
+    return NextResponse.json(
+      { error: 'Percentage discount cannot exceed 100%' },
+      { status: 400 },
+    );
+  }
+  if (discountType === 'fixed' && !isNaN(discountValue) && discountValue > 500) {
+    return NextResponse.json(
+      { error: 'Fixed discount cannot exceed $500' },
+      { status: 400 },
+    );
+  }
+
   const { data: restaurant } = await supabase
     .from('restaurants')
     .select('owner_id')
