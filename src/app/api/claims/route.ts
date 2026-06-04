@@ -7,11 +7,9 @@ import type { CreateClaimBody } from '@/types/api';
 
 // ─── Generates a short, readable QR code like "RE-4A7X2B" ───
 function generateQrCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1 to avoid confusion
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1
   let code = 'RE-';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
 
@@ -49,10 +47,7 @@ export async function POST(request: NextRequest) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json(
-      { error: 'Please sign in to claim deals' },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: 'Please sign in to claim deals' }, { status: 401 });
   }
 
   let body: CreateClaimBody;
@@ -66,7 +61,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'deal_id is required' }, { status: 400 });
   }
 
-  // ── Fetch user's plan for limit checks ────────────────────────
+  // ── Fetch user's plan ─────────────────────────────────────
   const { data: userRow } = await supabase
     .from('users')
     .select('is_repeat_plus, repeat_plus_tier')
@@ -75,9 +70,9 @@ export async function POST(request: NextRequest) {
 
   const tier = userRow?.repeat_plus_tier ?? (userRow?.is_repeat_plus ? 'pro' : 'free');
 
-  // Daily limits: free=1, starter=3, pro=3
-  // Count only REDEEMED claims that have been counted against the limit.
-  // Pending claims (not yet scanned) do NOT consume the daily slot.
+  // ── Daily quota check ─────────────────────────────────────
+  // Only claims that have been redeemed (counted_against_limit = true) consume
+  // a quota slot. Pending QRs that were never scanned don't block the user.
   const dailyLimit = tier === 'free' ? 1 : 3;
   const today = new Date().toISOString().split('T')[0];
 
@@ -85,9 +80,8 @@ export async function POST(request: NextRequest) {
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .eq('status', 'redeemed')
     .eq('counted_against_limit', true)
-    .gte('redeemed_at', `${today}T00:00:00`);
+    .gte('claimed_at', `${today}T00:00:00`);
 
   if ((dailyCount ?? 0) >= dailyLimit) {
     return NextResponse.json({
@@ -97,7 +91,7 @@ export async function POST(request: NextRequest) {
     }, { status: 403 });
   }
 
-  // Monthly limits: free=3, starter=20, pro=30
+  // ── Monthly quota check ───────────────────────────────────
   const monthlyLimits: Record<string, number> = { free: 3, starter: 20, pro: 30 };
   const monthlyLimit = monthlyLimits[tier] ?? 3;
   const monthStart = new Date();
@@ -108,12 +102,13 @@ export async function POST(request: NextRequest) {
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .eq('status', 'redeemed')
     .eq('counted_against_limit', true)
-    .gte('redeemed_at', monthStart.toISOString());
+    .gte('claimed_at', monthStart.toISOString());
 
   if ((monthlyCount ?? 0) >= monthlyLimit) {
-    const upgradeMsg = tier === 'free' ? 'Upgrade to Starter or Pro for more!' : tier === 'starter' ? 'Upgrade to Pro for 30/month!' : 'Limit reached for this month.';
+    const upgradeMsg = tier === 'free'
+      ? 'Upgrade to Starter or Pro for more!'
+      : tier === 'starter' ? 'Upgrade to Pro for 30/month!' : 'Limit reached for this month.';
     return NextResponse.json({
       error: `Monthly limit reached (${monthlyLimit}/month). ${upgradeMsg}`,
       limitReached: true,
@@ -121,45 +116,31 @@ export async function POST(request: NextRequest) {
     }, { status: 403 });
   }
 
-  // ── Check for any existing active claim for this deal ─────────────
+  // ── Check for an existing active claim on this deal ───────
   const { data: existingClaim } = await supabase
     .from('claims')
     .select('id, status, expires_at, qr_code')
     .eq('deal_id', body.deal_id)
     .eq('user_id', user.id)
-    .not('status', 'in', '("reverted","expired")')
+    .eq('status', 'claimed')
+    .gt('expires_at', new Date().toISOString())
     .maybeSingle();
 
   if (existingClaim) {
-    // Redeemed deals cannot be claimed again
-    if (existingClaim.status === 'redeemed') {
-      return NextResponse.json(
-        { error: 'You already redeemed this deal' },
-        { status: 409 },
-      );
-    }
+    return NextResponse.json({ data: existingClaim, alreadyClaimed: true });
+  }
 
-    // Active 'pending' claim — check if it has expired
-    if (existingClaim.status === 'pending' || existingClaim.status === 'claimed') {
-      const isExpired = existingClaim.expires_at
-        ? new Date(existingClaim.expires_at) < new Date()
-        : false;
+  // Also block if already fully redeemed
+  const { data: redeemedClaim } = await supabase
+    .from('claims')
+    .select('id')
+    .eq('deal_id', body.deal_id)
+    .eq('user_id', user.id)
+    .eq('status', 'redeemed')
+    .maybeSingle();
 
-      if (isExpired) {
-        // Auto-expire it so the user can re-claim
-        await supabase
-          .from('claims')
-          .update({ status: 'expired' })
-          .eq('id', existingClaim.id);
-        // Fall through to create a new claim below
-      } else {
-        // Still active — return the existing QR code instead of erroring
-        return NextResponse.json({
-          data: existingClaim,
-          alreadyClaimed: true,
-        });
-      }
-    }
+  if (redeemedClaim) {
+    return NextResponse.json({ error: 'You already redeemed this deal' }, { status: 409 });
   }
 
   // ── Check deal availability ────────────────────────────────
@@ -172,11 +153,9 @@ export async function POST(request: NextRequest) {
   if (dealError || !deal) {
     return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
   }
-
   if (!deal.is_active) {
     return NextResponse.json({ error: 'Deal is no longer active' }, { status: 409 });
   }
-
   if (deal.max_claims !== null && deal.current_claims >= deal.max_claims) {
     return NextResponse.json({ error: 'Deal is fully claimed' }, { status: 409 });
   }
@@ -185,36 +164,34 @@ export async function POST(request: NextRequest) {
   let qr_code = generateQrCode();
   for (let attempt = 0; attempt < 3; attempt++) {
     const { data: collision } = await supabase
-      .from('claims')
-      .select('id')
-      .eq('qr_code', qr_code)
-      .maybeSingle();
+      .from('claims').select('id').eq('qr_code', qr_code).maybeSingle();
     if (!collision) break;
     qr_code = generateQrCode();
   }
 
-  // ── Insert the claim — status 'pending', expires 45 minutes from now ──
-  // counted_against_limit stays FALSE until the restaurant scans and redeems.
+  // ── Insert the claim ────────────────────────────────────────
+  // status = 'claimed' (active QR, timer running)
+  // counted_against_limit = false until the restaurant scans and redeems it
   const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
   const { data: claim, error: claimError } = await supabase
     .from('claims')
     .insert({
-      deal_id:                body.deal_id,
-      user_id:                user.id,
+      deal_id:               body.deal_id,
+      user_id:               user.id,
       qr_code,
-      status:                 'pending',
-      expires_at:             expiresAt,
-      counted_against_limit:  false,
+      status:                'claimed',
+      expires_at:            expiresAt,
+      counted_against_limit: false,
     })
     .select()
     .single();
 
   if (claimError) {
-    console.error('Claim insert error:', claimError);
+    console.error('Claim insert error:', JSON.stringify(claimError));
     return NextResponse.json({ error: claimError.message }, { status: 500 });
   }
 
-  // Increment deal's display claim counter (cosmetic — shows social proof)
+  // Increment deal display counter (cosmetic social proof)
   await supabase
     .from('deals')
     .update({ current_claims: deal.current_claims + 1 })

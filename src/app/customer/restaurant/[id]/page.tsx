@@ -167,8 +167,7 @@ export default function RestaurantDetailPage() {
         const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
           if (!c.deal_id) continue;
-          // 'pending' = new status; 'claimed' = legacy rows pre-migration
-          if (c.status === 'pending' || c.status === 'claimed' || c.status === 'redeemed') {
+          if (c.status === 'claimed' || c.status === 'redeemed') {
             map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
           }
         }
@@ -179,8 +178,7 @@ export default function RestaurantDetailPage() {
 
   const isActiveClaim = (dealId: string): boolean => {
     const c = userClaimMap[dealId];
-    // Accept both 'pending' (new) and 'claimed' (legacy rows pre-migration)
-    if (!c || (c.status !== 'pending' && c.status !== 'claimed')) return false;
+    if (!c || c.status !== 'claimed') return false;
     if (!c.expires_at) return true;
     return new Date(c.expires_at) > new Date();
   };
@@ -194,7 +192,7 @@ export default function RestaurantDetailPage() {
       const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
-        [activeDeal.id]: { qr_code: result.qr_code, status: 'pending', expires_at: expiresAt },
+        [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
     } else {

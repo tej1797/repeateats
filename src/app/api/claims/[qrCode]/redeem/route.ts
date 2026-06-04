@@ -109,9 +109,8 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     .from('claims')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', claim.user_id)
-    .eq('status', 'redeemed')
     .eq('counted_against_limit', true)
-    .gte('redeemed_at', `${today}T00:00:00`);
+    .gte('claimed_at', `${today}T00:00:00`);
 
   if ((todayRedeemed ?? 0) >= dailyLimit) {
     return NextResponse.json({

@@ -692,8 +692,7 @@ export default function CustomerPage() {
         const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
           if (!c.deal_id) continue;
-          // 'pending' = new status; 'claimed' = legacy status for backward compat
-          if (c.status === 'pending' || c.status === 'claimed' || c.status === 'redeemed') {
+          if (c.status === 'claimed' || c.status === 'redeemed') {
             map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
           }
         }
@@ -759,8 +758,7 @@ export default function CustomerPage() {
   // ── Claim status helpers ─────────────────────────────────────
   const isActiveClaim = (dealId: string): boolean => {
     const c = userClaimMap[dealId];
-    // Accept both 'pending' (new) and 'claimed' (legacy rows pre-migration)
-    if (!c || (c.status !== 'pending' && c.status !== 'claimed')) return false;
+    if (!c || c.status !== 'claimed') return false;
     if (!c.expires_at) return true;
     return new Date(c.expires_at) > new Date();
   };
@@ -964,11 +962,11 @@ export default function CustomerPage() {
       const expiresAt = new Date(Date.now() + 45 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
-        [activeDeal.id]: { qr_code: result.qr_code, status: 'pending', expires_at: expiresAt },
+        [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
-      // Do NOT call optimisticClaim() — pending claims don't consume a quota slot.
-      // The counter only increases when the restaurant scans and redeems the QR.
+      // Do NOT call optimisticClaim() — the quota counter only increases when
+      // the restaurant scans and redeems the QR (counted_against_limit = true).
       if ((result as { claim_id?: string }).claim_id) {
         setActiveClaimId((result as { claim_id?: string }).claim_id!);
       }
