@@ -33,7 +33,7 @@ import type { User } from '@supabase/supabase-js';
 type DayKey = 'today' | 'tomorrow' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type Tab    = DayKey | 'all';
 interface DayTabDef { key: DayKey; label: string; earlyAccess?: boolean }
-interface ClaimInfo { qr_code: string; status: string; expires_at: string | null }
+interface ClaimInfo { id: string; qr_code: string; status: string; expires_at: string | null }
 
 // ─── Day-tab utilities ────────────────────────────────────────────────────
 // DOW index matches JS Date.getDay() — 0 = Sunday
@@ -687,13 +687,13 @@ export default function CustomerPage() {
     if (!authChecked || !user) return;
     fetch('/api/claims')
       .then(r => r.json())
-      .then(({ data }: { data?: Array<{ deal_id: string; qr_code: string; status: string; expires_at: string | null; claimed_at: string }> }) => {
+      .then(({ data }: { data?: Array<{ id: string; deal_id: string; qr_code: string; status: string; expires_at: string | null; claimed_at: string }> }) => {
         if (!data) return;
         const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
           if (!c.deal_id) continue;
           if (c.status === 'claimed' || c.status === 'redeemed') {
-            map[c.deal_id] = { qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
+            map[c.deal_id] = { id: c.id, qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
           }
         }
         setUserClaimMap(map);
@@ -962,7 +962,7 @@ export default function CustomerPage() {
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
-        [activeDeal.id]: { qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
+        [activeDeal.id]: { id: result.claim_id ?? '', qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
       }));
       setQrCode(result.qr_code);
       // Do NOT call optimisticClaim() — the quota counter only increases when
@@ -1557,7 +1557,11 @@ export default function CustomerPage() {
           existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
           isRedeemed={isRedeemed(activeDeal.id)}
           dailyLimitReached={plan.dailyHit}
-          onViewExisting={code => setQrCode(code)}
+          onViewExisting={code => {
+            setQrCode(code);
+            const claimInfo = userClaimMap[activeDeal.id];
+            if (claimInfo?.id) setActiveClaimId(claimInfo.id);
+          }}
           onShare={() => handleShare(activeDeal)}
         />
       )}

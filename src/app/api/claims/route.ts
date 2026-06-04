@@ -5,23 +5,14 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { CreateClaimBody } from '@/types/api';
 
-// ─── Token generators ────────────────────────────────────────
-// Legacy short code for display (kept as qr_code column)
-function generateQrCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1
-  let code = 'RE-';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
-
-// Vanishing token: "RE-XXXX-YYYY" — rotated every 5 min by cron
-function generateQrToken(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// ─── Token generator — RE-XXXX-XXXX (always exactly 11 chars) ───
+function generateQRToken(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1/S/5
   let t = 'RE-';
   for (let i = 0; i < 4; i++) t += chars[Math.floor(Math.random() * chars.length)];
   t += '-';
   for (let i = 0; i < 4; i++) t += chars[Math.floor(Math.random() * chars.length)];
-  return t;
+  return t; // e.g. RE-AB3K-ZX9M
 }
 
 // ─── GET ─────────────────────────────────────────────────────
@@ -171,27 +162,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Deal is fully claimed' }, { status: 409 });
   }
 
-  // ── Generate unique QR code ─────────────────────────────────
-  let qr_code = generateQrCode();
+  // ── Generate unique token ──────────────────────────────────
+  // One token used for qr_code, qr_token_current, and display.
+  // Format: RE-XXXX-XXXX (always 11 chars — never a long dynamic token).
+  let token = generateQRToken();
   for (let attempt = 0; attempt < 3; attempt++) {
     const { data: collision } = await supabase
-      .from('claims').select('id').eq('qr_code', qr_code).maybeSingle();
+      .from('claims').select('id').eq('qr_code', token).maybeSingle();
     if (!collision) break;
-    qr_code = generateQrCode();
+    token = generateQRToken();
   }
 
   // ── Insert the claim ────────────────────────────────────────
-  // status = 'claimed' (active QR, timer running)
-  // expires 60 minutes from now
-  // qr_token_current starts equal to the token; rotated by cron every 5 min
-  const token     = generateQrToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const { data: claim, error: claimError } = await supabase
     .from('claims')
     .insert({
       deal_id:               body.deal_id,
       user_id:               user.id,
-      qr_code,
+      qr_code:               token,
       status:                'claimed',
       expires_at:            expiresAt,
       counted_against_limit: false,
