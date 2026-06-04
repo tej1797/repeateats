@@ -44,7 +44,16 @@
       "Bash(grep -n \"setUserClaimMap\\\\|ClaimResult\\\\|ClaimInfo\" /Users/tejas/Documents/repeateats/src/app/customer/restaurant/[id]/page.tsx)",
       "Bash(grep -n \"alreadyClaimed\\\\|existingQrCode\\\\|userClaimMap\" /Users/tejas/Documents/repeateats/src/app/customer/restaurant/[id]/page.tsx)",
       "mcp__claude_ai_Supabase__list_projects",
-      "mcp__claude_ai_Supabase__apply_migration"
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(vercel --version)",
+      "Bash(vercel link *)",
+      "Bash(vercel *)",
+      "Bash(grep -n \"discount_value\\\\|formatDiscount\\\\|\\\\$.*value\\\\|value.*\\\\$\" /Users/tejas/Documents/repeateats/src/app/restaurant/page.tsx)",
+      "Bash(grep -rn '\\\\$\\\\`\\\\|formatCurrency\\\\|discount_value.*\\\\$\\\\|\\\\$.*discount' /Users/tejas/Documents/repeateats/src/ --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -n \"discount_value\\\\|formatDiscount\\\\|\\\\`.*\\\\$\\\\|\\\\$.*value\\\\|discount.*format\" /Users/tejas/Documents/repeateats/src/app/restaurant/page.tsx)",
+      "Bash(grep -E \"format|\\\\\\\\\\\\$|template\")",
+      "Bash(grep -n \"discount_value\\\\|20\\\\$\\\\|\\\\\\\\\\\\$20\\\\|'\\\\d\\\\+\\\\$'\" /Users/tejas/Documents/repeateats/supabase/seed.sql)",
+      "mcp__claude_ai_Supabase__execute_sql"
     ]
   }
 }
