@@ -106,7 +106,9 @@ export type UpdateDealResponse = ApiResponse<Deal>;
 
 // ─── POST /api/claims ────────────────────────────────────────
 export interface CreateClaimBody {
-  deal_id: string;
+  deal_id:          string;
+  timer_starts_at?: string;
+  claim_for_date?:  string;
 }
 export type CreateClaimResponse = ApiResponse<Claim>;
 

@@ -84,7 +84,7 @@ function DailyLimitReached({ plan }: { plan: string }) {
 interface DealDetailModalProps {
   deal:               DealWithRestaurant;
   user:               User | null;
-  planTier?:          'free' | 'starter' | 'pro';
+  planTier?:          'free' | 'starter' | 'pro' | 'yearly';
   onClose:            () => void;
   onClaim:            () => void;
   claiming?:          boolean;
@@ -116,7 +116,7 @@ export default function DealDetailModal({
 
   const spotsLeft      = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
   const soldOut        = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
-  const canSeeSchedule = planTier === 'starter' || planTier === 'pro';
+  const canSeeSchedule = planTier === 'starter' || planTier === 'pro' || planTier === 'yearly';
   const progressPct    = deal.max_claims ? Math.min(100, (deal.current_claims / deal.max_claims) * 100) : 0;
 
   // Header image: deal photo → cuisine Unsplash fallback

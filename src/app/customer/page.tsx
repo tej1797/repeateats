@@ -14,7 +14,10 @@ import {
 } from '@tabler/icons-react';
 import { formatDiscountValue } from '@/lib/utils';
 import { DEAL_FILTERS, type DealFilterId } from '@/lib/constants';
+import { getBrowseDayTabs } from '@/lib/dealVisibility';
+import { CUSTOMER_UI } from '@/lib/customerUI';
 import { usePlan } from '@/hooks/usePlan';
+import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
@@ -32,7 +35,7 @@ import type { User } from '@supabase/supabase-js';
 // ─── Types ────────────────────────────────────────────────────────────────
 type DayKey = 'today' | 'tomorrow' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type Tab    = DayKey | 'all';
-interface DayTabDef { key: DayKey; label: string; earlyAccess?: boolean }
+interface DayTabDef { key: DayKey; label: string; earlyAccess?: boolean; locked?: boolean; claimable?: boolean }
 interface ClaimInfo { id: string; qr_code: string; status: string; expires_at: string | null }
 
 // ─── Day-tab utilities ────────────────────────────────────────────────────
@@ -60,25 +63,15 @@ function dealAvailableOnTab(deal: DealWithRestaurant, tabKey: string): boolean {
   return days.some(d => d.toLowerCase() === dow || d === capFirst(dow));
 }
 
-// Returns which tabs to render based on the user's plan tier
-function getVisibleTabs(tier: string): DayTabDef[] {
-  if (tier === 'free') return [{ key: 'today', label: 'Today' }];
-
-  if (tier === 'starter') return [
-    { key: 'today',    label: 'Today' },
-    { key: 'tomorrow', label: 'Tomorrow', earlyAccess: true },
-  ];
-
-  // Pro: today + next 6 days (full week view)
-  const tabs: DayTabDef[] = [{ key: 'today', label: 'Today' }];
-  const todayIdx = DOW_KEYS.indexOf(todayDow() as typeof DOW_KEYS[number]);
-  for (let i = 1; i <= 6; i++) {
-    const dow   = DOW_KEYS[(todayIdx + i) % 7] as DayKey;
-    const key   = i === 1 ? 'tomorrow' as DayKey : dow;
-    const label = i === 1 ? 'Tomorrow' : capFirst(dow);
-    tabs.push({ key, label, earlyAccess: true });
-  }
-  return tabs;
+// Returns 7-day browse tabs — everyone sees all days; claim gating is separate.
+function getVisibleTabs(tier: string, tomorrowUnlockActive = false): DayTabDef[] {
+  return getBrowseDayTabs(tier, tomorrowUnlockActive).map(t => ({
+    key:         t.key as DayKey,
+    label:       t.label,
+    earlyAccess: t.claimable && t.offset > 0,
+    locked:      t.locked,
+    claimable:   t.claimable,
+  }));
 }
 
 interface SearchResult {
@@ -144,35 +137,6 @@ const HERO_SLIDES = [
     gradient: 'linear-gradient(135deg, #065F46 0%, #064E3B 100%)',
   },
 ] as const;
-
-// ─── QuotaChip ────────────────────────────────────────────────────────────
-function QuotaChip({
-  used, limit, label, onClick,
-}: { used: number; limit: number; label: string; onClick?: () => void }) {
-  const isFull = used >= limit;
-  return (
-    <button
-      onClick={isFull ? onClick : undefined}
-      style={{
-        background:  isFull ? 'rgba(136,135,128,0.15)' : 'rgba(232,93,4,0.12)',
-        border:      `1px solid ${isFull ? '#888880' : '#E85D04'}`,
-        borderRadius: 20,
-        padding:     '4px 10px',
-        fontSize:    12,
-        fontWeight:  600,
-        color:       isFull ? '#88887A' : '#E85D04',
-        cursor:      isFull ? 'pointer' : 'default',
-        display:     'inline-flex',
-        alignItems:  'center',
-        gap:         4,
-        transition:  'opacity 0.15s',
-        lineHeight:  1,
-      }}
-    >
-      🎟️ {used}/{limit} {label}{isFull && <span style={{ fontSize: 13 }}>→</span>}
-    </button>
-  );
-}
 
 // ─── HeroBanner ───────────────────────────────────────────────────────────
 function HeroBanner() {
@@ -833,8 +797,10 @@ export default function CustomerPage() {
 
   // Visible tabs for the current plan (recalculates when plan tier loads)
   const visibleTabs = useMemo(
-    () => plan.loading ? [{ key: 'today' as DayKey, label: 'Today' }] : getVisibleTabs(plan.tier),
-    [plan.tier, plan.loading],
+    () => plan.loading
+      ? [{ key: 'today' as DayKey, label: 'Today', claimable: true }]
+      : getVisibleTabs(plan.tier, plan.tomorrow_unlock_active),
+    [plan.tier, plan.loading, plan.tomorrow_unlock_active],
   );
 
   // Client-side filter: expiry guard + day filter + search + discount-type filters
@@ -904,12 +870,12 @@ export default function CustomerPage() {
   // Deal counts per DOW — fetched once for WeekStrip (Pro) and Starter locked preview
   const [dealCountsByDay, setDealCountsByDay] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (plan.tier === 'free' || plan.loading) return;
+    if (plan.loading) return;
     fetch('/api/deals/counts-by-day?days=7')
       .then(r => r.json())
       .then((d: Record<string, number>) => setDealCountsByDay(d))
       .catch(() => {});
-  }, [plan.tier, plan.loading]);
+  }, [plan.loading]);
 
   // Total deal count across future days (days 2-6 for Starter locked preview)
   const futureDayCount = useMemo(() => {
@@ -954,8 +920,15 @@ export default function CustomerPage() {
   }, [dealsWithLive]);
 
   // ── Claim handler ────────────────────────────────────────────
+  const currentTabMeta = visibleTabs.find(t => t.key === tab);
+  const tabClaimLocked = currentTabMeta?.locked ?? false;
+
   const handleClaim = async () => {
     if (!activeDeal) return;
+    if (tabClaimLocked) {
+      setClaimError('Upgrade to RepEAT+ to claim deals on this day.');
+      return;
+    }
     setClaimError(null);
     const result = await claimDeal(activeDeal.id);
     if (result) {
@@ -1125,35 +1098,14 @@ export default function CustomerPage() {
               className={`relative px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all flex items-center gap-1.5 ${tab === t.key ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
             >
               {t.label}
-              {t.earlyAccess && (
-                <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(212,175,55,0.15)', color: '#B8971F' }}>
+              {t.locked && <IconCrown size={12} style={{ color: CUSTOMER_UI.gold, opacity: 0.7 }} />}
+              {!t.locked && t.earlyAccess && (
+                <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,191,0,0.15)', color: CUSTOMER_UI.gold }}>
                   Early
                 </span>
               )}
             </button>
           ))}
-
-          {/* Teaser: locked tabs for plans that don't have access yet */}
-          {plan.tier === 'free' && (
-            <Link
-              href="/repeat-plus"
-              className="px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] border-transparent text-t3 flex items-center gap-1.5 hover:text-t2 transition-colors"
-              title="Upgrade to see tomorrow's deals"
-            >
-              <IconCrown size={13} className="text-t3" />
-              Tomorrow
-            </Link>
-          )}
-          {plan.tier === 'starter' && (
-            <Link
-              href="/repeat-plus"
-              className="px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] border-transparent text-t3 flex items-center gap-1.5 hover:text-t2 transition-colors"
-              title="Upgrade to Pro for full week view"
-            >
-              <IconCrown size={13} className="text-t3" />
-              Mon–Sun
-            </Link>
-          )}
 
           {/* Divider + Restaurants tab (always visible) */}
           <div className="w-px bg-[var(--bd)] self-stretch my-1.5 mx-1 flex-shrink-0" />
@@ -1166,27 +1118,25 @@ export default function CustomerPage() {
         </div>
       </header>
 
-      {/* ── Quota chips ─────────────────────────────────────────────────── */}
+      {/* ── Compact 4-bar header grid ─────────────────────────────────── */}
       {user && !plan.loading && (
         <div className="border-b border-[var(--bd)] bg-surface2">
-          <div className="max-w-[1100px] mx-auto px-5 py-2 flex items-center gap-2 flex-wrap">
-            <QuotaChip
-              used={plan.daily_used}
-              limit={plan.daily_limit}
-              label="today"
-              onClick={() => router.push('/repeat-plus')}
+          <div className="max-w-[1100px] mx-auto px-5 py-2">
+            <DiscoverCompactHeader
+              city={city}
+              radiusKm={radius}
+              tier={plan.tier}
+              dailyUsed={plan.daily_used}
+              effectiveDailyCap={plan.effective_daily_cap}
+              pointsBalance={plan.points_balance}
+              dietFilter={dietFilter === 'veg' ? 'veg' : 'nonveg'}
+              onDietChange={(v) => setDietFilter(v === 'veg' ? 'veg' : 'all')}
+              activeClaimLabel={
+                Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length > 0
+                  ? `${Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length} active`
+                  : null
+              }
             />
-            <QuotaChip
-              used={plan.monthly_used}
-              limit={plan.monthly_limit}
-              label="this month"
-              onClick={() => router.push('/repeat-plus')}
-            />
-            {plan.tier !== 'free' && (
-              <span className="text-[10px] font-bold uppercase tracking-wide ml-0.5" style={{ color: plan.accent }}>
-                {plan.planLabel}
-              </span>
-            )}
           </div>
         </div>
       )}
@@ -1240,14 +1190,14 @@ export default function CustomerPage() {
           })}
         </div>
 
-        {/* Week calendar strip — Pro: full 7-day; Starter: today + tomorrow cells */}
-        {!plan.loading && plan.tier !== 'free' && !isSearching && (
+        {/* Week calendar strip — all tiers browse 7 days */}
+        {!plan.loading && !isSearching && (
           <div className="mb-4">
             <WeekStrip
               selectedDay={tab === 'all' ? 'today' : (tab as Parameters<typeof WeekStrip>[0]['selectedDay'])}
               onDaySelect={(day) => setTab(day)}
               dealCountsByDay={dealCountsByDay}
-              variant={plan.tier === 'pro' ? 'pro' : 'starter'}
+              variant={plan.tier === 'pro' || plan.tier === 'yearly' ? 'pro' : plan.tier === 'starter' ? 'starter' : 'pro'}
             />
           </div>
         )}

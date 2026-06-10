@@ -43,7 +43,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         <IconChevronDown
           size={18}
           className="flex-shrink-0 transition-transform duration-200"
-          style={{ color: '#D4AF37', transform: open ? 'rotate(180deg)' : 'none' }}
+          style={{ color: '#FFBF00', transform: open ? 'rotate(180deg)' : 'none' }}
         />
       </button>
       {open && (
@@ -121,7 +121,7 @@ export default function RepeatPlusPage() {
           Back to deals
         </Link>
         <Link href="/customer" className="font-display text-[20px] font-extrabold tracking-tight">
-          Rep<span style={{ color: '#E85D04' }}>EAT</span>
+          Rep<span style={{ color: '#FF6B00' }}>EAT</span>
         </Link>
         <div style={{ width: 100 }} />
       </nav>
@@ -154,7 +154,7 @@ export default function RepeatPlusPage() {
           ] as const).map(({ id, label }) => (
             <button key={id} onClick={() => setBilling(id)}
               className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all whitespace-nowrap"
-              style={billing === id ? { background: '#D4AF37', color: '#0A0A0A' } : { color: 'rgba(255,255,255,0.6)' }}
+              style={billing === id ? { background: '#FFBF00', color: '#0A0A0A' } : { color: 'rgba(255,255,255,0.6)' }}
             >{label}</button>
           ))}
         </div>
@@ -207,28 +207,28 @@ export default function RepeatPlusPage() {
 
           {/* Pro */}
           <div className="rounded-2xl p-6 relative overflow-hidden border flex flex-col"
-            style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0.04) 100%)', borderColor: '#D4AF37' }}>
+            style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0.04) 100%)', borderColor: '#FFBF00' }}>
             <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-              style={{ background: '#D4AF37', color: '#1a1100' }}>
+              style={{ background: '#FFBF00', color: '#1a1100' }}>
               {billing === 'yearly' ? 'Best value' : 'Most popular'}
             </div>
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#D4AF37' }}>Pro</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#FFBF00' }}>Pro</p>
             <div className="mb-0.5">
               <span className="font-display text-[36px] font-extrabold leading-none">{PRICES.pro[billing].amount}</span>
               <span className="text-[14px] ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>/mo</span>
             </div>
-            <p className="text-[12px] mb-5" style={{ color: '#D4AF37' }}>{PRICES.pro[billing].sub}</p>
+            <p className="text-[12px] mb-5" style={{ color: '#FFBF00' }}>{PRICES.pro[billing].sub}</p>
             <ul className="space-y-2 mb-6 flex-1">
               {['30 deals/month · 3 per day', 'Full 7-day week preview', 'Week calendar on Discover', 'RepEAT+ badge on profile', 'Advanced savings analytics', 'Birthday bonus deal', 'Priority notifications'].map(f => (
                 <li key={f} className="flex items-start gap-2 text-[13px]" style={{ color: 'rgba(255,255,255,0.9)' }}>
-                  <IconCheck size={13} style={{ color: '#D4AF37', flexShrink: 0, marginTop: 2 }} />{f}
+                  <IconCheck size={13} style={{ color: '#FFBF00', flexShrink: 0, marginTop: 2 }} />{f}
                 </li>
               ))}
             </ul>
             <button onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
               disabled={!!loading}
               className="w-full h-10 rounded-xl text-[14px] font-bold transition-all hover:opacity-90 disabled:opacity-60"
-              style={{ background: '#D4AF37', color: '#1a1100' }}>
+              style={{ background: '#FFBF00', color: '#1a1100' }}>
               {loading === PLAN_KEYS.pro[billing] ? 'Redirecting…' : 'Start 3-day free trial'}
             </button>
           </div>
@@ -260,11 +260,11 @@ export default function RepeatPlusPage() {
             {[
               { label: 'Today',  color: '#FF7A00', text: '#fff',    plans: 'All'     },
               { label: 'Tmrw',   color: '#378ADD', text: '#fff',    plans: 'Starter+'},
-              { label: 'Day 3',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
-              { label: 'Day 4',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
-              { label: 'Day 5',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
-              { label: 'Day 6',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
-              { label: 'Day 7',  color: '#D4AF37', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 3',  color: '#FFBF00', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 4',  color: '#FFBF00', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 5',  color: '#FFBF00', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 6',  color: '#FFBF00', text: '#1a1100', plans: 'Pro'     },
+              { label: 'Day 7',  color: '#FFBF00', text: '#1a1100', plans: 'Pro'     },
             ].map(({ label, color, text }) => (
               <div key={label} className="flex flex-col items-center gap-1.5 flex-1">
                 <div className="w-full h-9 rounded-lg flex items-center justify-center text-[11px] font-bold"
@@ -278,7 +278,7 @@ export default function RepeatPlusPage() {
             {[
               { color: '#FF7A00', label: 'All plans'  },
               { color: '#378ADD', label: 'Starter+'   },
-              { color: '#D4AF37', label: 'Pro only'   },
+              { color: '#FFBF00', label: 'Pro only'   },
             ].map(({ color, label }) => (
               <div key={label} className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
                 <div className="w-3 h-3 rounded-sm" style={{ background: color }} />
@@ -338,7 +338,7 @@ export default function RepeatPlusPage() {
               { num: '47',     label: 'Exclusive restaurant partners' },
             ].map(({ num, label }) => (
               <div key={label} className="text-center">
-                <p className="font-display text-[36px] font-extrabold" style={{ color: '#D4AF37' }}>{num}</p>
+                <p className="font-display text-[36px] font-extrabold" style={{ color: '#FFBF00' }}>{num}</p>
                 <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{label}</p>
               </div>
             ))}
@@ -364,7 +364,7 @@ export default function RepeatPlusPage() {
           onClick={() => handleSubscribe(PLAN_KEYS.pro[billing])}
           disabled={!!loading}
           className="h-14 px-10 rounded-2xl text-[16px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
-          style={{ background: '#D4AF37', color: '#0A0A0A' }}
+          style={{ background: '#FFBF00', color: '#0A0A0A' }}
         >
           {loading ? 'Redirecting…' : 'Start free trial — it\'s on us'}
         </button>

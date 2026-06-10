@@ -4,12 +4,21 @@ export const dynamic = 'force-dynamic';
 import Stripe from 'stripe';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveCheckoutPriceKey } from '@/lib/stripeTier';
 
-export async function POST(request: NextRequest) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-05-27.dahlia',
-  });
+async function resolveUser(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const jwt = authHeader.slice(7);
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    const { data: { user }, error } = await admin.auth.getUser(jwt);
+    if (!error && user) return { user, supabase: admin };
+  }
 
   const cookieStore = cookies();
   const supabase = createServerClient(
@@ -29,38 +38,50 @@ export async function POST(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
+  return { user, supabase };
+}
+
+export async function POST(request: NextRequest) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2026-05-27.dahlia',
+  });
+
+  const { user, supabase } = await resolveUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await request.json() as { plan?: string };
-  const plan = body.plan ?? 'monthly';
-
-  const priceMap: Record<string, string | undefined> = {
-    // Legacy single-tier keys (kept for backwards compat)
-    monthly:                 process.env.STRIPE_MONTHLY_PRICE_ID,
-    three_monthly:           process.env.STRIPE_THREE_MONTHLY_PRICE_ID,
-    yearly:                  process.env.STRIPE_YEARLY_PRICE_ID,
-    // Starter tier
-    starter_monthly:         process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
-    starter_three_monthly:   process.env.STRIPE_STARTER_THREE_MONTHLY_PRICE_ID,
-    starter_yearly:          process.env.STRIPE_STARTER_YEARLY_PRICE_ID,
-    // Pro tier
-    pro_monthly:             process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-    pro_three_monthly:       process.env.STRIPE_PRO_THREE_MONTHLY_PRICE_ID,
-    pro_yearly:              process.env.STRIPE_PRO_YEARLY_PRICE_ID,
+  const body = await request.json() as {
+    plan?: string;
+    billing_interval?: string;
+    success_url?: string;
+    cancel_url?: string;
+    user_id?: string;
   };
-  const priceId = priceMap[plan];
+
+  const priceKey = resolveCheckoutPriceKey(body);
+  const priceMap: Record<string, string | undefined> = {
+    monthly:               process.env.STRIPE_MONTHLY_PRICE_ID,
+    three_monthly:         process.env.STRIPE_THREE_MONTHLY_PRICE_ID,
+    yearly:                process.env.STRIPE_YEARLY_PRICE_ID,
+    starter_monthly:       process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+    starter_three_monthly: process.env.STRIPE_STARTER_THREE_MONTHLY_PRICE_ID,
+    starter_yearly:        process.env.STRIPE_STARTER_YEARLY_PRICE_ID,
+    pro_monthly:           process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+    pro_three_monthly:     process.env.STRIPE_PRO_THREE_MONTHLY_PRICE_ID,
+    pro_yearly:            process.env.STRIPE_PRO_YEARLY_PRICE_ID,
+  };
+
+  const priceId = priceKey ? priceMap[priceKey] : undefined;
 
   if (!priceId) {
     return NextResponse.json({ error: 'Invalid plan or Stripe price ID not configured' }, { status: 400 });
   }
 
-  // Get or create Stripe customer
   let stripeCustomerId: string;
   const { data: userData } = await supabase
     .from('users')
-    .select('stripe_customer_id')
+    .select('stripe_customer_id, repeat_plus_trial_used')
     .eq('id', user.id)
     .single();
 
@@ -78,37 +99,21 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id);
   }
 
-  // payment_method_types: ['card'] is the correct value for Stripe Hosted Checkout.
-  // 'apple_pay' and 'google_pay' are NOT valid enum values here — passing them causes
-  // a 400 API error. Apple Pay and Google Pay appear automatically inside the 'card'
-  // flow based on the user's device/browser:
-  //   • Safari / iOS / macOS  → Apple Pay button shown (requires domain registration)
-  //   • Chrome / Android      → Google Pay button shown
-  // Enable both in Stripe Dashboard → Settings → Payment methods.
-  // For Apple Pay: also register repeateats.ca under Settings → Apple Pay domains.
-  //
-  // The "billingAgreement is not a recognized parameter" warning is emitted by Stripe's
-  // hosted checkout page itself (inside their iframe). It is a Stripe-side deprecation
-  // in their Apple Pay recurring config — there is nothing to change in our code.
-  //
-  // Interac e-Transfer cannot be used here: Stripe only supports Interac for one-time
-  // payments, not recurring subscriptions. Card, Apple Pay, and Google Pay are the
-  // correct Canadian payment methods for this subscription flow.
-  //
-  // Appearance: Stripe Dashboard → Settings → Branding (background, button colour).
-  // Hosted Checkout does not accept client-side appearance options via API.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://repeateats.ca';
+  const successUrl = body.success_url ?? `${siteUrl}/repeat-plus/success?session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl  = body.cancel_url  ?? `${siteUrl}/repeat-plus`;
+
   const session = await stripe.checkout.sessions.create({
     customer:                   stripeCustomerId,
-    // Attach user IDs so /api/subscription/sync can locate the row without cookies
     client_reference_id:        user.id,
     metadata:                   { userId: user.id },
     mode:                       'subscription',
-    payment_method_types:       ['card'],   // Apple Pay + Google Pay included automatically
-    payment_method_collection:  'always',   // collect card before trial — charged when trial ends
+    payment_method_types:       ['card'],
+    payment_method_collection:  'always',
     line_items:                 [{ price: priceId, quantity: 1 }],
     subscription_data:          { trial_period_days: 3 },
-    success_url:                `${process.env.NEXT_PUBLIC_SITE_URL}/repeat-plus/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url:                 `${process.env.NEXT_PUBLIC_SITE_URL}/repeat-plus`,
+    success_url:                successUrl,
+    cancel_url:                 cancelUrl,
     allow_promotion_codes:      true,
     billing_address_collection: 'required',
   });

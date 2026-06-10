@@ -1,21 +1,11 @@
-// POST /api/claims  — claim a deal (auth required), returns QR code
+// POST /api/claims  — claim a deal via claim-deal edge function
 // GET  /api/claims  — list all claims for the logged-in user
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getAccessToken, invokeClaimDeal } from '@/lib/claimDeal';
 import type { CreateClaimBody } from '@/types/api';
 
-// ─── Token generator — RE-XXXX-XXXX (always exactly 11 chars) ───
-function generateQRToken(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/I/1/S/5
-  let t = 'RE-';
-  for (let i = 0; i < 4; i++) t += chars[Math.floor(Math.random() * chars.length)];
-  t += '-';
-  for (let i = 0; i < 4; i++) t += chars[Math.floor(Math.random() * chars.length)];
-  return t; // e.g. RE-AB3K-ZX9M
-}
-
-// ─── GET ─────────────────────────────────────────────────────
 export async function GET() {
   const supabase = createClient();
 
@@ -28,6 +18,7 @@ export async function GET() {
     .from('claims')
     .select(`
       id, qr_code, status, claimed_at, redeemed_at, expires_at, deal_id,
+      claim_for_date, timer_starts_at, window_minutes,
       deal:deals (
         title, emoji, discount_value, valid_until,
         restaurant:restaurants ( name, address )
@@ -43,7 +34,6 @@ export async function GET() {
   return NextResponse.json({ data });
 }
 
-// ─── POST ────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   const supabase = createClient();
 
@@ -52,7 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please sign in to claim deals' }, { status: 401 });
   }
 
-  let body: CreateClaimBody;
+  let body: CreateClaimBody & { timer_starts_at?: string; claim_for_date?: string };
   try {
     body = await request.json();
   } catch {
@@ -63,145 +53,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'deal_id is required' }, { status: 400 });
   }
 
-  // ── Fetch user's plan ─────────────────────────────────────
-  const { data: userRow } = await supabase
-    .from('users')
-    .select('is_repeat_plus, repeat_plus_tier')
-    .eq('id', user.id)
-    .maybeSingle();
+  const token = await getAccessToken(supabase);
+  if (!token) {
+    return NextResponse.json({ error: 'Session expired — please sign in again' }, { status: 401 });
+  }
 
-  const tier = userRow?.repeat_plus_tier ?? (userRow?.is_repeat_plus ? 'pro' : 'free');
+  const { data, error, status } = await invokeClaimDeal(token, {
+    action:          'claim',
+    deal_id:         body.deal_id,
+    timer_starts_at: body.timer_starts_at,
+    claim_for_date:  body.claim_for_date,
+  });
 
-  // ── Daily quota check ─────────────────────────────────────
-  // Only claims that have been redeemed (counted_against_limit = true) consume
-  // a quota slot. Pending QRs that were never scanned don't block the user.
-  const dailyLimit = tier === 'free' ? 1 : 3;
-  const today = new Date().toISOString().split('T')[0];
-
-  const { count: dailyCount } = await supabase
-    .from('claims')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('counted_against_limit', true)
-    .gte('claimed_at', `${today}T00:00:00`);
-
-  if ((dailyCount ?? 0) >= dailyLimit) {
+  if (error) {
+    const payload = data as Record<string, unknown> | undefined;
     return NextResponse.json({
-      error: `Daily limit reached (${dailyLimit}/day). ${tier === 'free' ? 'Upgrade to RepEAT+ for 3 deals/day!' : 'Come back tomorrow!'}`,
-      limitReached: true,
-      upgradeUrl: '/repeat-plus',
-    }, { status: 403 });
+      error,
+      limitReached: payload?.limitReached ?? payload?.limit_reached,
+      upgradeUrl:   '/repeat-plus',
+    }, { status: status >= 400 ? status : 400 });
   }
 
-  // ── Monthly quota check ───────────────────────────────────
-  const monthlyLimits: Record<string, number> = { free: 3, starter: 20, pro: 30 };
-  const monthlyLimit = monthlyLimits[tier] ?? 3;
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
+  const result = data as {
+    claim?: Record<string, unknown>;
+    reused?: boolean;
+    error?: string;
+  };
 
-  const { count: monthlyCount } = await supabase
-    .from('claims')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('counted_against_limit', true)
-    .gte('claimed_at', monthStart.toISOString());
-
-  if ((monthlyCount ?? 0) >= monthlyLimit) {
-    const upgradeMsg = tier === 'free'
-      ? 'Upgrade to Starter or Pro for more!'
-      : tier === 'starter' ? 'Upgrade to Pro for 30/month!' : 'Limit reached for this month.';
-    return NextResponse.json({
-      error: `Monthly limit reached (${monthlyLimit}/month). ${upgradeMsg}`,
-      limitReached: true,
-      upgradeUrl: '/repeat-plus',
-    }, { status: 403 });
+  if (result.error) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  // ── Check for an existing active claim on this deal ───────
-  const { data: existingClaim } = await supabase
-    .from('claims')
-    .select('id, status, expires_at, qr_code')
-    .eq('deal_id', body.deal_id)
-    .eq('user_id', user.id)
-    .eq('status', 'claimed')
-    .gt('expires_at', new Date().toISOString())
-    .maybeSingle();
-
-  if (existingClaim) {
-    return NextResponse.json({ data: existingClaim, alreadyClaimed: true });
+  const claim = result.claim;
+  if (!claim) {
+    return NextResponse.json({ error: 'No claim returned from server' }, { status: 500 });
   }
 
-  // Also block if already fully redeemed
-  const { data: redeemedClaim } = await supabase
-    .from('claims')
-    .select('id')
-    .eq('deal_id', body.deal_id)
-    .eq('user_id', user.id)
-    .eq('status', 'redeemed')
-    .maybeSingle();
-
-  if (redeemedClaim) {
-    return NextResponse.json({ error: 'You already redeemed this deal' }, { status: 409 });
+  if (result.reused) {
+    return NextResponse.json({ data: claim, alreadyClaimed: true });
   }
 
-  // ── Check deal availability ────────────────────────────────
-  const { data: deal, error: dealError } = await supabase
-    .from('deals')
-    .select('id, max_claims, current_claims, is_active')
-    .eq('id', body.deal_id)
-    .single();
-
-  if (dealError || !deal) {
-    return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
-  }
-  if (!deal.is_active) {
-    return NextResponse.json({ error: 'Deal is no longer active' }, { status: 409 });
-  }
-  if (deal.max_claims !== null && deal.current_claims >= deal.max_claims) {
-    return NextResponse.json({ error: 'Deal is fully claimed' }, { status: 409 });
-  }
-
-  // ── Generate unique token ──────────────────────────────────
-  // One token used for qr_code, qr_token_current, and display.
-  // Format: RE-XXXX-XXXX (always 11 chars — never a long dynamic token).
-  let token = generateQRToken();
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { data: collision } = await supabase
-      .from('claims').select('id').eq('qr_code', token).maybeSingle();
-    if (!collision) break;
-    token = generateQRToken();
-  }
-
-  // ── Insert the claim ────────────────────────────────────────
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  const { data: claim, error: claimError } = await supabase
-    .from('claims')
-    .insert({
-      deal_id:               body.deal_id,
-      user_id:               user.id,
-      qr_code:               token,
-      status:                'claimed',
-      expires_at:            expiresAt,
-      counted_against_limit: false,
-      reveals_used:          0,
-      last_revealed_at:      null,
-      qr_token_current:      token,
-      qr_token_previous:     null,
-    })
-    .select()
-    .single();
-
-  if (claimError) {
-    console.error('Claim insert error:', JSON.stringify(claimError));
-    return NextResponse.json({ error: claimError.message }, { status: 500 });
-  }
-
-  // Increment deal display counter (cosmetic social proof)
-  await supabase
-    .from('deals')
-    .update({ current_claims: deal.current_claims + 1 })
-    .eq('id', body.deal_id);
-
-  return NextResponse.json({ data: { ...claim, claim_id: claim.id } }, { status: 201 });
+  return NextResponse.json({
+    data: { ...claim, claim_id: claim.id },
+  }, { status: 201 });
 }

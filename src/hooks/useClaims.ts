@@ -21,7 +21,10 @@ export function useClaims(): UseClaimsResult {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  const claimDeal = async (dealId: string): Promise<ClaimResult | null> => {
+  const claimDeal = async (
+    dealId: string,
+    opts?: { claim_for_date?: string; timer_starts_at?: string },
+  ): Promise<ClaimResult | null> => {
     setLoading(true);
     setError(null);
 
@@ -29,7 +32,11 @@ export function useClaims(): UseClaimsResult {
       const res  = await fetch('/api/claims', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ deal_id: dealId }),
+        body:    JSON.stringify({
+          deal_id:         dealId,
+          claim_for_date:  opts?.claim_for_date,
+          timer_starts_at: opts?.timer_starts_at,
+        }),
       });
       const json = await res.json() as {
         data?: Claim & { qr_code: string; claim_id?: string };

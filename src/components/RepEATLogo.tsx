@@ -16,8 +16,8 @@ const FONT_SIZES: Record<Size, number> = { sm: 18, md: 24, lg: 32, xl: 48 }
 
 // Stroke colors match each portal's accent color so "Rep" is legible on white cards
 const STROKE_COLORS: Record<Portal, string> = {
-  customer:   '#E85D04',
-  restaurant: '#065F46',
+  customer:   '#FF6B00',
+  restaurant: '#1249A9',
   influencer: '#7E22CE',
   dark:       'transparent',
 }
@@ -50,7 +50,7 @@ export function RepEATLogo({ portal = 'dark', size = 'md', onClick, className }:
       }}>
         Rep
       </span>
-      <span style={{ color: '#E85D04' }}>EAT</span>
+      <span style={{ color: '#FF6B00' }}>EAT</span>
     </span>
   )
 }

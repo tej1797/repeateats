@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  IconTag, IconSearch, IconTicket, IconUser,
+  IconTag, IconTicket, IconUser,
   IconLayoutDashboard, IconStar, IconChartBar, IconSettings,
   IconUsers, IconMessage, IconCoin,
 } from '@tabler/icons-react';
@@ -20,8 +20,8 @@ interface NavItem {
 const NAV_ITEMS: Record<Portal, NavItem[]> = {
   customer: [
     { href: '/customer',                          icon: <IconTag size={22} />,    label: 'Deals' },
-    { href: '/customer?tab=coming',               icon: <IconSearch size={22} />, label: 'Coming' },
     { href: '/customer/profile?tab=claims',       icon: <IconTicket size={22} />, label: 'Claims' },
+    { href: '/customer/points',                   icon: <IconStar size={22} />,   label: 'Rewards' },
     { href: '/customer/profile',                  icon: <IconUser size={22} />,   label: 'Profile' },
   ],
   restaurant: [
@@ -39,8 +39,8 @@ const NAV_ITEMS: Record<Portal, NavItem[]> = {
 };
 
 const PORTAL_COLOR: Record<Portal, string> = {
-  customer:   '#E85D04',
-  restaurant: '#065F46',
+  customer:   '#FF6B00',
+  restaurant: '#1249A9',
   influencer: '#7E22CE',
 };
 

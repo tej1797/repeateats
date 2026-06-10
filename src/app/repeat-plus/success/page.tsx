@@ -11,7 +11,7 @@ export default function RepeatPlusSuccessPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0A0A' }}>
-        <div style={{ width: 44, height: 44, border: '3px solid rgba(212,175,55,0.2)', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ width: 44, height: 44, border: '3px solid rgba(212,175,55,0.2)', borderTopColor: '#FFBF00', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     }>
@@ -45,7 +45,7 @@ function RepeatPlusSuccess() {
       }
     `;
     document.head.appendChild(style);
-    const colors = ['#E85D04', '#D4AF37', '#FFD700', '#fff', '#065F46'];
+    const colors = ['#E85D04', '#FFBF00', '#FFD700', '#fff', '#065F46'];
     const pieces: HTMLElement[] = [];
     for (let i = 0; i < 80; i++) {
       const el = document.createElement('div');
@@ -124,7 +124,7 @@ function RepeatPlusSuccess() {
             <button
               onClick={() => { setSecs(5); void runSync(); }}
               className="h-12 px-8 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
-              style={{ background: '#D4AF37', color: '#1a1100' }}
+              style={{ background: '#FFBF00', color: '#1a1100' }}
             >
               Retry
             </button>
@@ -159,7 +159,7 @@ function RepeatPlusSuccess() {
           <Link
             href="/customer/profile"
             className="inline-flex items-center justify-center h-12 px-8 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
-            style={{ background: '#D4AF37', color: '#1a1100' }}
+            style={{ background: '#FFBF00', color: '#1a1100' }}
           >
             Go to my profile →
           </Link>
@@ -175,7 +175,7 @@ function RepeatPlusSuccess() {
         <div>
           <div style={{
             width: 44, height: 44, margin: '0 auto 16px',
-            border: '3px solid rgba(212,175,55,0.2)', borderTopColor: '#D4AF37',
+            border: '3px solid rgba(212,175,55,0.2)', borderTopColor: '#FFBF00',
             borderRadius: '50%', animation: 'spin 0.8s linear infinite',
           }} />
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -194,7 +194,7 @@ function RepeatPlusSuccess() {
         <div className="text-7xl mb-6 animate-bounce">👑</div>
 
         <h1 className="font-display text-[42px] font-extrabold text-white mb-3 leading-tight">
-          Welcome to Rep<span style={{ color: isProTier ? '#D4AF37' : '#3B82F6' }}>EAT+</span>
+          Welcome to Rep<span style={{ color: isProTier ? '#FFBF00' : '#3B82F6' }}>EAT+</span>
         </h1>
 
         <p className="text-[18px] font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.8)' }}>
@@ -211,7 +211,7 @@ function RepeatPlusSuccess() {
           style={{ background: isProTier ? 'rgba(212,175,55,0.15)' : 'rgba(59,130,246,0.15)', border: `1px solid ${isProTier ? 'rgba(212,175,55,0.4)' : 'rgba(59,130,246,0.4)'}` }}
         >
           <span style={{ fontSize: 14 }}>{isProTier ? '⭐' : '🚀'}</span>
-          <span className="text-[13px] font-bold" style={{ color: isProTier ? '#D4AF37' : '#60a5fa' }}>
+          <span className="text-[13px] font-bold" style={{ color: isProTier ? '#FFBF00' : '#60a5fa' }}>
             {isProTier ? 'Pro plan activated' : 'Starter plan activated'}
           </span>
         </div>
@@ -220,7 +220,7 @@ function RepeatPlusSuccess() {
           <Link
             href="/customer"
             className="inline-flex items-center justify-center h-12 px-8 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
-            style={{ background: isProTier ? '#D4AF37' : '#3B82F6', color: isProTier ? '#1a1100' : '#fff' }}
+            style={{ background: isProTier ? '#FFBF00' : '#3B82F6', color: isProTier ? '#1a1100' : '#fff' }}
           >
             Browse exclusive deals →
           </Link>

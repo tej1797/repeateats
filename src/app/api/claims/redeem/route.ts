@@ -1,18 +1,9 @@
 // POST /api/claims/redeem
-// Restaurant staff endpoint — uses admin client to bypass RLS so ownership
-// is verified in application code rather than relying on row-level policies.
+// Restaurant staff — proxies to claim-deal edge function for atomic redeem + points + metering.
 
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { getAccessToken, invokeClaimDeal } from '@/lib/claimDeal';
 import { NextRequest, NextResponse } from 'next/server';
-
-function getAdminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,118 +26,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const adminClient = getAdminClient();
-
-    // Verify the signed-in user owns a restaurant
-    const { data: restaurant } = await adminClient
-      .from('restaurants')
-      .select('id, name, owner_id')
-      .eq('owner_id', user.id)
-      .maybeSingle();
-
-    if (!restaurant) {
-      return NextResponse.json(
-        { error: 'No restaurant found for this account.' },
-        { status: 403 },
-      );
+    const token = await getAccessToken(supabase);
+    if (!token) {
+      return NextResponse.json({ error: 'Session expired' }, { status: 401 });
     }
 
-    // Find the claim by token — searches qr_token_current, qr_token_previous, qr_code
-    const { data: claims, error: rpcError } = await adminClient
-      .rpc('find_claim_by_token', { p_token: scannedToken });
+    const { data, error, status } = await invokeClaimDeal(token, {
+      action:  'redeem',
+      qr_code: scannedToken,
+    });
 
-    if (rpcError) {
-      console.error('RPC error:', rpcError);
-      return NextResponse.json(
-        { error: 'Database error: ' + rpcError.message },
-        { status: 500 },
-      );
+    if (error) {
+      const payload = data as Record<string, unknown> | undefined;
+      return NextResponse.json({
+        error,
+        error_type: payload?.error_type ?? payload?.errorType,
+        limitReached: payload?.limitReached,
+      }, { status: status >= 400 ? status : 400 });
     }
 
-    const claim = (claims as Array<{
-      id: string; status: string; expires_at: string; redeemed_at: string | null;
-      restaurant_id: string; restaurant_name: string; deal_title: string;
-      discount_value: string | null; discount_type: string | null; deal_category: string | null;
-    }> | null)?.[0];
+    const result = data as {
+      claim?: Record<string, unknown>;
+      success?: boolean;
+      message?: string;
+    };
 
-    if (!claim) {
-      return NextResponse.json(
-        { error: 'Invalid QR code. Ask the customer to show their QR again.', error_type: 'invalid' },
-        { status: 404 },
-      );
-    }
-
-    // Ownership check — this token belongs to a different restaurant
-    if (claim.restaurant_id !== restaurant.id) {
-      return NextResponse.json(
-        {
-          error: `This deal belongs to ${claim.restaurant_name}, not ${restaurant.name}.`,
-          error_type: 'wrong_restaurant',
-        },
-        { status: 403 },
-      );
-    }
-
-    if (claim.status === 'redeemed') {
-      const at = claim.redeemed_at
-        ? new Date(claim.redeemed_at).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })
-        : 'earlier';
-      return NextResponse.json(
-        { error: `Already redeemed at ${at}.`, error_type: 'already_redeemed' },
-        { status: 409 },
-      );
-    }
-
-    if (claim.status === 'expired' || new Date(claim.expires_at) < new Date()) {
-      await adminClient
-        .from('claims')
-        .update({ status: 'expired' })
-        .eq('id', claim.id);
-      return NextResponse.json(
-        { error: 'QR code has expired. Customer must claim again.', error_type: 'expired' },
-        { status: 410 },
-      );
-    }
-
-    if (claim.status !== 'claimed') {
-      return NextResponse.json(
-        { error: `Invalid claim status: ${claim.status}` },
-        { status: 400 },
-      );
-    }
-
-    const { data: redeemed, error: redeemError } = await adminClient
-      .from('claims')
-      .update({
-        status:                'redeemed',
-        redeemed_at:           new Date().toISOString(),
-        counted_against_limit: true,
-      })
-      .eq('id', claim.id)
-      .eq('status', 'claimed')
-      .select()
-      .single();
-
-    if (redeemError || !redeemed) {
-      console.error('Redeem update error:', redeemError);
-      return NextResponse.json(
-        { error: 'Failed to redeem. Please try again.' },
-        { status: 500 },
-      );
-    }
+    const claim = result.claim as Record<string, unknown> | undefined;
 
     return NextResponse.json({
-      success:  true,
-      message:  'Deal redeemed successfully!',
-      claim: {
-        id:              redeemed.id,
-        redeemed_at:     redeemed.redeemed_at,
+      success: true,
+      message: result.message ?? 'Deal redeemed successfully!',
+      claim:   claim ? {
+        id:              claim.id,
+        redeemed_at:     claim.redeemed_at,
         deal_title:      claim.deal_title,
         discount_value:  claim.discount_value,
         discount_type:   claim.discount_type,
-        deal_category:   claim.deal_category,
         restaurant_name: claim.restaurant_name,
-      },
+      } : undefined,
     });
 
   } catch (err: unknown) {

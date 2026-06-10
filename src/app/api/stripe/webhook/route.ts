@@ -1,27 +1,11 @@
 // POST /api/stripe/webhook — handle Stripe subscription lifecycle events
-// This is the reliable fallback sync: runs server-side regardless of whether
-// the browser reaches the success page. Register this URL in Stripe Dashboard →
-// Developers → Webhooks → Add endpoint: https://repeateats.ca/api/stripe/webhook
-// Events to listen for: checkout.session.completed, customer.subscription.updated,
-// customer.subscription.deleted, invoice.payment_failed
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs'; // required for request.text()
+export const runtime = 'nodejs';
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-
-const STARTER_PRICE_IDS = new Set(
-  [
-    process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
-    process.env.STRIPE_STARTER_THREE_MONTHLY_PRICE_ID,
-    process.env.STRIPE_STARTER_YEARLY_PRICE_ID,
-  ].filter(Boolean),
-);
-
-function resolveTier(priceId: string): 'starter' | 'pro' {
-  return STARTER_PRICE_IDS.has(priceId) ? 'starter' : 'pro';
-}
+import { resolveBillingPlan, resolveStripeTier } from '@/lib/stripeTier';
 
 export async function POST(request: NextRequest) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -57,26 +41,30 @@ export async function POST(request: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sub          = subscription as unknown as Record<string, any>;
       const priceId      = subscription.items.data[0].price.id;
-      const tier         = resolveTier(priceId);
-      // Billing-cycle label kept for backwards compat
-      const billingCycle = priceId === process.env.STRIPE_YEARLY_PRICE_ID
-        ? 'yearly'
-        : (priceId === process.env.STRIPE_THREE_MONTHLY_PRICE_ID ||
-           priceId === process.env.STRIPE_STARTER_THREE_MONTHLY_PRICE_ID ||
-           priceId === process.env.STRIPE_PRO_THREE_MONTHLY_PRICE_ID)
-        ? 'three_monthly'
-        : 'monthly';
-      const periodEnd = sub.current_period_end as number | undefined;
+      const tier         = resolveStripeTier(priceId);
+      const billingCycle = resolveBillingPlan(priceId);
+      const periodEnd    = sub.current_period_end as number | undefined;
 
-      const { error: wErr } = await supabase.from('users').update({
+      const userId =
+        (session.metadata?.userId as string | undefined) ??
+        session.client_reference_id ??
+        null;
+
+      const updatePayload: Record<string, unknown> = {
         is_repeat_plus:         true,
         repeat_plus_tier:       tier,
-        stripe_subscription_id: subscriptionId,
         repeat_plus_plan:       billingCycle,
+        stripe_customer_id:     customerId,
+        stripe_subscription_id: subscriptionId,
         repeat_plus_since:      new Date().toISOString(),
         repeat_plus_expires_at: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-      }).eq('stripe_customer_id', customerId);
+      };
 
+      const query = userId
+        ? supabase.from('users').update(updatePayload).eq('id', userId)
+        : supabase.from('users').update(updatePayload).eq('stripe_customer_id', customerId);
+
+      const { error: wErr } = await query;
       if (wErr) console.error('[webhook] checkout.session.completed DB error:', JSON.stringify(wErr));
       break;
     }
@@ -90,7 +78,7 @@ export async function POST(request: NextRequest) {
       const sub          = subscription as unknown as Record<string, any>;
       const periodEnd    = sub.current_period_end as number | undefined;
       const priceId      = subscription.items.data[0]?.price?.id ?? '';
-      const tier         = resolveTier(priceId);
+      const tier         = resolveStripeTier(priceId);
 
       const { error: wErr } = await supabase.from('users').update({
         is_repeat_plus:         isActive,
