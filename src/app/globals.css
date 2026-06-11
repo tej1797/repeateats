@@ -103,6 +103,49 @@ input, select, textarea {
   display: none;
 }
 
+/* ─── Customer portal (mobile Blinkit parity) ───────────────────────────── */
+.customer-portal {
+  --br: #FF6B00;
+  --br2: #FF8534;
+  --blt: rgba(255, 107, 0, 0.16);
+  --bdk: #CC5500;
+  --bg: #0C0A09;
+  --sf: #141210;
+  --sf2: #1C1A18;
+  --bd: rgba(255, 255, 255, 0.08);
+  --bd2: rgba(255, 255, 255, 0.14);
+  --tx: #FAFAF9;
+  --t2: #A8A29E;
+  --t3: #78716C;
+  --customer-gold: #FFBF00;
+  --customer-glass-bg: rgba(28, 26, 24, 0.55);
+  --customer-glass-border: rgba(255, 255, 255, 0.14);
+  --sh: 0 4px 24px rgba(0, 0, 0, 0.45);
+  --sh2: 0 8px 40px rgba(0, 0, 0, 0.55);
+  background: var(--bg);
+  color: var(--tx);
+}
+
+.customer-portal .glass-bar {
+  background: var(--customer-glass-bg);
+  border: 1px solid var(--customer-glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.customer-portal .glass-panel {
+  background: var(--customer-glass-bg);
+  border: 1px solid var(--customer-glass-border);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@keyframes customerGlow {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%       { opacity: 0.55; transform: scale(1.05); }
+}
+
 /* ─── Landing page animations ─────────────────────────────────────────────── */
 @keyframes orbDrift1 {
   0%, 100% { transform: translate(0, 0) scale(1); }

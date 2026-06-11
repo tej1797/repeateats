@@ -12,21 +12,21 @@ import {
   IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
   IconHeart, IconClock,
 } from '@tabler/icons-react';
-import { formatDiscountValue } from '@/lib/utils';
 import { DEAL_FILTERS, type DealFilterId } from '@/lib/constants';
 import { getBrowseDayTabs } from '@/lib/dealVisibility';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { usePlan } from '@/hooks/usePlan';
+import AmbientBackground from '@/components/customer/AmbientBackground';
 import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
+import DayTabStrip from '@/components/customer/DayTabStrip';
+import CuisineCarousel from '@/components/customer/CuisineCarousel';
+import DiscoverDealCard from '@/components/customer/DiscoverDealCard';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
-import SharedDealCard from '@/components/deals/DealCard';
-import CuisinePills from '@/components/deals/CuisinePills';
 import DealDetailModal from '@/components/deals/DealDetailModal';
 import QRCodeModal from '@/components/deals/QRCodeModal';
-import WeekStrip from '@/components/deals/WeekStrip';
 import Skeleton from '@/components/ui/Skeleton';
 import MobileNav from '@/components/layout/MobileNav';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
@@ -115,125 +115,6 @@ const CATEGORY_IMAGES: Record<string, string> = {
   seafood:   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&q=80',
   default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
 };
-
-// Hero slides (module-level so HeroBanner's useEffect dep array is empty)
-const HERO_SLIDES = [
-  {
-    emoji:    '🔥',
-    title:    '12 new deals this week',
-    sub:      'Fresh local restaurant deals, updated every Monday',
-    gradient: 'linear-gradient(135deg, #E85D04 0%, #A03C01 100%)',
-  },
-  {
-    emoji:    '💰',
-    title:    'Save up to 50% at local spots',
-    sub:      'Exclusive discounts from Ontario restaurants',
-    gradient: 'linear-gradient(135deg, #7E22CE 0%, #4C1D95 100%)',
-  },
-  {
-    emoji:    '⭐',
-    title:    'RepEAT+ — exclusive deals from $4.99/mo',
-    sub:      'Early access, bonus deals, and priority claims',
-    gradient: 'linear-gradient(135deg, #065F46 0%, #064E3B 100%)',
-  },
-] as const;
-
-// ─── HeroBanner ───────────────────────────────────────────────────────────
-function HeroBanner() {
-  const [slide, setSlide] = useState(0);
-  const touchStartX = useRef(0);
-
-  useEffect(() => {
-    const t = setInterval(() => setSlide(s => (s + 1) % HERO_SLIDES.length), 4500);
-    return () => clearInterval(t);
-  }, []);
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-brand mb-5 h-[120px] md:h-[160px] select-none"
-      onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
-      onTouchEnd={e => {
-        const dx = touchStartX.current - e.changedTouches[0].clientX;
-        if (dx > 40)       setSlide(s => (s + 1) % HERO_SLIDES.length);
-        else if (dx < -40) setSlide(s => (s - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
-      }}
-    >
-      {HERO_SLIDES.map((s, i) => (
-        <div
-          key={i}
-          className="absolute inset-0 flex items-center px-6 md:px-10 transition-opacity duration-500"
-          style={{ background: s.gradient, opacity: i === slide ? 1 : 0, pointerEvents: i === slide ? 'auto' : 'none' }}
-        >
-          {/* Decorative circles */}
-          <div className="absolute right-[-20px] top-[-20px] w-[160px] h-[160px] rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute right-[60px] bottom-[-40px] w-[120px] h-[120px] rounded-full bg-white/5 pointer-events-none" />
-
-          <div className="text-white relative z-10">
-            <div className="text-[28px] md:text-[36px] mb-1">{s.emoji}</div>
-            <div className="font-display text-[18px] md:text-[24px] font-bold leading-tight">{s.title}</div>
-            <div className="text-[12px] md:text-[14px] opacity-85 mt-1">{s.sub}</div>
-          </div>
-        </div>
-      ))}
-
-      {/* Dot indicators */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-        {HERO_SLIDES.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setSlide(i)}
-            className={`rounded-full bg-white transition-all duration-300 ${i === slide ? 'w-5 h-2 opacity-100' : 'w-2 h-2 opacity-50'}`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
-        ))}
-      </div>
-
-      {/* Counter */}
-      <span className="absolute top-3 right-4 text-[11px] text-white/60 font-mono z-10">
-        {slide + 1}/{HERO_SLIDES.length}
-      </span>
-    </div>
-  );
-}
-
-// ─── TrendingCard — wider image-heavy card for the Trending row ───────────
-function TrendingCard({ deal, onClick }: { deal: DealWithRestaurant; onClick: () => void }) {
-  const category = deal.restaurant?.category ?? 'default';
-  const img = CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.default;
-
-  return (
-    <button
-      onClick={onClick}
-      className="flex-shrink-0 w-[200px] rounded-brand overflow-hidden shadow-brand border border-[var(--bd)] hover:-translate-y-1 hover:shadow-brand2 transition-all duration-150 text-left cursor-pointer"
-    >
-      <div className="relative h-[130px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={img} alt="" className="w-full h-full object-cover" loading="lazy" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
-
-        {/* Emoji top-right */}
-        <span className="absolute top-2 right-2 text-[22px] drop-shadow-md">{deal.emoji ?? '🍽️'}</span>
-
-        {/* Claim count social proof */}
-        {deal.current_claims > 0 && (
-          <span className="absolute top-2 left-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
-            🔥 {deal.current_claims} claimed
-          </span>
-        )}
-
-        {/* Discount value */}
-        <span className="absolute bottom-2 left-2.5 font-display text-[18px] font-extrabold text-white drop-shadow">
-          {formatDiscountValue(deal.discount_value)}
-        </span>
-      </div>
-
-      <div className="bg-surface p-2.5">
-        <p className="font-bold text-[13px] text-tx line-clamp-1">{deal.title}</p>
-        <p className="text-[11px] text-t2 mt-0.5 truncate">{deal.restaurant?.name}</p>
-      </div>
-    </button>
-  );
-}
 
 // ─── RestaurantScrollCard — for the Featured Restaurants row ──────────────
 // Image priority: stored cover_url → proxy (Google Places) → cuisine Unsplash fallback
@@ -404,10 +285,6 @@ function RestaurantCard({ r }: { r: Restaurant }) {
   );
 }
 
-// ─── DealCard thin wrapper ────────────────────────────────────────────────
-function DealCard({ deal, onClick, claimed }: { deal: DealWithRestaurant; onClick: () => void; claimed?: boolean }) {
-  return <SharedDealCard deal={deal} onClick={onClick} claimed={claimed} />;
-}
 
 // ─── Overlay (shared by location + sign-in modals) ───────────────────────
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -972,30 +849,49 @@ export default function CustomerPage() {
   );
 
   // Blank screen while auth check runs
-  if (!authChecked) return <div className="min-h-screen bg-[var(--bg)]" />;
+  if (!authChecked) return <div className="min-h-screen" style={{ background: CUSTOMER_UI.bg }} />;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
+    <div className="min-h-screen relative" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
+      <AmbientBackground />
 
-      {/* ── Sticky header ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-surface border-b border-[var(--bd)] shadow-sm">
-        <div className="max-w-[1100px] mx-auto px-5 h-16 flex items-center gap-3">
+      {/* ── Sticky discover header (mobile parity) ─────────────────── */}
+      <header className="sticky top-0 z-40 glass-bar border-b-0" style={{ borderBottom: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+        <div className="max-w-[1100px] mx-auto px-4 pt-3 pb-2 space-y-3">
 
-          {/* Logo */}
-          <Link href="/customer" className="font-display text-[22px] font-extrabold tracking-tight leading-none flex-shrink-0">
-            Rep<span className="text-brand">EAT</span>
-          </Link>
+          {!plan.loading && (
+            <DiscoverCompactHeader
+              city={city}
+              radiusKm={radius}
+              tier={plan.tier}
+              dailyUsed={plan.daily_used}
+              effectiveDailyCap={plan.effective_daily_cap}
+              pointsBalance={plan.points_balance}
+              dietFilter={dietFilter === 'veg' ? 'veg' : 'nonveg'}
+              onDietChange={(v) => setDietFilter(v === 'veg' ? 'veg' : 'all')}
+              activeClaimLabel={
+                Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length > 0
+                  ? `${Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length} active`
+                  : null
+              }
+            />
+          )}
 
-          {/* Search + dropdown */}
-          <div className="relative flex-1 max-w-[520px]" ref={searchContainerRef}>
-            <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3 pointer-events-none z-10" />
+          {/* Search */}
+          <div className="relative" ref={searchContainerRef}>
+            <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10" style={{ color: CUSTOMER_UI.textMuted }} />
             <input
               type="text"
               value={search}
               onChange={e => { setSearch(e.target.value); setSearchFocused(true); }}
               onFocus={() => setSearchFocused(true)}
               placeholder="Search restaurants, deals, cuisines…"
-              className="w-full h-11 pl-10 pr-9 border border-[var(--bd2)] rounded-full bg-surface2 text-tx text-[14px] outline-none focus:bg-surface focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-t3"
+              className="w-full h-9 pl-9 pr-9 rounded-xl text-[13px] outline-none transition-all placeholder:opacity-60"
+              style={{
+                background: CUSTOMER_UI.glassBg,
+                border: `1px solid ${CUSTOMER_UI.glassBorder}`,
+                color: CUSTOMER_UI.textPrimary,
+              }}
             />
             {search && (
               <button onClick={() => { setSearch(''); setSearchFocused(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10 transition-colors">
@@ -1005,7 +901,7 @@ export default function CustomerPage() {
 
             {/* Search suggestions dropdown */}
             {hasSearchDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 bg-surface border border-[var(--bd2)] rounded-brand shadow-brand2 z-50 overflow-hidden max-h-[380px] overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1.5 rounded-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto glass-panel shadow-2xl">
                 {searchResults.restaurants.length > 0 && (
                   <>
                     <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🍽️ Restaurants</p>
@@ -1057,100 +953,57 @@ export default function CustomerPage() {
             )}
           </div>
 
-          {/* Location pill */}
-          <button
-            onClick={() => setShowLocation(true)}
-            className="flex items-center gap-1.5 bg-brandlt border-[1.5px] border-brand rounded-full px-3.5 py-2 text-[13px] font-bold text-brand hover:bg-brand hover:text-white transition-all flex-shrink-0 whitespace-nowrap"
-          >
-            <IconMapPin size={14} />
-            <span className="hidden sm:inline">{city} · {radius} km</span>
-            <span className="sm:hidden">{radius} km</span>
-          </button>
-
-          {/* Avatar */}
-          {user ? (
-            <button onClick={() => setShowDrawer(true)} className="relative flex-shrink-0 hover:opacity-90 transition-opacity" title="Open profile">
-              {user.user_metadata?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.user_metadata.avatar_url as string} alt="Profile" className="w-9 h-9 rounded-full object-cover border-2 border-[var(--bd)]" />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-brand flex items-center justify-center">
-                  <span className="text-white font-bold text-[14px]">
-                    {((user.user_metadata?.full_name ?? user.email ?? 'U') as string).charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-            </button>
-          ) : (
-            <button onClick={() => setShowSignIn(true)} className="w-9 h-9 rounded-full bg-brandlt flex items-center justify-center flex-shrink-0 hover:bg-brand/20 transition-colors" title="Sign in">
-              <IconUser size={16} className="text-brand" />
-            </button>
-          )}
-        </div>
-
-        {/* ── Day-based tab switcher ─────────────────────────────────── */}
-        <div className="max-w-[1100px] mx-auto px-5 border-t border-[var(--bd)] flex overflow-x-auto scrollbar-none gap-0">
-          {/* Plan-gated day tabs */}
-          {visibleTabs.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`relative px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all flex items-center gap-1.5 ${tab === t.key ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
-            >
-              {t.label}
-              {t.locked && <IconCrown size={12} style={{ color: CUSTOMER_UI.gold, opacity: 0.7 }} />}
-              {!t.locked && t.earlyAccess && (
-                <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,191,0,0.15)', color: CUSTOMER_UI.gold }}>
-                  Early
-                </span>
-              )}
-            </button>
-          ))}
-
-          {/* Divider + Restaurants tab (always visible) */}
-          <div className="w-px bg-[var(--bd)] self-stretch my-1.5 mx-1 flex-shrink-0" />
-          <button
-            onClick={() => setTab('all')}
-            className={`px-4 py-2.5 text-[14px] font-semibold whitespace-nowrap border-b-[2.5px] transition-all ${tab === 'all' ? 'text-brand border-brand' : 'text-t2 border-transparent hover:text-tx'}`}
-          >
-            🏪 Restaurants
-          </button>
-        </div>
-      </header>
-
-      {/* ── Compact 4-bar header grid ─────────────────────────────────── */}
-      {user && !plan.loading && (
-        <div className="border-b border-[var(--bd)] bg-surface2">
-          <div className="max-w-[1100px] mx-auto px-5 py-2">
-            <DiscoverCompactHeader
-              city={city}
-              radiusKm={radius}
-              tier={plan.tier}
-              dailyUsed={plan.daily_used}
-              effectiveDailyCap={plan.effective_daily_cap}
-              pointsBalance={plan.points_balance}
-              dietFilter={dietFilter === 'veg' ? 'veg' : 'nonveg'}
-              onDietChange={(v) => setDietFilter(v === 'veg' ? 'veg' : 'all')}
-              activeClaimLabel={
-                Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length > 0
-                  ? `${Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length} active`
-                  : null
-              }
+          {/* 7-day browse tabs */}
+          {!plan.loading && (
+            <DayTabStrip
+              tabs={visibleTabs}
+              activeKey={tab === 'all' ? '' : tab}
+              onSelect={(key) => setTab(key as Tab)}
+              restaurantsActive={tab === 'all'}
+              onRestaurants={() => setTab('all')}
             />
+          )}
+
+          <div className="flex items-center justify-end gap-2 pb-1">
+            <button
+              type="button"
+              onClick={() => setShowLocation(true)}
+              className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full"
+              style={{ background: CUSTOMER_UI.accentSoft, color: CUSTOMER_UI.accent }}
+            >
+              <IconMapPin size={12} />
+              Change location
+            </button>
+            {user ? (
+              <button type="button" onClick={() => setShowDrawer(true)} className="w-8 h-8 rounded-full overflow-hidden border" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
+                {user.user_metadata?.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.user_metadata.avatar_url as string} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[12px] font-bold" style={{ background: CUSTOMER_UI.accent, color: '#fff' }}>
+                    {((user.user_metadata?.full_name ?? user.email ?? 'U') as string).charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </button>
+            ) : (
+              <button type="button" onClick={() => setShowSignIn(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+                <IconUser size={14} style={{ color: CUSTOMER_UI.accent }} />
+              </button>
+            )}
           </div>
         </div>
-      )}
+      </header>
 
       {/* ── Active claims banner ───────────────────────────────────── */}
       {(() => {
         const activeCount = Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length;
         if (claimsBannerDismissed || activeCount === 0) return null;
         return (
-          <div className="bg-brand/10 border-b border-brand/20">
-            <div className="max-w-[1100px] mx-auto px-5 py-2.5 flex items-center gap-3">
-              <IconClock size={15} className="text-brand flex-shrink-0" />
-              <p className="text-[13px] font-semibold text-tx flex-1">
-                You have <span className="text-brand">{activeCount} active claim{activeCount !== 1 ? 's' : ''}</span>
+          <div style={{ background: CUSTOMER_UI.accentSoft, borderBottom: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+            <div className="max-w-[1100px] mx-auto px-4 py-2.5 flex items-center gap-3">
+              <IconClock size={15} className="flex-shrink-0" style={{ color: CUSTOMER_UI.accent }} />
+              <p className="text-[13px] font-semibold flex-1" style={{ color: CUSTOMER_UI.textPrimary }}>
+                You have <span style={{ color: CUSTOMER_UI.accent }}>{activeCount} active claim{activeCount !== 1 ? 's' : ''}</span>
                 {' '}— remember to redeem before they expire!{' '}
                 <Link href="/customer/profile?tab=claims" className="underline text-brand hover:text-brand2">View QR codes →</Link>
               </p>
@@ -1163,61 +1016,37 @@ export default function CustomerPage() {
       })()}
 
       {/* ── Main content ───────────────────────────────────────────── */}
-      <main className="max-w-[1100px] mx-auto px-5 py-5 pb-28">
+      <main className="max-w-[1100px] mx-auto px-4 py-4 pb-28">
 
-        {/* Section 2 — Hero Banner (today tab only) */}
-        {tab === 'today' && !isSearching && <HeroBanner />}
-
-        {/* Section 2b — Diet preference toggle */}
-        <div className="flex items-center gap-2 mb-4">
-          {([
-            { id: 'veg',    label: 'Veg',     dot: '#16a34a' },
-            { id: 'egg',    label: 'Egg',     dot: '#ca8a04' },
-            { id: 'nonveg', label: 'Non-Veg', dot: '#dc2626' },
-          ] as const).map(({ id, label, dot }) => {
-            const active = dietFilter === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setDietFilter(active ? 'all' : id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold border transition-all ${active ? 'text-tx border-transparent shadow-sm' : 'text-t2 border-[var(--bd2)] hover:border-t2'}`}
-                style={active ? { background: `${dot}18`, borderColor: dot } : {}}
-              >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dot }} />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Week calendar strip — all tiers browse 7 days */}
-        {!plan.loading && !isSearching && (
-          <div className="mb-4">
-            <WeekStrip
-              selectedDay={tab === 'all' ? 'today' : (tab as Parameters<typeof WeekStrip>[0]['selectedDay'])}
-              onDaySelect={(day) => setTab(day)}
-              dealCountsByDay={dealCountsByDay}
-              variant={plan.tier === 'pro' || plan.tier === 'yearly' ? 'pro' : plan.tier === 'starter' ? 'starter' : 'pro'}
-            />
-          </div>
+        {/* Cuisine carousel */}
+        {tab !== 'all' && !isSearching && (
+          <CuisineCarousel selected={category} onChange={setCategory} className="mb-4" />
         )}
 
-        {/* Section 3 — Cuisine Pills */}
-        <CuisinePills selected={category} onChange={setCategory} className="mb-5" />
-
-        {/* Section 4 — Deal type filter chips (horizontally scrollable) */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-5 -mx-5 px-5">
-          {DEAL_FILTERS.map(({ id, label, icon }) => (
-            <button
-              key={id}
-              onClick={() => setDealType(id)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[13px] font-semibold border-[1.5px] transition-all whitespace-nowrap flex-shrink-0 ${dealType === id ? 'bg-brand text-white border-brand' : 'bg-surface text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
-            >
-              {icon && <span className="text-[14px] leading-none">{icon}</span>}
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Deal type filter pills */}
+        {tab !== 'all' && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-4">
+            {DEAL_FILTERS.map(({ id, label, icon }) => {
+              const active = dealType === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setDealType(id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap flex-shrink-0 transition-all"
+                  style={
+                    active
+                      ? { background: CUSTOMER_UI.accent, color: '#fff' }
+                      : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }
+                  }
+                >
+                  {icon && <span className="text-[13px] leading-none">{icon}</span>}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Results header */}
         <div className="flex justify-between items-center mb-4">
@@ -1254,10 +1083,12 @@ export default function CustomerPage() {
                     >
                       <IconHeart size={14} className="text-red-500 fill-red-500" />
                     </button>
-                    <DealCard
+                    <DiscoverDealCard
                       deal={deal}
                       onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                       claimed={isActiveClaim(deal.id)}
+                      saved={favorites.has(deal.id)}
+                      onToggleSave={() => toggleFavorite(deal.id)}
                     />
                   </div>
                 ))}
@@ -1276,7 +1107,7 @@ export default function CustomerPage() {
             <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
               {recentlyViewed.map(deal => (
                 <div key={deal.id} className="flex-shrink-0 w-[200px] relative">
-                  <DealCard
+                  <DiscoverDealCard
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
@@ -1296,7 +1127,9 @@ export default function CustomerPage() {
             </div>
             <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
               {trendingDeals.map(deal => (
-                <TrendingCard key={deal.id} deal={deal} onClick={() => { setActiveDeal(deal); setClaimError(null); }} />
+                <div key={deal.id} className="flex-shrink-0 w-[180px]">
+                  <DiscoverDealCard deal={deal} onClick={() => { setActiveDeal(deal); setClaimError(null); }} showCrown={plan.tier === 'pro' || plan.tier === 'yearly'} />
+                </div>
               ))}
             </div>
           </section>
@@ -1338,30 +1171,15 @@ export default function CustomerPage() {
                   className="relative"
                   style={{ animation: 'fadeUpIn 0.3s ease both', animationDelay: `${Math.min(i, 7) * 45}ms` }}
                 >
-                  <DealCard
+                  <DiscoverDealCard
                     deal={deal}
                     onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
+                    saved={favorites.has(deal.id)}
+                    onToggleSave={() => toggleFavorite(deal.id)}
+                    showCrown={plan.tier === 'pro' || plan.tier === 'yearly'}
+                    locked={currentTabMeta?.locked ?? false}
                   />
-                  {/* (2) Early access badge — shown on future-day tabs for Starter/Pro */}
-                  {tab !== 'today' && (
-                    <span className="absolute top-2 left-2 z-20 pointer-events-none flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm"
-                      style={{ background: 'rgba(212,175,55,0.18)', color: '#B8971F', border: '1px solid rgba(212,175,55,0.4)' }}>
-                      ⚡ Early access
-                    </span>
-                  )}
-                  {/* Heart / save button */}
-                  <button
-                    onClick={e => { e.stopPropagation(); toggleFavorite(deal.id); }}
-                    className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-                    aria-label={favorites.has(deal.id) ? 'Remove from saved' : 'Save deal'}
-                  >
-                    <IconHeart
-                      size={14}
-                      className={favorites.has(deal.id) ? 'text-red-500' : 'text-t3'}
-                      style={favorites.has(deal.id) ? { fill: '#ef4444' } : {}}
-                    />
-                  </button>
                 </div>
               ))}
             </div>
@@ -1398,7 +1216,7 @@ export default function CustomerPage() {
               {/* Blurred deal cards — pointer-events off so they can't be clicked */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 select-none pointer-events-none" style={{ filter: 'blur(4px)', opacity: 0.55 }}>
                 {tomorrowPreviewDeals.map(deal => (
-                  <DealCard key={deal.id} deal={deal} onClick={() => {}} claimed={false} />
+                  <DiscoverDealCard key={deal.id} deal={deal} onClick={() => {}} locked />
                 ))}
               </div>
               {/* Upgrade overlay */}
@@ -1410,7 +1228,7 @@ export default function CustomerPage() {
                   <Link
                     href="/repeat-plus"
                     className="inline-flex items-center justify-center h-10 px-5 rounded-brands text-[14px] font-bold transition-all hover:opacity-90"
-                    style={{ background: '#D4AF37', color: '#1a1100' }}
+                    style={{ background: CUSTOMER_UI.gold, color: '#1a1100' }}
                   >
                     Upgrade to Starter →
                   </Link>
@@ -1432,7 +1250,7 @@ export default function CustomerPage() {
             <Link
               href="/repeat-plus"
               className="inline-flex items-center h-9 px-4 rounded-brands text-[13px] font-bold transition-all hover:opacity-90 flex-shrink-0"
-              style={{ background: '#D4AF37', color: '#1a1100' }}
+              style={{ background: CUSTOMER_UI.gold, color: '#1a1100' }}
             >
               Unlock with Pro →
             </Link>
@@ -1473,7 +1291,7 @@ export default function CustomerPage() {
                   <span className="absolute top-2 left-2 z-20 text-[10px] font-bold text-white bg-brand px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
                     NEW
                   </span>
-                  <DealCard
+                  <DiscoverDealCard
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}

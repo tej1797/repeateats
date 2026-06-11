@@ -55,8 +55,13 @@ export default function MobileNav({ portal }: MobileNavProps) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-[var(--bd)] flex md:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden glass-bar"
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        borderTop: '1px solid var(--customer-glass-border, var(--bd))',
+        background: portal === 'customer' ? 'var(--customer-glass-bg, var(--sf))' : 'var(--sf)',
+        backdropFilter: 'blur(16px)',
+      }}
     >
       {items.map((item) => {
         // Match pathname + optional query string comparison
