@@ -57,7 +57,7 @@ export async function handleOAuthReturn(
 
   // Allow Supabase client auto-detect a moment, then exchange manually if needed
   await new Promise((r) => setTimeout(r, 80));
-  let { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
     const { error: authError } = await supabase.auth.exchangeCodeForSession(code);
     if (authError) {
