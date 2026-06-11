@@ -21,6 +21,7 @@ interface RestaurantSearchProps {
   placeholder?: string;
   className?:   string;
   variant?:     'light' | 'dark';
+  restaurantId?: string;
 }
 
 export default function RestaurantSearch({
@@ -28,6 +29,7 @@ export default function RestaurantSearch({
   placeholder = 'Search for your restaurant…',
   className   = '',
   variant     = 'light',
+  restaurantId,
 }: RestaurantSearchProps) {
   const [query,   setQuery]   = useState('');
   const [results, setResults] = useState<PlaceResult[]>([]);
@@ -52,7 +54,9 @@ export default function RestaurantSearch({
     if (q.length < 2) { setResults([]); setOpen(false); return; }
     setLoading(true);
     try {
-      const res  = await fetch(`/api/google-places?q=${encodeURIComponent(q)}`);
+      const params = new URLSearchParams({ q });
+      if (restaurantId) params.set('restaurant_id', restaurantId);
+      const res  = await fetch(`/api/google-places?${params.toString()}`);
       const data = await res.json() as { data?: PlaceResult[]; results?: PlaceResult[] };
       const list = data.data ?? data.results ?? [];
       setResults(list);
@@ -62,7 +66,7 @@ export default function RestaurantSearch({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [restaurantId]);
 
   const handleChange = (value: string) => {
     setQuery(value);

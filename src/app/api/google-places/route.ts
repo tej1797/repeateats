@@ -4,7 +4,101 @@
 // Supports both ?q= and ?query= params for compatibility.
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import type { PlaceResult } from '@/types/api';
+
+const DAY_FULL: Record<string, string> = {
+  Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday',
+  Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday',
+};
+
+function hoursRecordToWeekdayText(hours: Record<string, string> | null): string[] | null {
+  if (!hours) return null;
+  return Object.entries(hours).map(([day, val]) => {
+    const full = DAY_FULL[day] ?? day;
+    if (val.toLowerCase() === 'closed') return `${full}: Closed`;
+    const normalized = val.replace(/[–-]/g, ' – ');
+    return `${full}: ${normalized}`;
+  });
+}
+
+async function fetchRestaurantById(id: string): Promise<PlaceResult | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+
+  const sb = createClient(url, key);
+  const { data } = await sb
+    .from('restaurants')
+    .select('id, name, address, city, phone, website, google_place_id, hours, rating')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (!data) return null;
+  return {
+    place_id:  data.google_place_id ?? `db_${data.id}`,
+    name:      data.name,
+    address:   data.address ? `${data.address}, ${data.city ?? ''}`.replace(/,\s*$/, '') : (data.city ?? ''),
+    phone:     data.phone ?? null,
+    website:   data.website ?? null,
+    hours:     null,
+    hours_raw: hoursRecordToWeekdayText(data.hours as Record<string, string> | null),
+    rating:    data.rating ?? null,
+    types:     [],
+    source:    'database' as const,
+  };
+}
+
+async function searchDbRestaurants(query: string): Promise<PlaceResult[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || query.length < 2) return [];
+
+  const sb = createClient(url, key);
+  const escaped = query.replace(/[%_]/g, '');
+  const tokens = escaped.split(/\s+/).filter((t) => t.length >= 2);
+  const orParts = [
+    `name.ilike.%${escaped}%`,
+    `address.ilike.%${escaped}%`,
+    `city.ilike.%${escaped}%`,
+    ...tokens.flatMap((t) => [
+      `name.ilike.%${t}%`,
+      `city.ilike.%${t}%`,
+    ]),
+  ];
+  const { data } = await sb
+    .from('restaurants')
+    .select('id, name, address, city, phone, website, google_place_id, hours, rating')
+    .or(orParts.join(','))
+    .limit(10);
+
+  return (data ?? []).map((r) => ({
+    place_id:  r.google_place_id ?? `db_${r.id}`,
+    name:      r.name,
+    address:   r.address ? `${r.address}, ${r.city ?? ''}`.replace(/,\s*$/, '') : (r.city ?? ''),
+    phone:     r.phone ?? null,
+    website:   r.website ?? null,
+    hours:     null,
+    hours_raw: hoursRecordToWeekdayText(r.hours as Record<string, string> | null),
+    rating:    r.rating ?? null,
+    types:     [],
+    source:    'database' as const,
+  }));
+}
+
+function mergePlaceResults(...lists: PlaceResult[][]): PlaceResult[] {
+  const seen = new Set<string>();
+  const out: PlaceResult[] = [];
+  for (const list of lists) {
+    for (const p of list) {
+      const key = `${p.place_id}|${p.name.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+  }
+  return out.slice(0, 10);
+}
 
 // ─── Static Ontario restaurant database (fallback) ────────────────────────────
 // Used when GOOGLE_PLACES_API_KEY is not set in the environment.
@@ -151,7 +245,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: [] });
   }
 
+  const restaurantId = searchParams.get('restaurant_id');
+  const [dbMatches, pinnedRestaurant] = await Promise.all([
+    searchDbRestaurants(query),
+    restaurantId ? fetchRestaurantById(restaurantId) : Promise.resolve(null),
+  ]);
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+
+  const pinIfRelevant = (list: PlaceResult[]): PlaceResult[] => {
+    if (!pinnedRestaurant) return list;
+    const q = query.toLowerCase();
+    const hay = `${pinnedRestaurant.name} ${pinnedRestaurant.address}`.toLowerCase();
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const relevant = tokens.length === 0 || tokens.some((t) => hay.includes(t));
+    if (!relevant) return list;
+    return mergePlaceResults([pinnedRestaurant], list);
+  };
 
   // ── Try Google Places API ─────────────────────────────────────────────────
   if (apiKey) {
@@ -206,7 +315,8 @@ export async function GET(request: NextRequest) {
         );
 
         // Return both `data` and `results` keys for compatibility
-        return NextResponse.json({ data: detailed, results: detailed });
+        const merged = pinIfRelevant(mergePlaceResults(dbMatches, detailed));
+        return NextResponse.json({ data: merged, results: merged });
       }
     } catch (err) {
       console.error('[google-places/google-api]', err);
@@ -214,15 +324,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (dbMatches.length > 0) {
+    const merged = pinIfRelevant(dbMatches);
+    return NextResponse.json({ data: merged, results: merged });
+  }
+
   // ── Static Ontario fallback ───────────────────────────────────────────────
   // Split query into tokens so "indian mississauga" matches both fields
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
   const matches = ONTARIO_RESTAURANTS.filter((r) => {
     const haystack = [r.name, r.address, r.city, r.cuisine].join(' ').toLowerCase();
-    return tokens.every((t) => haystack.includes(t));
+    return tokens.some((t) => haystack.includes(t));
   }).slice(0, 8);
 
-  const results: PlaceResult[] = matches.map((r) => ({
+  const results: PlaceResult[] = mergePlaceResults(dbMatches, matches.map((r) => ({
     place_id:  r.place_id,
     name:      r.name,
     address:   r.address,
@@ -233,8 +348,8 @@ export async function GET(request: NextRequest) {
     rating:    r.rating,
     types:     [],
     source:    'database' as const,
-  }));
+  })));
 
-  // Return both `data` and `results` keys for compatibility
-  return NextResponse.json({ data: results, results });
+  const merged = pinIfRelevant(results);
+  return NextResponse.json({ data: merged, results: merged });
 }

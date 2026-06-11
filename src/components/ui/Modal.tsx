@@ -80,7 +80,7 @@ export default function Modal({
         ref={panelRef}
         className={[
           'relative w-full bg-surface rounded-t-[20px] sm:rounded-brand shadow-brand2',
-          'max-h-[95vh] overflow-y-auto',
+          'max-h-[95vh] overflow-y-auto scrollbar-none',
           'animate-[slideUp_0.25s_ease]',
           SIZE_CLASSES[size],
           className,

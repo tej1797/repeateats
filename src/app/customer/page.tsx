@@ -353,7 +353,7 @@ function LocationModal({ city, radius, onApply, onClose }: { city: string; radiu
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose} />
       <div
-        className="relative w-full sm:max-w-md rounded-t-[24px] sm:rounded-[24px] px-5 pt-5 pb-[max(20px,env(safe-area-inset-bottom))] animate-[slideUp_0.22s_ease] max-h-[88vh] overflow-y-auto"
+        className="relative w-full sm:max-w-md rounded-t-[24px] sm:rounded-[24px] px-5 pt-5 pb-[max(20px,env(safe-area-inset-bottom))] animate-[slideUp_0.22s_ease] max-h-[88vh] overflow-y-auto scrollbar-none"
         style={{ background: CUSTOMER_UI.bgElevated, color: CUSTOMER_UI.textPrimary, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
       >
         <div className="flex items-start justify-between mb-1">
@@ -986,7 +986,7 @@ export default function CustomerPage() {
 
             {/* Search suggestions dropdown */}
             {hasSearchDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 rounded-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto glass-panel shadow-2xl">
+              <div className="absolute top-full left-0 right-0 mt-1.5 rounded-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto scrollbar-none glass-panel shadow-2xl">
                 {searchResults.restaurants.length > 0 && (
                   <>
                     <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🍽️ Restaurants</p>

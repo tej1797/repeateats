@@ -54,7 +54,10 @@ import {
   IconTag,
   IconClock,
   IconChevronRight,
+  IconSettings,
 } from '@tabler/icons-react';
+import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
+import type { ClaimRow } from '@/lib/restaurantAnalytics';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1600,7 +1603,30 @@ interface ManagerPerms {
   dashboard: boolean; deals: boolean; analytics: boolean;
   collabs: boolean; profile: boolean; scanner: boolean;
 }
-interface ManagerLock { restaurant_id: string; perms: ManagerPerms }
+interface ManagerLock { restaurant_id: string; perms: ManagerPerms; tab?: DashTab }
+
+const TAB_ORDER: { id: DashTab; perm?: keyof ManagerPerms }[] = [
+  { id: 'dashboard', perm: 'dashboard' },
+  { id: 'deals',     perm: 'deals'     },
+  { id: 'analytics', perm: 'analytics' },
+  { id: 'scanner',   perm: 'scanner'   },
+  { id: 'profile',   perm: 'profile'   },
+  { id: 'settings'  },
+];
+
+function isTabAllowed(tab: DashTab, managerMode: boolean, perms: ManagerPerms): boolean {
+  if (!managerMode) return true;
+  if (tab === 'settings') return false;
+  const entry = TAB_ORDER.find((t) => t.id === tab);
+  if (!entry?.perm) return false;
+  return perms[entry.perm];
+}
+
+function firstAllowedTab(managerMode: boolean, perms: ManagerPerms): DashTab {
+  if (!managerMode) return 'dashboard';
+  const found = TAB_ORDER.find((t) => t.perm && perms[t.perm]);
+  return found?.id ?? 'scanner';
+}
 
 // SHA-256 hex digest for PIN hashing (browser-native)
 async function sha256hex(input: string): Promise<string> {
@@ -1614,7 +1640,22 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   onSignOut: () => void;
   supabase: ReturnType<typeof createClient>;
 }) {
-  const [tab,             setTab]             = useState<DashTab>('dashboard');
+  const [tab,             setTab]             = useState<DashTab>(() => {
+    if (typeof window === 'undefined') return 'dashboard';
+    try {
+      const raw = localStorage.getItem('repeateats.manager_locked');
+      if (raw) {
+        const lock = JSON.parse(raw) as ManagerLock;
+        if (lock.restaurant_id === initialRestaurant.id) {
+          if (lock.tab && isTabAllowed(lock.tab, true, lock.perms)) return lock.tab;
+          return firstAllowedTab(true, lock.perms);
+        }
+      }
+      const saved = localStorage.getItem('repeateats.restaurant_tab') as DashTab | null;
+      if (saved) return saved;
+    } catch { /* ignore */ }
+    return 'dashboard';
+  });
   const [restaurant,      setRestaurant]      = useState<Restaurant>(initialRestaurant);
   const [deals,           setDeals]           = useState<Deal[]>([]);
   const [collabs,         setCollabs]         = useState<Collab[]>([]);
@@ -1634,12 +1675,16 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       if (lock.restaurant_id === initialRestaurant.id) {
         setManagerMode(true);
         setManagerPerms(lock.perms);
-        // Verify DB still has manager_mode_enabled (in case owner disabled from another device)
+        const allowed = lock.tab && isTabAllowed(lock.tab, true, lock.perms)
+          ? lock.tab
+          : firstAllowedTab(true, lock.perms);
+        setTab(allowed);
         supabase.from('restaurants').select('manager_mode_enabled').eq('id', initialRestaurant.id).single()
           .then(({ data }) => {
             if (!data?.manager_mode_enabled) {
               localStorage.removeItem('repeateats.manager_locked');
               setManagerMode(false);
+              setTab('dashboard');
             }
           });
       }
@@ -1647,11 +1692,31 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialRestaurant.id]);
 
-  // Dashboard stats from the analytics RPC (separates redeemed vs awaiting-scan,
-  // counted by redeemed_at — not raw claim counts). Falls back to deal-derived values.
   const [dashStats, setDashStats] = useState<{
     active_deals: number; redeemed_claims: number; awaiting_scan: number;
   } | null>(null);
+  const [claimRows, setClaimRows] = useState<ClaimRow[]>([]);
+
+  const setTabPersist = useCallback((next: DashTab) => {
+    setTab(next);
+    try {
+      localStorage.setItem('repeateats.restaurant_tab', next);
+      if (managerMode) {
+        const raw = localStorage.getItem('repeateats.manager_locked');
+        if (raw) {
+          const lock = JSON.parse(raw) as ManagerLock;
+          localStorage.setItem('repeateats.manager_locked', JSON.stringify({ ...lock, tab: next }));
+        }
+      }
+    } catch { /* ignore */ }
+  }, [managerMode]);
+
+  useEffect(() => {
+    if (!managerMode) return;
+    if (!isTabAllowed(tab, managerMode, managerPerms)) {
+      setTabPersist(firstAllowedTab(true, managerPerms));
+    }
+  }, [managerMode, managerPerms, tab, setTabPersist]);
 
   useEffect(() => {
     async function load() {
@@ -1663,33 +1728,25 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       setDeals((dr.data ?? []) as Deal[]);
       setCollabs((cr.data ?? []) as Collab[]);
       if (sr.data && !sr.error) {
-        const s = sr.data as Record<string, number>;
+        const s = sr.data as Record<string, unknown>;
         setDashStats({
-          active_deals:    s.active_deals    ?? 0,
-          redeemed_claims: s.redeemed_claims ?? 0,
-          awaiting_scan:   s.awaiting_scan   ?? 0,
+          active_deals:    (s.active_deals as number)    ?? 0,
+          redeemed_claims: (s.redeemed_claims as number) ?? 0,
+          awaiting_scan:   (s.awaiting_scan as number)   ?? 0,
         });
+        setClaimRows((s.claims as ClaimRow[]) ?? []);
       }
       setLoading(false);
     }
     void load();
   }, [restaurant.id, supabase]);
 
+  // Prefer RPC values; fall back to locally derived counts.
   const activeDeals = deals.filter((d) => d.is_active && !d.is_coming);
   const openCollabs = collabs.filter((c) => c.status === 'open' || c.status === 'negotiating');
-  const totalClaims = deals.reduce((s, d) => s + d.current_claims, 0);
-
-  // Prefer RPC values; fall back to locally derived counts.
   const redeemedCount = dashStats?.redeemed_claims ?? 0;
   const awaitingCount = dashStats?.awaiting_scan ?? deals.reduce((s, d) => s + d.current_claims, 0);
   const activeDealCount = dashStats?.active_deals ?? activeDeals.length;
-
-  const STATS = [
-    { label: 'Redeemed',      value: redeemedCount,                         emoji: '✅', highlight: true  },
-    { label: 'Awaiting scan', value: awaitingCount,                         emoji: '🎟️', highlight: false },
-    { label: 'Active deals',  value: activeDealCount,                       emoji: '🔥', highlight: false },
-    { label: 'Rating',        value: restaurant.rating?.toFixed(1) ?? '—',  emoji: '⭐', highlight: false },
-  ];
 
   const toggleActive = async (deal: Deal) => {
     await supabase.from('deals').update({ is_active: !deal.is_active }).eq('id', deal.id);
@@ -1770,7 +1827,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         {/* Tab nav */}
         <div className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto scrollbar-none pb-0">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => setTabPersist(t.id)}
               className="px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 transition-colors"
               style={{
                 borderColor: tab === t.id ? BLUE : 'transparent',
@@ -1785,7 +1842,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       <main className="max-w-4xl mx-auto px-4 py-6">
 
         {/* ── DASHBOARD TAB ─────────────────────────────────────── */}
-        {tab === 'dashboard' && (
+        {tab === 'dashboard' && (!managerMode || managerPerms.dashboard) && (
           <div className="space-y-5">
             {/* Welcome header */}
             <div>
@@ -1816,7 +1873,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                   <span className="text-[#CCC]">{tierLabel}</span>
                   <button
                     type="button"
-                    onClick={() => setTab('settings')}
+                    onClick={() => setTabPersist('settings')}
                     className="text-[11px] font-bold ml-1"
                     style={{ color: BLUE }}
                   >
@@ -1826,10 +1883,10 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               </div>
             </div>
 
-            {/* Primary redeem CTA — blue card like app */}
+            {(!managerMode || managerPerms.scanner) && (
             <button
               type="button"
-              onClick={() => setTab('scanner')}
+              onClick={() => setTabPersist('scanner')}
               className="w-full flex items-center gap-4 rounded-2xl p-4 transition-all hover:opacity-95 text-left"
               style={{ background: BLUE }}
             >
@@ -1842,6 +1899,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               </div>
               <IconArrowRight size={20} className="text-white/80 flex-shrink-0" />
             </button>
+            )}
 
             {/* 2×2 metrics grid */}
             <div className="grid grid-cols-2 gap-3">
@@ -1863,38 +1921,44 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               ))}
             </div>
 
-            {/* Quick actions */}
+            {/* Quick actions — matches app 2×2 + Settings row */}
             <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCreateDeal(true)}
-                className="rounded-2xl p-4 flex flex-col items-center gap-2 transition-all hover:bg-[#1A1A1A]"
-                style={{ background: '#141414', border: '1px solid #222' }}
-              >
-                <div className="w-10 h-10 rounded-full border border-[#444] flex items-center justify-center">
-                  <IconPlus size={18} className="text-white" />
-                </div>
-                <span className="text-[13px] font-semibold text-white">New deal</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab('analytics')}
-                className="rounded-2xl p-4 flex flex-col items-center gap-2 transition-all hover:bg-[#1A1A1A]"
-                style={{ background: '#141414', border: '1px solid #222' }}
-              >
-                <div className="w-10 h-10 rounded-full border border-[#444] flex items-center justify-center">
-                  <IconChartBar size={18} className="text-white" />
-                </div>
-                <span className="text-[13px] font-semibold text-white">Analytics</span>
-              </button>
+              {[
+                { label: 'New deal',   icon: IconPlus,          action: () => setShowCreateDeal(true) },
+                { label: 'Analytics', icon: IconChartBar,      action: () => setTabPersist('analytics') },
+                { label: 'Plans',     icon: IconStar,          action: () => setTabPersist('settings') },
+                { label: 'Profile',   icon: IconBuildingStore, action: () => setTabPersist('profile') },
+              ].map(({ label, icon: Icon, action }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={action}
+                  className="rounded-2xl p-4 flex flex-col items-center gap-2 transition-all hover:bg-[#1A1A1A]"
+                  style={{ background: '#141414', border: '1px solid #222' }}
+                >
+                  <div className="w-10 h-10 rounded-full border border-[#444] flex items-center justify-center">
+                    <Icon size={18} className="text-white" stroke={1.5} />
+                  </div>
+                  <span className="text-[13px] font-semibold text-white">{label}</span>
+                </button>
+              ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setTabPersist('settings')}
+              className="w-full rounded-2xl p-4 flex items-center justify-center gap-2 transition-all hover:bg-[#1A1A1A]"
+              style={{ background: '#141414', border: '1px solid #222' }}
+            >
+              <IconSettings size={18} className="text-white" />
+              <span className="text-[13px] font-semibold text-white">Settings</span>
+            </button>
 
             {/* Active deals preview */}
             {!loading && activeDeals.length > 0 && (
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-display text-[15px] font-bold text-white">Active deals</h2>
-                  <button type="button" onClick={() => setTab('deals')} className="text-[12px] font-semibold text-brand">
+                  <button type="button" onClick={() => setTabPersist('deals')} className="text-[12px] font-semibold text-brand">
                     View all →
                   </button>
                 </div>
@@ -1933,7 +1997,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         )}
 
         {/* ── DEALS TAB ─────────────────────────────────────────── */}
-        {tab === 'deals' && (
+        {tab === 'deals' && (!managerMode || managerPerms.deals) && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-xl font-bold">Your Deals</h2>
@@ -2021,64 +2085,23 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         )}
 
         {/* ── ANALYTICS TAB ─────────────────────────────────────── */}
-        {tab === 'analytics' && (
-          <div className="space-y-6">
-            <h2 className="font-display text-xl font-bold">Analytics</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {STATS.map((s) => (
-                <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
-                  <div className="text-2xl mb-1">{s.emoji}</div>
-                  <div className="font-display text-2xl font-extrabold" style={{ color: s.highlight ? GREEN : 'var(--tx)' }}>{s.value}</div>
-                  <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
-                </div>
-              ))}
-            </div>
-            {/* Top deals */}
-            <div className="bg-surface rounded-brand shadow-brand p-5">
-              <h3 className="font-display font-bold text-base mb-4">Top deals by claims</h3>
-              {deals.length === 0 ? (
-                <p className="text-t2 text-sm">No deals yet.</p>
-              ) : (
-                <div className="space-y-3">
-                  {[...deals].sort((a, b) => b.current_claims - a.current_claims).slice(0, 5).map((deal, i) => (
-                    <div key={deal.id} className="flex items-center gap-3">
-                      <span className="text-[13px] font-bold text-t3 w-5 text-center">{i + 1}</span>
-                      <span className="text-xl">{deal.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-tx truncate">{deal.title}</div>
-                        <div className="h-1.5 bg-surface2 rounded-full overflow-hidden mt-1">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${totalClaims > 0 ? Math.round((deal.current_claims / totalClaims) * 100) : 0}%`, background: BLUE }} />
-                        </div>
-                      </div>
-                      <span className="text-[13px] font-bold text-tx shrink-0">{deal.current_claims}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="bg-surface rounded-brand shadow-brand p-5">
-              <h3 className="font-display font-bold text-base mb-2">Insights</h3>
-              <div className="space-y-2 text-sm text-t2">
-                <p>📍 Restaurant active in <strong className="text-tx">{restaurant.city}</strong></p>
-                <p>🤝 Collab requests: <strong className="text-tx">{openCollabs.length} open</strong></p>
-                <p>🎯 Claim rate: <strong className="text-tx">
-                  {deals.length > 0 && deals.some((d) => d.max_claims)
-                    ? `${Math.round((totalClaims / deals.filter((d) => d.max_claims).reduce((s, d) => s + (d.max_claims ?? 0), 0)) * 100)}% of capacity used`
-                    : `${totalClaims} total claims`}
-                </strong></p>
-              </div>
-            </div>
-          </div>
+        {tab === 'analytics' && (!managerMode || managerPerms.analytics) && (
+          <RestaurantAnalytics
+            restaurantName={restaurant.name}
+            claims={claimRows}
+            activeDealCount={activeDealCount}
+            loading={loading}
+          />
         )}
 
         {/* ── SCANNER TAB ───────────────────────────────────────── */}
-        {tab === 'scanner' && (
+        {tab === 'scanner' && (!managerMode || managerPerms.scanner) && (
           <ScannerPanel restaurantId={restaurant.id} />
         )}
 
         {/* ── PROFILE TAB ───────────────────────────────────────── */}
-        {tab === 'profile' && (
-          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} user={user} onGoSettings={() => setTab('settings')} trialLabel={tierLabel} />
+        {tab === 'profile' && (!managerMode || managerPerms.profile) && (
+          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} user={user} onGoSettings={() => setTabPersist('settings')} trialLabel={tierLabel} />
         )}
 
         {/* ── SETTINGS TAB ──────────────────────────────────────── */}
@@ -2297,6 +2320,7 @@ function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, t
           <RestaurantSearch
             variant="dark"
             placeholder="Search for your restaurant…"
+            restaurantId={restaurant.id}
             onSelect={handlePlaceSelect}
           />
         </div>
@@ -2900,7 +2924,7 @@ function ManagerSetupModal({ restaurant, supabase, onDone, onClose }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-surface rounded-brand p-6 w-full max-w-[420px] shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-surface rounded-brand p-6 w-full max-w-[420px] shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none">
         <button onClick={onClose} className="absolute top-3 right-3 text-t3 hover:text-tx"><IconX size={16} /></button>
         <h3 className="font-bold text-[18px] mb-1 flex items-center gap-2"><IconShieldLock size={18} style={{ color: GREEN }} /> Enable Manager Mode</h3>
         <p className="text-[13px] text-t2 mb-5">Set PINs and choose which tabs your staff can access. The Scanner tab is always available.</p>

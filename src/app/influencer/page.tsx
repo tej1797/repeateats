@@ -820,7 +820,7 @@ function NegotiateModal({
         </button>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 p-5">
+        <div className="overflow-y-auto scrollbar-none flex-1 p-5">
           {/* Restaurant info */}
           <div className="pr-8 mb-4">
             <div className="font-display text-xl font-extrabold leading-tight">
@@ -1056,7 +1056,7 @@ function ChatPanel({
       </div>
 
       {/* Messages list */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto scrollbar-none px-4 py-3 space-y-2">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <IconLoader2 size={20} className="text-t3 animate-spin" />

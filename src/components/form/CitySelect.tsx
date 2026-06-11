@@ -66,7 +66,7 @@ export default function CitySelect({ value, onChange, className = '', label, err
               className="w-full bg-surface2 rounded-brands px-3 py-1.5 text-[13px] outline-none text-tx"
             />
           </div>
-          <div className="max-h-[220px] overflow-y-auto">
+          <div className="max-h-[220px] overflow-y-auto scrollbar-none">
             {filtered.map((city) => (
               <button
                 key={city}

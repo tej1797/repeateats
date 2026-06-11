@@ -7,9 +7,9 @@ import { useState } from 'react';
 import { IconX, IconLoader2, IconCheck } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 
-const GREEN = '#1249A9';
+const BLUE = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-const DEAL_TYPES = ['dine-in', 'pickup', 'delivery'] as const;
+const DEAL_TYPES = ['dine-in', 'pickup'] as const;
 type DayKey = typeof DAYS[number];
 type DealTypeKey = typeof DEAL_TYPES[number];
 type DiscountTypeKey = 'percentage' | 'dollar' | 'free_item' | 'bogo' | 'other';
@@ -38,7 +38,9 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
   const [description,    setDescription]    = useState(existingDeal?.description ?? '');
   const [discountType,   setDiscountType]   = useState<DiscountTypeKey>(((existingDeal?.discount_type ?? 'percentage') as DiscountTypeKey));
   const [discountValue,  setDiscountValue]  = useState(existingDeal?.discount_value ?? '');
-  const [selectedTypes,  setSelectedTypes]  = useState<Set<DealTypeKey>>(new Set<DealTypeKey>((existingDeal?.deal_types ?? ['dine-in']) as DealTypeKey[]));
+  const [selectedTypes,  setSelectedTypes]  = useState<Set<DealTypeKey>>(new Set<DealTypeKey>(
+    ((existingDeal?.deal_types ?? ['dine-in']) as string[]).filter((t): t is DealTypeKey => t === 'dine-in' || t === 'pickup'),
+  ));
   const [allDays,        setAllDays]        = useState(!existingDeal || existingDeal.available_days[0] === 'all');
   const [selectedDays,   setSelectedDays]   = useState<Set<DayKey>>(new Set((existingDeal?.available_days ?? []).filter(d => d !== 'all') as DayKey[]));
   const [unlimited,      setUnlimited]      = useState(!existingDeal || existingDeal.max_claims === null);
@@ -47,7 +49,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
   const [validUntil,     setValidUntil]     = useState(existingDeal?.valid_until ?? '');
   const [isComing,  setIsComing]  = useState(existingDeal?.is_coming ?? false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [dietType,  setDietType]  = useState<'veg'|'egg'|'nonveg'>((existingDeal as any)?.diet_type ?? 'nonveg');
+  const [dietType,  setDietType]  = useState<'veg'|'nonveg'>((existingDeal as any)?.diet_type === 'veg' ? 'veg' : 'nonveg');
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState('');
   const [done,       setDone]       = useState(false);
@@ -76,8 +78,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
 
     setError('');
     setSubmitting(true);
-
-    if (!dietType) { setError('Diet type is required'); return; }
 
     const payload = {
       restaurant_id:  restaurantId,
@@ -130,10 +130,9 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full sm:max-w-[540px] max-h-[92vh] overflow-y-auto bg-surface rounded-t-[20px] sm:rounded-brand shadow-2xl flex flex-col"
+        className="relative w-full sm:max-w-[540px] max-h-[92vh] overflow-y-auto scrollbar-none bg-surface rounded-t-[20px] sm:rounded-brand shadow-2xl flex flex-col"
         style={{ animation: 'slideUp 0.25s ease' }}
       >
-        {/* Header */}
         <div className="sticky top-0 bg-surface z-10 px-5 pt-5 pb-4 border-b border-[var(--bd)] flex items-center justify-between">
           <div>
             <h2 className="font-display text-[20px] font-extrabold">{isEdit ? 'Edit Deal' : 'Create a Deal'}</h2>
@@ -147,14 +146,12 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
         {done ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
             <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgba(18,73,169,0.1)' }}>
-              <IconCheck size={32} style={{ color: GREEN }} />
+              <IconCheck size={32} style={{ color: BLUE }} />
             </div>
-            <p className="font-bold text-[18px]" style={{ color: GREEN }}>{isEdit ? 'Deal updated!' : 'Deal created!'}</p>
+            <p className="font-bold text-[18px]" style={{ color: BLUE }}>{isEdit ? 'Deal updated!' : 'Deal created!'}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="px-5 py-5 space-y-5">
-
-            {/* Emoji + Title */}
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Deal title</label>
               <div className="flex gap-2">
@@ -174,7 +171,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </div>
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Description (optional)</label>
               <textarea
@@ -186,7 +182,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               />
             </div>
 
-            {/* Discount */}
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Discount</label>
               <div className="flex gap-2">
@@ -210,7 +205,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </div>
             </div>
 
-            {/* Deal types */}
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Deal type</label>
               <div className="flex gap-2 flex-wrap">
@@ -221,7 +215,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                     onClick={() => toggleType(t)}
                     className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold capitalize transition-all"
                     style={selectedTypes.has(t)
-                      ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
+                      ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                       : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                   >
                     {t}
@@ -230,7 +224,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </div>
             </div>
 
-            {/* Available days */}
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Available days</label>
               <div className="flex gap-2 flex-wrap mb-2">
@@ -239,7 +232,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setAllDays(true)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={allDays
-                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
+                    ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Every day
@@ -249,7 +242,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setAllDays(false)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={!allDays
-                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
+                    ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Select days
@@ -264,7 +257,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                       onClick={() => toggleDay(d)}
                       className="w-11 h-9 rounded-brands border-2 text-[13px] font-semibold transition-all"
                       style={selectedDays.has(d)
-                        ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
+                        ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                         : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                     >
                       {d}
@@ -274,7 +267,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               )}
             </div>
 
-            {/* Max claims */}
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Claim limit</label>
               <div className="flex gap-2 items-center">
@@ -283,7 +275,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setUnlimited(true)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={unlimited
-                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
+                    ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Unlimited
@@ -293,7 +285,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setUnlimited(false)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={!unlimited
-                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
+                    ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Set limit
@@ -311,7 +303,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </div>
             </div>
 
-            {/* Validity dates */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Start date (opt.)</label>
@@ -333,15 +324,13 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </div>
             </div>
 
-            {/* Diet type — required */}
             <div className="pt-2 border-t border-[var(--bd)]">
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-2">
                 Diet type <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
                 {([
-                  { id: 'veg',    label: '🟢 Vegetarian',     dot: '#16a34a' },
-                  { id: 'egg',    label: '🟡 Contains Egg',   dot: '#ca8a04' },
+                  { id: 'veg',    label: '🟢 Vegetarian',      dot: '#16a34a' },
                   { id: 'nonveg', label: '🔴 Non-Vegetarian', dot: '#dc2626' },
                 ] as const).map(({ id, label, dot }) => (
                   <button
@@ -357,7 +346,6 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </div>
             </div>
 
-            {/* Coming soon toggle */}
             <div className="flex items-center justify-between py-2 border-t border-[var(--bd)]">
               <div>
                 <p className="font-semibold text-[14px]">Mark as coming soon</p>
@@ -367,7 +355,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                 type="button"
                 onClick={() => setIsComing(!isComing)}
                 className="relative w-12 h-6 rounded-full transition-colors"
-                style={{ background: isComing ? GREEN : 'var(--bd2)' }}
+                style={{ background: isComing ? BLUE : 'var(--bd2)' }}
               >
                 <span
                   className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
@@ -382,12 +370,11 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               </p>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={submitting}
               className="w-full h-12 font-bold text-[15px] text-white rounded-brands transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-              style={{ background: GREEN }}
+              style={{ background: BLUE }}
             >
               {submitting ? <><IconLoader2 size={18} className="animate-spin" /> Creating…</> : 'Create Deal'}
             </button>
