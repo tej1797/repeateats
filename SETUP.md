@@ -305,21 +305,18 @@ In **Supabase Dashboard → Authentication → Settings**:
 
 3. **Site URL** → `https://repeateats.ca`
 
-4. **Redirect URLs** → add (all required for Google OAuth return paths):
-   - `https://repeateats.ca/restaurant`
-   - `https://repeateats.ca/customer`
-   - `https://repeateats.ca/influencer`
+4. **Redirect URLs** → add (web + mobile — do not remove mobile entries):
    - `https://repeateats.ca/auth/callback`
-   - `https://www.repeateats.ca/restaurant`
-   - `https://www.repeateats.ca/customer`
-   - `https://www.repeateats.ca/influencer`
    - `https://www.repeateats.ca/auth/callback`
-   - `https://repeateats.ca` (homepage fallback)
-   - `https://www.repeateats.ca`
-   - `http://localhost:3000/restaurant`
-   - `http://localhost:3000/customer`
-   - `http://localhost:3000/influencer`
    - `http://localhost:3000/auth/callback`
+   - `http://localhost:3001/auth/callback`
+   - `repeateats://auth/callback` (React Native / Expo mobile app)
+   - `repeateats://*` (mobile deep links)
+   - `exp://*` (Expo dev)
+
+   Web OAuth always returns to `/auth/callback?portal=restaurant|customer|influencer`.
+   Portal routing uses the `portal` query param + `rp_portal` cookie — no per-portal URLs needed.
+   Mobile sets its own `redirectTo: repeateats://auth/callback` and is unaffected.
 
    That's it — just 3. Portal routing is handled server-side via the `rp_portal` cookie.
 
