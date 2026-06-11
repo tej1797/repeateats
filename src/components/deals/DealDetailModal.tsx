@@ -1,7 +1,8 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconArrowLeft, IconShare2, IconCircleCheck, IconChevronRight, IconClock, IconLayoutGrid } from '@tabler/icons-react';
+import { IconArrowLeft, IconShare2, IconCircleCheck, IconChevronRight, IconClock, IconLayoutGrid, IconCalendarClock, IconBolt } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
@@ -38,20 +39,31 @@ interface DealDetailModalProps {
   user:               User | null;
   planTier?:          'free' | 'starter' | 'pro' | 'yearly';
   onClose:            () => void;
-  onClaim:            () => void;
+  onClaim:            (opts?: { timer_starts_at?: string; claim_for_date?: string }) => void;
   claiming?:          boolean;
   claimError?:        string | null;
   alreadyClaimed?:    boolean;
   existingQrCode?:    string;
   isRedeemed?:        boolean;
   dailyLimitReached?: boolean;
+  /** YYYY-MM-DD of the day tab the deal was opened from (today if omitted). */
+  claimForDate?:      string;
+  /** Minutes the visit window stays open once it starts (tier-based). */
+  visitWindowMinutes?: number;
   onViewExisting?:    (code: string) => void;
   onShare?:           () => void;
+}
+
+// Round a Date up to the next 15-minute mark, formatted for datetime-local.
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default function DealDetailModal({
   deal,
   user,
+  planTier           = 'free',
   onClose,
   onClaim,
   claiming           = false,
@@ -60,10 +72,46 @@ export default function DealDetailModal({
   existingQrCode,
   isRedeemed         = false,
   dailyLimitReached  = false,
+  claimForDate,
+  visitWindowMinutes = 45,
   onViewExisting,
   onShare,
 }: DealDetailModalProps) {
   const router = useRouter();
+
+  // Starter / Pro / yearly can schedule a future visit start time.
+  const canSchedule = planTier === 'starter' || planTier === 'pro' || planTier === 'yearly';
+  const [scheduling, setScheduling] = useState(false);
+  // For a future day tab, scheduling is required (the visit can't start today).
+  const isFutureDay = useMemo(() => {
+    if (!claimForDate) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return new Date(`${claimForDate}T00:00:00`).getTime() > today.getTime();
+  }, [claimForDate]);
+
+  // Default scheduled time: start of the chosen day at 12:00, or now + 30min for today.
+  const defaultSchedule = useMemo(() => {
+    if (isFutureDay && claimForDate) return `${claimForDate}T12:00`;
+    const d = new Date(Date.now() + 30 * 60 * 1000);
+    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+    return toLocalInputValue(d);
+  }, [isFutureDay, claimForDate]);
+
+  const [scheduleAt, setScheduleAt] = useState(defaultSchedule);
+
+  const minSchedule = useMemo(() => {
+    if (isFutureDay && claimForDate) return `${claimForDate}T00:00`;
+    return toLocalInputValue(new Date());
+  }, [isFutureDay, claimForDate]);
+
+  const submitClaim = (mode: 'now' | 'schedule') => {
+    if (mode === 'schedule') {
+      const iso = new Date(scheduleAt).toISOString();
+      onClaim({ timer_starts_at: iso, claim_for_date: claimForDate });
+    } else {
+      onClaim(claimForDate ? { claim_for_date: claimForDate } : undefined);
+    }
+  };
 
   const spotsLeft   = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
   const soldOut     = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
@@ -293,6 +341,59 @@ export default function DealDetailModal({
               </button>
             </div>
           )}
+
+          {/* Visit-time scheduling (Starter / Pro / yearly) */}
+          {canSchedule && user && !alreadyClaimed && !isRedeemed && !soldOut && !deal.is_coming && !dailyLimitReached && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide mb-2.5" style={{ color: CUSTOMER_UI.textMuted }}>
+                Visit time
+              </p>
+              {!isFutureDay && (
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setScheduling(false)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all"
+                    style={!scheduling
+                      ? { background: CUSTOMER_UI.accent, color: '#fff' }
+                      : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}
+                  >
+                    <IconBolt size={15} /> Claim now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScheduling(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold transition-all"
+                    style={scheduling
+                      ? { background: CUSTOMER_UI.accent, color: '#fff' }
+                      : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}
+                  >
+                    <IconCalendarClock size={15} /> Schedule
+                  </button>
+                </div>
+              )}
+
+              {(scheduling || isFutureDay) && (
+                <div>
+                  <label className="block text-[12px] mb-1.5" style={{ color: CUSTOMER_UI.textSecondary }}>
+                    Pick your visit start time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    min={minSchedule}
+                    onChange={e => setScheduleAt(e.target.value)}
+                    className="w-full h-12 px-3 rounded-xl text-[14px] outline-none"
+                    style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary, colorScheme: 'dark' }}
+                  />
+                  <p className="text-[12px] mt-2 flex items-center gap-1.5" style={{ color: CUSTOMER_UI.textMuted }}>
+                    <IconClock size={13} style={{ color: CUSTOMER_UI.claimBlue }} />
+                    Your {visitWindowMinutes}-min visit window starts then. It waits in your Claims until that time.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Sticky CTA ── */}
@@ -328,16 +429,22 @@ export default function DealDetailModal({
             >
               <IconCircleCheck size={18} /> View QR code
             </button>
-          ) : (
-            <button
-              onClick={dailyLimitReached ? undefined : onClaim}
-              disabled={claiming || dailyLimitReached}
-              className="w-full py-3.5 rounded-2xl transition-opacity text-[16px] font-bold text-white"
-              style={{ background: CUSTOMER_UI.accent, opacity: dailyLimitReached ? 0.4 : 1, cursor: dailyLimitReached ? 'default' : 'pointer' }}
-            >
-              {claiming ? 'Claiming…' : 'Claim now'}
-            </button>
-          )}
+          ) : (() => {
+            const mode: 'now' | 'schedule' = (scheduling || isFutureDay) ? 'schedule' : 'now';
+            const label = mode === 'schedule'
+              ? (claiming ? 'Reserving…' : 'Reserve deal')
+              : (claiming ? 'Claiming…' : 'Claim now');
+            return (
+              <button
+                onClick={dailyLimitReached ? undefined : () => submitClaim(mode)}
+                disabled={claiming || dailyLimitReached}
+                className="w-full py-3.5 rounded-2xl transition-opacity text-[16px] font-bold text-white"
+                style={{ background: CUSTOMER_UI.accent, opacity: dailyLimitReached ? 0.4 : 1, cursor: dailyLimitReached ? 'default' : 'pointer' }}
+              >
+                {label}
+              </button>
+            );
+          })()}
         </div>
       </div>
     </div>

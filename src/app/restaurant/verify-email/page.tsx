@@ -48,7 +48,7 @@ function RestaurantVerifyEmailContent() {
     setCooldown(30);
   }, [email, cooldown, supabase]);
 
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
 
   return (
     <div
@@ -59,7 +59,7 @@ function RestaurantVerifyEmailContent() {
         className="pointer-events-none absolute"
         style={{
           width: 500, height: 500, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(6,95,70,0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(18,73,169,0.12) 0%, transparent 70%)',
           top: '20%', left: '50%', transform: 'translateX(-50%)',
           filter: 'blur(60px)',
         }}
@@ -78,9 +78,9 @@ function RestaurantVerifyEmailContent() {
           <div
             className="w-full h-full rounded-2xl flex items-center justify-center text-5xl transition-all duration-500"
             style={{
-              background: resent ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)' : '#F9FAFB',
+              background: resent ? 'linear-gradient(135deg, #EAF1FB, #D8E5FA)' : '#F9FAFB',
               border: `2px solid ${resent ? '#6EE7B7' : '#E5E7EB'}`,
-              boxShadow: resent ? '0 0 40px rgba(6,95,70,0.2)' : undefined,
+              boxShadow: resent ? '0 0 40px rgba(18,73,169,0.2)' : undefined,
             }}
           >
             {resent ? '📨' : '✉️'}
@@ -88,7 +88,7 @@ function RestaurantVerifyEmailContent() {
           {resent && (
             <div
               className="absolute inset-0 rounded-2xl animate-ping"
-              style={{ border: `2px solid rgba(6,95,70,0.3)` }}
+              style={{ border: `2px solid rgba(18,73,169,0.3)` }}
             />
           )}
         </div>
@@ -105,7 +105,7 @@ function RestaurantVerifyEmailContent() {
           disabled={cooldown > 0 || !email}
           className="w-full h-12 rounded-xl font-bold text-[15px] flex items-center justify-center transition-all disabled:cursor-not-allowed"
           style={{
-            background: cooldown > 0 ? '#F9FAFB' : resent ? '#ECFDF5' : GREEN,
+            background: cooldown > 0 ? '#F9FAFB' : resent ? '#EAF1FB' : GREEN,
             color: cooldown > 0 ? '#9CA3AF' : resent ? GREEN : '#fff',
             border: cooldown > 0 || resent ? '1.5px solid #E5E7EB' : 'none',
           }}

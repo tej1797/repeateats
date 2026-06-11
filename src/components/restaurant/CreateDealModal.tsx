@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { IconX, IconLoader2, IconCheck } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 
-const GREEN = '#065F46';
+const GREEN = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const DEAL_TYPES = ['dine-in', 'pickup', 'delivery'] as const;
 type DayKey = typeof DAYS[number];
@@ -146,7 +146,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
 
         {done ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgba(6,95,70,0.1)' }}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgba(18,73,169,0.1)' }}>
               <IconCheck size={32} style={{ color: GREEN }} />
             </div>
             <p className="font-bold text-[18px]" style={{ color: GREEN }}>{isEdit ? 'Deal updated!' : 'Deal created!'}</p>
@@ -221,7 +221,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                     onClick={() => toggleType(t)}
                     className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold capitalize transition-all"
                     style={selectedTypes.has(t)
-                      ? { borderColor: GREEN, background: 'rgba(6,95,70,0.08)', color: GREEN }
+                      ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
                       : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                   >
                     {t}
@@ -239,7 +239,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setAllDays(true)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={allDays
-                    ? { borderColor: GREEN, background: 'rgba(6,95,70,0.08)', color: GREEN }
+                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Every day
@@ -249,7 +249,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setAllDays(false)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={!allDays
-                    ? { borderColor: GREEN, background: 'rgba(6,95,70,0.08)', color: GREEN }
+                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Select days
@@ -264,7 +264,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                       onClick={() => toggleDay(d)}
                       className="w-11 h-9 rounded-brands border-2 text-[13px] font-semibold transition-all"
                       style={selectedDays.has(d)
-                        ? { borderColor: GREEN, background: 'rgba(6,95,70,0.08)', color: GREEN }
+                        ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
                         : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                     >
                       {d}
@@ -283,7 +283,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setUnlimited(true)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={unlimited
-                    ? { borderColor: GREEN, background: 'rgba(6,95,70,0.08)', color: GREEN }
+                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Unlimited
@@ -293,7 +293,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   onClick={() => setUnlimited(false)}
                   className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
                   style={!unlimited
-                    ? { borderColor: GREEN, background: 'rgba(6,95,70,0.08)', color: GREEN }
+                    ? { borderColor: GREEN, background: 'rgba(18,73,169,0.08)', color: GREEN }
                     : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                 >
                   Set limit

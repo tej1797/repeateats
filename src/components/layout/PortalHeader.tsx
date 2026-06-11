@@ -25,7 +25,7 @@ interface PortalHeaderProps {
 
 const PORTAL_COLOR: Record<Portal, string> = {
   customer:   '#E85D04',
-  restaurant: '#065F46',
+  restaurant: '#1249A9',
   influencer: '#7E22CE',
 };
 

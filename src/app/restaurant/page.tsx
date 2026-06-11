@@ -657,7 +657,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
     await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
 
   return (
     <div className="min-h-screen flex" style={{ background: '#0D0D0D' }}>
@@ -668,10 +668,10 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
         style={{ background: '#0a1a12' }}
       >
         <div className="pointer-events-none absolute inset-0"
-          style={{ background: `radial-gradient(500px circle at ${cursor.x}px ${cursor.y}px, rgba(6,95,70,0.2), transparent 50%)` }} />
+          style={{ background: `radial-gradient(500px circle at ${cursor.x}px ${cursor.y}px, rgba(18,73,169,0.2), transparent 50%)` }} />
         <a href="/" className="text-[13px] z-10" style={{ color: 'rgba(255,255,255,0.4)' }}>← Back to home</a>
         <div className="z-10">
-          <div className="w-16 h-16 rounded-2xl mb-5 flex items-center justify-center" style={{ background: 'rgba(6,95,70,0.3)', border: '1px solid rgba(6,95,70,0.5)' }}>
+          <div className="w-16 h-16 rounded-2xl mb-5 flex items-center justify-center" style={{ background: 'rgba(18,73,169,0.3)', border: '1px solid rgba(18,73,169,0.5)' }}>
             <IconBuildingStore size={32} style={{ color: '#34d399' }} />
           </div>
           <p className="font-display text-[26px] font-extrabold text-white leading-tight mb-4">
@@ -712,14 +712,14 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="owner@restaurant.com" required
               className="w-full h-12 px-4 rounded-xl text-[15px] outline-none transition-all"
               style={{ border: '1.5px solid #E5E7EB', background: '#FAFAFA' }}
-              onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(6,95,70,0.1)`; }}
+              onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(18,73,169,0.1)`; }}
               onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.boxShadow = 'none'; }}
             />
             <div className="relative">
               <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required
                 className="w-full h-12 pl-4 pr-12 rounded-xl text-[15px] outline-none transition-all"
                 style={{ border: '1.5px solid #E5E7EB', background: '#FAFAFA' }}
-                onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(6,95,70,0.1)`; }}
+                onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(18,73,169,0.1)`; }}
                 onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.boxShadow = 'none'; }}
               />
               <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -731,7 +731,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
                 <input type={showConf ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm password" required
                   className="w-full h-12 pl-4 pr-12 rounded-xl text-[15px] outline-none transition-all"
                   style={{ border: '1.5px solid #E5E7EB', background: '#FAFAFA' }}
-                  onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(6,95,70,0.1)`; }}
+                  onFocus={(e) => { e.target.style.borderColor = GREEN; e.target.style.boxShadow = `0 0 0 3px rgba(18,73,169,0.1)`; }}
                   onBlur={(e) => { e.target.style.borderColor = '#E5E7EB'; e.target.style.boxShadow = 'none'; }}
                 />
                 <button type="button" onClick={() => setShowConf((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -1680,28 +1680,48 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialRestaurant.id]);
 
+  // Dashboard stats from the analytics RPC (separates redeemed vs awaiting-scan,
+  // counted by redeemed_at — not raw claim counts). Falls back to deal-derived values.
+  const [dashStats, setDashStats] = useState<{
+    active_deals: number; redeemed_claims: number; awaiting_scan: number;
+  } | null>(null);
+
   useEffect(() => {
     async function load() {
-      const [dr, cr] = await Promise.all([
+      const [dr, cr, sr] = await Promise.all([
         supabase.from('deals').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
         supabase.from('collabs').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
+        supabase.rpc('get_restaurant_dashboard_stats', { p_restaurant_id: restaurant.id }),
       ]);
       setDeals((dr.data ?? []) as Deal[]);
       setCollabs((cr.data ?? []) as Collab[]);
+      if (sr.data && !sr.error) {
+        const s = sr.data as Record<string, number>;
+        setDashStats({
+          active_deals:    s.active_deals    ?? 0,
+          redeemed_claims: s.redeemed_claims ?? 0,
+          awaiting_scan:   s.awaiting_scan   ?? 0,
+        });
+      }
       setLoading(false);
     }
     void load();
   }, [restaurant.id, supabase]);
 
-  const totalClaims = deals.reduce((s, d) => s + d.current_claims, 0);
   const activeDeals = deals.filter((d) => d.is_active && !d.is_coming);
   const openCollabs = collabs.filter((c) => c.status === 'open' || c.status === 'negotiating');
+  const totalClaims = deals.reduce((s, d) => s + d.current_claims, 0);
+
+  // Prefer RPC values; fall back to locally derived counts.
+  const redeemedCount = dashStats?.redeemed_claims ?? 0;
+  const awaitingCount = dashStats?.awaiting_scan ?? deals.reduce((s, d) => s + d.current_claims, 0);
+  const activeDealCount = dashStats?.active_deals ?? activeDeals.length;
 
   const STATS = [
-    { label: 'Total claims',    value: totalClaims,              emoji: '🎟️' },
-    { label: 'Active deals',    value: activeDeals.length,       emoji: '🔥' },
-    { label: 'Collab requests', value: openCollabs.length,       emoji: '📸' },
-    { label: 'Rating',          value: restaurant.rating?.toFixed(1) ?? '—', emoji: '⭐' },
+    { label: 'Redeemed',      value: redeemedCount,                         emoji: '✅', highlight: true  },
+    { label: 'Awaiting scan', value: awaitingCount,                         emoji: '🎟️', highlight: false },
+    { label: 'Active deals',  value: activeDealCount,                       emoji: '🔥', highlight: false },
+    { label: 'Rating',        value: restaurant.rating?.toFixed(1) ?? '—',  emoji: '⭐', highlight: false },
   ];
 
   const toggleActive = async (deal: Deal) => {
@@ -1715,7 +1735,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     setDeals((prev) => prev.filter((d) => d.id !== deal.id));
   };
 
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
 
   const ALL_TABS: { id: DashTab; label: string; perm?: keyof ManagerPerms }[] = [
     { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
@@ -1736,7 +1756,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       <header className="bg-surface border-b border-[var(--bd)] sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/restaurant" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 rounded-brands bg-[#ECFDF5] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-brands bg-[#EAF1FB] flex items-center justify-center">
               <IconBuildingStore size={18} style={{ color: GREEN }} />
             </div>
             <div>
@@ -1755,7 +1775,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
           </a>
           {managerMode ? (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(6,95,70,0.1)', color: GREEN }}>
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(18,73,169,0.1)', color: GREEN }}>
                 <IconShieldLock size={13} /> Manager Mode
               </span>
             </div>
@@ -1802,7 +1822,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               {STATS.map((s) => (
                 <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
                   <div className="text-2xl mb-1">{s.emoji}</div>
-                  <div className="font-display text-2xl font-extrabold text-tx">{s.value}</div>
+                  <div className="font-display text-2xl font-extrabold" style={{ color: s.highlight ? '#16A34A' : 'var(--tx)' }}>{s.value}</div>
                   <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
                 </div>
               ))}
@@ -1811,13 +1831,13 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
             <a
               href="/restaurant/redeem"
               className="flex items-center gap-4 rounded-brand border-2 p-4 transition-all hover:shadow-md"
-              style={{ borderColor: '#065F46', background: 'rgba(6,95,70,0.04)' }}
+              style={{ borderColor: '#22C55E', background: 'rgba(34,197,94,0.06)' }}
             >
-              <div className="w-11 h-11 rounded-brands flex items-center justify-center text-2xl flex-shrink-0" style={{ background: 'rgba(6,95,70,0.1)' }}>
+              <div className="w-11 h-11 rounded-brands flex items-center justify-center text-2xl flex-shrink-0" style={{ background: 'rgba(34,197,94,0.12)' }}>
                 📷
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-[15px]" style={{ color: '#065F46' }}>Redeem a customer QR code</p>
+                <p className="font-bold text-[15px]" style={{ color: '#16A34A' }}>Redeem a customer QR code</p>
                 <p className="text-[12px] text-t2">Tap to open the staff redemption terminal</p>
               </div>
               <span className="text-[20px] text-t3">→</span>
@@ -1980,7 +2000,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               {STATS.map((s) => (
                 <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
                   <div className="text-2xl mb-1">{s.emoji}</div>
-                  <div className="font-display text-2xl font-extrabold text-tx">{s.value}</div>
+                  <div className="font-display text-2xl font-extrabold" style={{ color: s.highlight ? '#16A34A' : 'var(--tx)' }}>{s.value}</div>
                   <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
                 </div>
               ))}
@@ -2093,7 +2113,7 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
   const [coverPreview,   setCoverPreview]   = useState<string | null>(restaurant.cover_url ?? null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
 
   const save = async () => {
     setSaving(true);
@@ -2181,7 +2201,7 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
             <button
               onClick={() => coverInputRef.current?.click()}
               disabled={coverUploading}
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-brands border border-[var(--bd2)] text-[13px] font-semibold text-t2 hover:border-[#065F46] hover:text-[#065F46] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-brands border border-[var(--bd2)] text-[13px] font-semibold text-t2 hover:border-[#1249A9] hover:text-[#1249A9] transition-colors disabled:opacity-50"
             >
               {coverUploading ? (
                 <><IconLoader2 size={14} className="animate-spin" /> Uploading…</>
@@ -2209,7 +2229,7 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
             <input
               value={form[key]}
               onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-              className="w-full h-10 px-3 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#065F46] transition-colors bg-white"
+              className="w-full h-10 px-3 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#1249A9] transition-colors bg-white"
             />
           </div>
         ))}
@@ -2219,7 +2239,7 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             rows={3}
-            className="w-full px-3 py-2 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#065F46] transition-colors bg-white resize-none"
+            className="w-full px-3 py-2 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#1249A9] transition-colors bg-white resize-none"
           />
         </div>
       </div>
@@ -2297,14 +2317,14 @@ function ManagerExitPrompt({ restaurant, onExit }: {
         onChange={e => { setPin(e.target.value.replace(/\D/g,'')); setError(''); }}
         onKeyDown={e => e.key === 'Enter' && handleVerify()}
         placeholder="6-digit PIN"
-        className="w-full h-10 px-3 text-center font-mono text-[18px] tracking-widest border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46] mb-2"
+        className="w-full h-10 px-3 text-center font-mono text-[18px] tracking-widest border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#1249A9] mb-2"
       />
       {error && <p className="text-[12px] text-red-500 mb-2">{error}</p>}
       <div className="flex gap-2">
         <button onClick={() => setOpen(false)} className="flex-1 h-9 rounded-brands border border-[var(--bd2)] text-[13px] text-t2">Cancel</button>
         <button onClick={handleVerify} disabled={pin.length !== 6 || busy}
           className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50"
-          style={{ background: '#065F46' }}>
+          style={{ background: '#1249A9' }}>
           {busy ? '…' : 'Confirm'}
         </button>
       </div>
@@ -2322,7 +2342,7 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
   onSignOut: () => void;
 }) {
   const rest = restaurant as unknown as Record<string, unknown>;
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
 
   // Pause / live
   const [isPaused,    setIsPaused]    = useState(!!(rest.is_paused as boolean));
@@ -2459,7 +2479,7 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
                 onChange={e => { setOwnerPinForPay(e.target.value.replace(/\D/,'')); setPayPinError(''); }}
                 onKeyDown={e => e.key === 'Enter' && handlePayPinSubmit()}
                 placeholder="6-digit PIN"
-                className="flex-1 h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46]"
+                className="flex-1 h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#1249A9]"
               />
               <button onClick={handlePayPinSubmit} disabled={ownerPinForPay.length !== 6 || payPinBusy}
                 className="h-10 px-4 rounded-brands text-[13px] font-semibold text-white disabled:opacity-50"
@@ -2618,12 +2638,12 @@ function OwnerPinGate({ restaurant, title, onSuccess, onClose }: {
         onChange={e => { setPin(e.target.value.replace(/\D/g,'')); setErr(''); }}
         onKeyDown={e => e.key === 'Enter' && verify()}
         placeholder="6-digit PIN"
-        className="w-full h-11 px-3 font-mono text-[18px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46] mb-2"
+        className="w-full h-11 px-3 font-mono text-[18px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#1249A9] mb-2"
       />
       {err && <p className="text-[12px] text-red-500 mb-2">{err}</p>}
       <button onClick={verify} disabled={pin.length !== 6 || busy}
         className="w-full h-11 rounded-brands text-[14px] font-bold text-white disabled:opacity-50"
-        style={{ background: '#065F46' }}>
+        style={{ background: '#1249A9' }}>
         {busy ? '…' : 'Confirm'}
       </button>
     </div>
@@ -2637,7 +2657,7 @@ function ManagerSetupModal({ restaurant, supabase, onDone, onClose }: {
   onDone: (perms: ManagerPerms) => void;
   onClose: () => void;
 }) {
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
   const [mgrPin,   setMgrPin]   = useState('');
   const [ownPin,   setOwnPin]   = useState('');
   const [perms, setPerms] = useState<ManagerPerms>({ dashboard: false, deals: false, analytics: false, collabs: false, profile: false, scanner: true });
@@ -2685,14 +2705,14 @@ function ManagerSetupModal({ restaurant, supabase, onDone, onClose }: {
             <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Manager PIN (staff uses this)</label>
             <input type="password" maxLength={6} value={mgrPin} placeholder="6 digits"
               onChange={e => setMgrPin(e.target.value.replace(/\D/g,''))}
-              className="w-full h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46]"
+              className="w-full h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#1249A9]"
             />
           </div>
           <div>
             <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Owner PIN (you use this to exit + view payments)</label>
             <input type="password" maxLength={6} value={ownPin} placeholder="6 digits"
               onChange={e => setOwnPin(e.target.value.replace(/\D/g,''))}
-              className="w-full h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#065F46]"
+              className="w-full h-10 px-3 font-mono text-[16px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface outline-none focus:border-[#1249A9]"
             />
           </div>
 
@@ -2734,7 +2754,7 @@ function PaymentMethodsEditor({ restaurantId, supabase }: {
   restaurantId: string;
   supabase: ReturnType<typeof createClient>;
 }) {
-  const GREEN = '#065F46';
+  const GREEN = '#1249A9';
   interface Payout {
     card_last4: string; bank_account_name: string; bank_transit: string;
     bank_institution: string; bank_account: string; paypal_email: string; etransfer_email: string;
@@ -2768,7 +2788,7 @@ function PaymentMethodsEditor({ restaurantId, supabase }: {
       <label className="block text-[12px] font-semibold text-t2 mb-1">{label}</label>
       <input value={form[k]} placeholder={placeholder}
         onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-        className="w-full h-9 px-3 border border-[var(--bd2)] rounded-brands bg-surface text-[13px] text-tx outline-none focus:border-[#065F46]"
+        className="w-full h-9 px-3 border border-[var(--bd2)] rounded-brands bg-surface text-[13px] text-tx outline-none focus:border-[#1249A9]"
       />
     </div>
   );

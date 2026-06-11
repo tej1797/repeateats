@@ -5,13 +5,21 @@ import { useState } from 'react';
 import type { Claim, ClaimWithDeal } from '@/types/index';
 
 interface ClaimResult {
-  qr_code:        string;
-  claim_id?:      string;
+  qr_code:         string;
+  claim_id?:       string;
+  status?:         string;
+  expires_at?:     string | null;
+  timer_starts_at?: string | null;
   alreadyClaimed?: boolean;
 }
 
+interface ClaimOpts {
+  claim_for_date?:  string;
+  timer_starts_at?: string;
+}
+
 interface UseClaimsResult {
-  claimDeal:   (dealId: string) => Promise<ClaimResult | null>;
+  claimDeal:   (dealId: string, opts?: ClaimOpts) => Promise<ClaimResult | null>;
   fetchClaims: () => Promise<ClaimWithDeal[]>;
   loading:     boolean;
   error:       string | null;
@@ -39,7 +47,7 @@ export function useClaims(): UseClaimsResult {
         }),
       });
       const json = await res.json() as {
-        data?: Claim & { qr_code: string; claim_id?: string };
+        data?: Claim & { qr_code: string; claim_id?: string; status?: string; expires_at?: string | null; timer_starts_at?: string | null };
         error?: string;
         alreadyClaimed?: boolean;
       };
@@ -56,7 +64,14 @@ export function useClaims(): UseClaimsResult {
       const qrCode = json.data?.qr_code;
       if (!qrCode) return null;
 
-      return { qr_code: qrCode, claim_id: json.data?.claim_id, alreadyClaimed: json.alreadyClaimed };
+      return {
+        qr_code:         qrCode,
+        claim_id:        json.data?.claim_id,
+        status:          json.data?.status,
+        expires_at:      json.data?.expires_at ?? null,
+        timer_starts_at: json.data?.timer_starts_at ?? null,
+        alreadyClaimed:  json.alreadyClaimed,
+      };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       return null;

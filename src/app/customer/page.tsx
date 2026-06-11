@@ -45,7 +45,7 @@ import type { User } from '@supabase/supabase-js';
 // ─── Types ────────────────────────────────────────────────────────────────
 type DayKey = 'today' | 'tomorrow' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type Tab    = DayKey | 'all';
-interface DayTabDef { key: DayKey; label: string; earlyAccess?: boolean; locked?: boolean; claimable?: boolean }
+interface DayTabDef { key: DayKey; label: string; offset: number; earlyAccess?: boolean; locked?: boolean; claimable?: boolean }
 interface ClaimInfo { id: string; qr_code: string; status: string; expires_at: string | null }
 
 // ─── Day-tab utilities ────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ function getVisibleTabs(tier: string, tomorrowUnlockActive = false): DayTabDef[]
   return getBrowseDayTabs(tier, tomorrowUnlockActive).map(t => ({
     key:         t.key as DayKey,
     label:       t.label,
+    offset:      t.offset,
     earlyAccess: t.claimable && t.offset > 0,
     locked:      t.locked,
     claimable:   t.claimable,
@@ -741,7 +742,7 @@ export default function CustomerPage() {
   // Visible tabs for the current plan (recalculates when plan tier loads)
   const visibleTabs = useMemo(
     () => plan.loading
-      ? [{ key: 'today' as DayKey, label: 'Today', claimable: true }]
+      ? [{ key: 'today' as DayKey, label: 'Today', offset: 0, claimable: true }]
       : getVisibleTabs(plan.tier, plan.tomorrow_unlock_active),
     [plan.tier, plan.loading, plan.tomorrow_unlock_active],
   );
@@ -844,25 +845,44 @@ export default function CustomerPage() {
   const currentTabMeta = visibleTabs.find(t => t.key === tab);
   const tabClaimLocked = currentTabMeta?.locked ?? false;
 
-  const handleClaim = async () => {
+  // Date (YYYY-MM-DD) for the currently active day tab — used for scheduled claims.
+  const activeTabDate = useMemo(() => {
+    if (tab === 'all') return undefined;
+    const offset = visibleTabs.find(t => t.key === tab)?.offset ?? 0;
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }, [tab, visibleTabs]);
+
+  const handleClaim = async (opts?: { timer_starts_at?: string; claim_for_date?: string }) => {
     if (!activeDeal) return;
     if (tabClaimLocked) {
       setClaimError('Upgrade to RepEAT+ to claim deals on this day.');
       return;
     }
     setClaimError(null);
-    const result = await claimDeal(activeDeal.id);
+    const result = await claimDeal(activeDeal.id, opts);
     if (result) {
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const isScheduled = result.status === 'scheduled';
+      const expiresAt = result.expires_at ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
-        [activeDeal.id]: { id: result.claim_id ?? '', qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
+        [activeDeal.id]: {
+          id: result.claim_id ?? '',
+          qr_code: result.qr_code,
+          status: isScheduled ? 'scheduled' : 'claimed',
+          expires_at: expiresAt,
+        },
       }));
-      setQrCode(result.qr_code);
-      // Do NOT call optimisticClaim() — the quota counter only increases when
-      // the restaurant scans and redeems the QR (counted_against_limit = true).
-      if ((result as { claim_id?: string }).claim_id) {
-        setActiveClaimId((result as { claim_id?: string }).claim_id!);
+      // Quota counter only increases on restaurant redeem (counted_against_limit).
+      if (isScheduled) {
+        // Reserved for a future time — no live QR yet. Send the user to Waiting.
+        setActiveDeal(null);
+        router.push('/customer/claims');
+      } else {
+        setQrCode(result.qr_code);
+        if (result.claim_id) setActiveClaimId(result.claim_id);
       }
     } else {
       setClaimError('Could not claim this deal. Please try again.');
@@ -1364,6 +1384,8 @@ export default function CustomerPage() {
           existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
           isRedeemed={isRedeemed(activeDeal.id)}
           dailyLimitReached={plan.dailyHit}
+          claimForDate={activeTabDate}
+          visitWindowMinutes={plan.visit_window_minutes}
           onViewExisting={code => {
             setQrCode(code);
             const claimInfo = userClaimMap[activeDeal.id];

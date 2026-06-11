@@ -24,7 +24,7 @@ interface ClaimPreview {
   } | null;
 }
 
-const GREEN = '#065F46';
+const GREEN = '#16A34A';
 
 export default function RedeemPage() {
   const router   = useRouter();
@@ -198,7 +198,7 @@ export default function RedeemPage() {
 
         {/* Title */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'rgba(6,95,70,0.1)' }}>
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.1)' }}>
             <IconQrcode size={32} style={{ color: GREEN }} />
           </div>
           <h1 className="font-display text-[26px] font-extrabold mb-2">Redeem a Deal</h1>
@@ -263,7 +263,7 @@ export default function RedeemPage() {
             <div className="flex items-start gap-4 mb-5">
               <div
                 className="w-14 h-14 rounded-brands flex items-center justify-center text-3xl flex-shrink-0"
-                style={{ background: 'rgba(6,95,70,0.08)' }}
+                style={{ background: 'rgba(34,197,94,0.08)' }}
               >
                 {preview.deal?.emoji ?? '🍽️'}
               </div>
