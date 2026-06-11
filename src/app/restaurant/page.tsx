@@ -621,6 +621,14 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const leftRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'auth') {
+      setError('Google sign-in failed. Please try again or use email.');
+      window.history.replaceState({}, '', '/restaurant');
+    }
+  }, []);
+
+  useEffect(() => {
     const el = leftRef.current;
     if (!el) return;
     const fn = (e: MouseEvent) => {

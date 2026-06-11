@@ -36,8 +36,14 @@ function CallbackInner() {
       router.replace(portalPath(portal));
     };
     void run().catch(() => {
+      const portal = resolvePortalIntent(
+        searchParams.get('portal'),
+        readPortalCookie(),
+      );
       setMsg('Sign-in failed. Redirecting…');
-      router.replace('/customer/login?error=auth');
+      window.location.replace(
+        portal === 'customer' ? '/customer/login?error=auth' : `${portalPath(portal)}?error=auth`,
+      );
     });
   }, [router, searchParams]);
 
