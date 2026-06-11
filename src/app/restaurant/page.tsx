@@ -58,6 +58,7 @@ import {
 } from '@tabler/icons-react';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
+import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -637,7 +638,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
     setBtnState('loading'); setError('');
 
     if (isSignUp) {
-      localStorage.setItem('rp_portal', 'restaurant');
+      void setPortalIntent('restaurant');
       const { data, error: authErr } = await supabase.auth.signUp({
         email,
         password,
@@ -664,8 +665,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
-    localStorage.setItem('rp_portal', 'restaurant')
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await startGoogleOAuth(supabase, 'restaurant');
   };
 
   const GREEN = '#1249A9';

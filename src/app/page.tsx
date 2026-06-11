@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { resolvePortalIntent, readPortalCookie, clearPortalIntent, portalPath } from '@/lib/portalAuth';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const GOLD = '#D4AF37';
@@ -165,9 +166,9 @@ export default function LandingPage() {
       const code   = params.get('code');
       const error  = params.get('error');
       if (error) {
-        const portal = localStorage.getItem('rp_portal') || 'customer';
-        localStorage.removeItem('rp_portal');
-        router.replace(portal === 'customer' ? `/customer/login?error=${error}` : `/${portal}?error=${error}`);
+        const portal = resolvePortalIntent(null, readPortalCookie());
+        clearPortalIntent();
+        router.replace(portal === 'customer' ? `/customer/login?error=${error}` : `${portalPath(portal)}?error=${error}`);
         return;
       }
       if (!code) return;
@@ -178,20 +179,16 @@ export default function LandingPage() {
         if (authError) {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
-            const portal = localStorage.getItem('rp_portal') || 'customer';
-            localStorage.removeItem('rp_portal');
-            router.replace(portal === 'customer' ? '/customer/login?error=auth' : `/${portal}?error=auth`);
+            const portal = resolvePortalIntent(null, readPortalCookie());
+            clearPortalIntent();
+            router.replace(portal === 'customer' ? '/customer/login?error=auth' : `${portalPath(portal)}?error=auth`);
             return;
           }
         }
-        const portal = localStorage.getItem('rp_portal') || 'customer';
-        localStorage.removeItem('rp_portal');
+        const portal = resolvePortalIntent(null, readPortalCookie());
+        clearPortalIntent();
         window.history.replaceState({}, '', '/');
-        switch (portal) {
-          case 'restaurant': router.replace('/restaurant'); break;
-          case 'influencer': router.replace('/influencer'); break;
-          default:           router.replace('/customer');
-        }
+        router.replace(portalPath(portal));
       } catch {
         router.replace('/customer/login?error=auth');
       }

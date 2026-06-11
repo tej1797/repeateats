@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { setPortalIntent } from '@/lib/portalAuth';
 import {
   IconArrowLeft, IconArrowRight, IconCheck,
   IconEye, IconEyeOff, IconBrandInstagram, IconBrandTiktok,
@@ -187,7 +188,7 @@ export default function CreatorSignupPage() {
       };
 
       // Store portal + profile for post-email-confirmation creation
-      localStorage.setItem('rp_portal', 'influencer');
+      void setPortalIntent('influencer');
       localStorage.setItem('rp_pending_influencer', JSON.stringify(profilePayload));
 
       // 1. Create auth user

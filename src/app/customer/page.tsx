@@ -32,6 +32,7 @@ import {
   type SortBy,
 } from '@/lib/discoverFilters';
 import { createClient } from '@/lib/supabase/client';
+import { startGoogleOAuth } from '@/lib/portalAuth';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
@@ -458,8 +459,7 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   };
 
   const handleGoogle = async () => {
-    localStorage.setItem('rp_portal', 'customer');
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await startGoogleOAuth(supabase, 'customer');
   };
 
   return (

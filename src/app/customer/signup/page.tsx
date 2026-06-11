@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { IconCheck, IconEye, IconEyeOff, IconArrowLeft, IconArrowRight } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 
 // ─── Google SVG ───────────────────────────────────────────────────────────────
 function GoogleIcon() {
@@ -179,8 +180,7 @@ export default function CustomerSignupPage() {
   ];
 
   const handleGoogle = async () => {
-    localStorage.setItem('rp_portal', 'customer')
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await startGoogleOAuth(supabase, 'customer');
   };
 
   const handleNext = () => {
@@ -190,7 +190,7 @@ export default function CustomerSignupPage() {
     // Final submit
     void (async () => {
       setLoading(true);
-      localStorage.setItem('rp_portal', 'customer');
+      void setPortalIntent('customer');
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email,
         password,

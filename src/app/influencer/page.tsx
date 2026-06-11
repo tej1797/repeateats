@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { startGoogleOAuth } from '@/lib/portalAuth';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Influencer, CollabWithDetails } from '@/types';
 import { useCollabs } from '@/hooks/useCollabs';
@@ -360,8 +361,7 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   };
 
   const handleGoogle = async () => {
-    localStorage.setItem('rp_portal', 'influencer')
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await startGoogleOAuth(supabase, 'influencer');
   };
 
 

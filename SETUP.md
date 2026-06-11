@@ -307,6 +307,7 @@ In **Supabase Dashboard → Authentication → Settings**:
 
 4. **Redirect URLs** → add:
    - `https://repeateats.ca/auth/callback`
+   - `https://www.repeateats.ca/auth/callback`
    - `http://localhost:3000/auth/callback`
    - `http://localhost:3001/auth/callback`
 
