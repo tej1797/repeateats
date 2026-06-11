@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  IconX, IconCalendar, IconStar, IconTag, IconWallet, IconSortAscending,
+  IconCalendar, IconStar, IconTag, IconWallet, IconSortAscending,
 } from '@tabler/icons-react';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { SORT_OPTIONS, type SortBy } from '@/lib/discoverFilters';

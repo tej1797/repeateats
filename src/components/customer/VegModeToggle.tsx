@@ -1,7 +1,5 @@
 'use client';
 
-import { CUSTOMER_UI } from '@/lib/customerUI';
-
 interface VegModeToggleProps {
   vegMode:  boolean;
   onChange: (veg: boolean) => void;
