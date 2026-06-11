@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const { data: claim, error: claimError } = await supabase
     .from('claims')
-    .select('id, status, expires_at, qr_token_current, reveals_used, last_revealed_at')
+    .select('id, status, expires_at, qr_code, qr_token_current, reveals_used, last_revealed_at')
     .eq('id', claim_id)
     .eq('user_id', user.id)
     .eq('status', 'claimed')
@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
   if (claimError || !claim) {
     return NextResponse.json({ error: 'Claim not found or expired' }, { status: 404 });
   }
+
+  // The scannable token is the short RE-XXX-XXX code (matches the mobile app QR
+  // and the claim-deal redeem normaliser). Fall back to a legacy vanishing token.
+  const scanToken = claim.qr_token_current ?? claim.qr_code;
 
   if ((claim.reveals_used ?? 0) >= 2) {
     return NextResponse.json(
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (isCurrentlyVisible) {
     return NextResponse.json({
       visible:           true,
-      qr_token:          claim.qr_token_current,
+      qr_token:          scanToken,
       reveals_remaining: 2 - (claim.reveals_used ?? 0),
       visible_until:     new Date(lastReveal + VISIBLE_MS).toISOString(),
     });
@@ -67,7 +71,7 @@ export async function POST(req: NextRequest) {
       last_revealed_at: now,
     })
     .eq('id', claim_id)
-    .select('qr_token_current, reveals_used')
+    .select('qr_code, qr_token_current, reveals_used')
     .single();
 
   if (updateError || !updated) {
@@ -76,7 +80,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     visible:           true,
-    qr_token:          updated.qr_token_current,
+    qr_token:          updated.qr_token_current ?? updated.qr_code,
     reveals_remaining: 2 - (updated.reveals_used ?? 0),
     visible_until:     new Date(Date.now() + VISIBLE_MS).toISOString(),
   });

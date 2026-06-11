@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const { data: claim, error } = await supabase
     .from('claims')
-    .select('reveals_used, last_revealed_at, qr_token_current, status, expires_at')
+    .select('reveals_used, last_revealed_at, qr_code, qr_token_current, status, expires_at')
     .eq('id', claimId)
     .eq('user_id', user.id)
     .single();
@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     reveals_used:      claim.reveals_used      ?? 0,
     last_revealed_at:  claim.last_revealed_at,
-    qr_token_current:  claim.qr_token_current,
+    // Scannable token = short RE-XXX-XXX code (matches mobile app + redeem normaliser).
+    qr_token_current:  claim.qr_token_current ?? claim.qr_code,
     status:            claim.status,
     expires_at:        claim.expires_at,
   });
