@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCode } from 'react-qrcode-logo';
 
 interface VanishingQRProps {
   claimId: string;
@@ -33,7 +33,6 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
     if (document.hidden) hideQR();
   }, [hideQR]);
 
-  // Fetch real reveal state from DB on every mount
   useEffect(() => {
     const fetchClaimState = async () => {
       try {
@@ -43,7 +42,6 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
           last_revealed_at?: string | null;
           qr_token_current?: string | null;
           status?:           string;
-          expires_at?:       string | null;
         };
 
         if (!res.ok) {
@@ -60,9 +58,8 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
           return;
         }
 
-        // Restore visible state if the 2-min window is still open
-        const lastReveal    = data.last_revealed_at ? new Date(data.last_revealed_at).getTime() : null;
-        const visibleUntil  = lastReveal ? lastReveal + 2 * 60 * 1000 : null;
+        const lastReveal   = data.last_revealed_at ? new Date(data.last_revealed_at).getTime() : null;
+        const visibleUntil = lastReveal ? lastReveal + 2 * 60 * 1000 : null;
 
         if (visibleUntil && visibleUntil > Date.now()) {
           setQrToken(data.qr_token_current ?? null);
@@ -92,7 +89,6 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
     void fetchClaimState();
   }, [claimId, hideQR]);
 
-  // Hide on window blur (e.g. app switcher, screenshot tools)
   useEffect(() => {
     if (state !== 'visible') return;
     const handleBlur = () => hideQR();
@@ -116,14 +112,13 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
         body:    JSON.stringify({ claim_id: claimId }),
       });
       const data = await res.json() as {
-        qr_token?:         string;
+        qr_token?:          string;
         reveals_remaining?: number;
-        visible_until?:    string;
-        error?:            string;
+        visible_until?:     string;
       };
 
       if (res.status === 403) { setState('exhausted'); setRevealsRemaining(0); return; }
-      if (!res.ok)             return;
+      if (!res.ok) return;
 
       setQrToken(data.qr_token ?? null);
       setRevealsRemaining(data.reveals_remaining ?? 0);
@@ -151,8 +146,6 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
 
   return (
     <div style={{ textAlign: 'center', padding: '0 16px' }}>
-
-      {/* QR tap area */}
       <div
         onClick={(!initialising && state !== 'exhausted') ? revealQR : undefined}
         style={{
@@ -169,13 +162,16 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
       >
         {state === 'visible' && qrToken ? (
           <>
-            <QRCodeSVG
+            <QRCode
               value={qrToken}
               size={180}
-              level="L"
+              quietZone={8}
               fgColor="#FF7A00"
-              bgColor="#ffffff"
-              style={{ display: 'block' }}
+              bgColor="#FFFFFF"
+              ecLevel="M"
+              qrStyle="dots"
+              eyeRadius={8}
+              style={{ display: 'block', margin: '0 auto' }}
             />
             <div style={{
               marginTop:        12,
@@ -245,7 +241,6 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
         )}
       </div>
 
-      {/* Timer pill — outside the white box */}
       {state === 'visible' && (
         <div style={{
           background:   'rgba(255,122,0,0.10)',

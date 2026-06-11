@@ -10,6 +10,16 @@ import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Restaurant, Deal, Collab } from '@/types';
 import CreateDealModal from '@/components/restaurant/CreateDealModal';
+import ScannerPanel from '@/components/restaurant/ScannerPanel';
+import RestaurantSearch, { type PlaceResult } from '@/components/restaurant/RestaurantSearch';
+import {
+  defaultHours as defaultHoursEntries,
+  hoursRecordToEntries,
+  entriesToHoursRecord,
+  parseGoogleHours,
+  RESTAURANT_DAYS,
+  type HoursEntry,
+} from '@/lib/restaurantHours';
 import {
   IconBuildingStore,
   IconArrowLeft,
@@ -39,6 +49,11 @@ import {
   IconCreditCard,
   IconLock,
   IconAlertTriangle,
+  IconQrcode,
+  IconChartBar,
+  IconTag,
+  IconClock,
+  IconChevronRight,
 } from '@tabler/icons-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -76,12 +91,7 @@ const DEAL_TEMPLATES = [
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// Per-day hours entry used in the hours editor (Step 3)
-interface HoursEntry {
-  open: string;   // "11:00"
-  close: string;  // "22:00"
-  closed: boolean;
-}
+// HoursEntry imported from @/lib/restaurantHours
 
 // A single deal being composed before it's POSTed
 interface DealDraft {
@@ -132,9 +142,7 @@ type ViewState = 'loading' | 'auth' | 'onboarding' | 'dashboard';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function defaultHours(): Record<string, HoursEntry> {
-  return Object.fromEntries(
-    DAYS.map((d) => [d, { open: '11:00', close: '22:00', closed: false }])
-  );
+  return defaultHoursEntries();
 }
 
 function todayStr(): string { return new Date().toISOString().split('T')[0]; }
@@ -763,47 +771,6 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
       </div>
     </div>
   );
-}
-
-// ─── Google hours parsing helpers ────────────────────────────────────────────
-
-const GOOGLE_DAY_MAP: Record<string, string> = {
-  Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu',
-  Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun',
-};
-
-function to24h(timeStr: string): string {
-  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-  if (!match) return '12:00';
-  let hour = parseInt(match[1], 10);
-  const min = match[2];
-  const meridiem = match[3].toUpperCase();
-  if (meridiem === 'PM' && hour !== 12) hour += 12;
-  if (meridiem === 'AM' && hour === 12) hour = 0;
-  return `${hour.toString().padStart(2, '0')}:${min}`;
-}
-
-function parseGoogleHours(weekdayText: string[]): Record<string, HoursEntry> {
-  const result = defaultHours();
-  for (const line of weekdayText) {
-    const colonIdx = line.indexOf(': ');
-    if (colonIdx === -1) continue;
-    const dayFull = line.slice(0, colonIdx);
-    const hoursStr = line.slice(colonIdx + 2);
-    const key = GOOGLE_DAY_MAP[dayFull];
-    if (!key) continue;
-    if (hoursStr === 'Closed') {
-      result[key] = { open: '11:00', close: '22:00', closed: true };
-    } else if (hoursStr.includes('Open 24 hours')) {
-      result[key] = { open: '00:00', close: '23:59', closed: false };
-    } else {
-      const parts = hoursStr.split(/\s*[–\-]\s*/);
-      if (parts.length >= 2) {
-        result[key] = { open: to24h(parts[0].trim()), close: to24h(parts[1].trim()), closed: false };
-      }
-    }
-  }
-  return result;
 }
 
 // ─── Step 1: Google Places search ─────────────────────────────────────────────
@@ -1627,7 +1594,7 @@ function Step5Photo({
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'settings';
+type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'scanner' | 'settings';
 
 interface ManagerPerms {
   dashboard: boolean; deals: boolean; analytics: boolean;
@@ -1735,12 +1702,37 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     setDeals((prev) => prev.filter((d) => d.id !== deal.id));
   };
 
-  const GREEN = '#1249A9';
+  const BLUE = '#1249A9';
+  const GREEN = '#22C55E';
+
+  const restMeta = restaurant as unknown as Record<string, unknown>;
+  const trialEndsAt = restMeta.trial_ends_at as string | null;
+  const restaurantTier = restMeta.restaurant_tier as string | null;
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000))
+    : 0;
+  const tierLabel = restaurantTier === 'trial'
+    ? `Pro trial · ${trialDaysLeft}d left`
+    : restaurantTier === 'pro'
+      ? 'Pro plan'
+      : restaurantTier === 'starter'
+        ? 'Starter plan'
+        : 'Free plan';
+
+  const TAB_LABELS: Record<DashTab, string> = {
+    dashboard: 'Dashboard',
+    deals:     'Deals',
+    analytics: 'Analytics',
+    profile:   'Profile',
+    scanner:   'Scan QR',
+    settings:  'Settings',
+  };
 
   const ALL_TABS: { id: DashTab; label: string; perm?: keyof ManagerPerms }[] = [
     { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
     { id: 'deals',     label: 'Deals',     perm: 'deals'     },
     { id: 'analytics', label: 'Analytics', perm: 'analytics' },
+    { id: 'scanner',   label: 'Scanner',   perm: 'scanner'   },
     { id: 'profile',   label: 'Profile',   perm: 'profile'   },
     { id: 'settings',  label: 'Settings'                     },
   ];
@@ -1756,26 +1748,16 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       <header className="bg-surface border-b border-[var(--bd)] sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/restaurant" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 rounded-brands bg-[#EAF1FB] flex items-center justify-center">
-              <IconBuildingStore size={18} style={{ color: GREEN }} />
-            </div>
             <div>
-              <div className="font-display text-[15px] font-extrabold leading-none">
+              <div className="font-display text-[18px] font-extrabold leading-none">
                 Rep<span className="text-brand">EAT</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-t2 leading-none">{restaurant.name}</span>
-                {(restaurant as unknown as Record<string,unknown>).rating as number > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
-                    <IconStar size={9} /> {((restaurant as unknown as Record<string,unknown>).rating as number).toFixed(1)}
-                  </span>
-                )}
-              </div>
+              <div className="text-[11px] text-[#666] leading-none mt-0.5">{TAB_LABELS[tab]}</div>
             </div>
           </a>
           {managerMode ? (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(18,73,169,0.1)', color: GREEN }}>
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(18,73,169,0.1)', color: BLUE }}>
                 <IconShieldLock size={13} /> Manager Mode
               </span>
             </div>
@@ -1791,8 +1773,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
             <button key={t.id} onClick={() => setTab(t.id)}
               className="px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 transition-colors"
               style={{
-                borderColor: tab === t.id ? GREEN : 'transparent',
-                color: tab === t.id ? GREEN : 'var(--t2)',
+                borderColor: tab === t.id ? BLUE : 'transparent',
+                color: tab === t.id ? BLUE : 'var(--t2)',
               }}>
               {t.label}
             </button>
@@ -1804,97 +1786,143 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
         {/* ── DASHBOARD TAB ─────────────────────────────────────── */}
         {tab === 'dashboard' && (
-          <div className="space-y-6">
-            <div className="bg-surface rounded-brand shadow-brand p-5 flex items-center justify-between">
-              <div>
-                <h1 className="font-display text-xl font-extrabold">{restaurant.name}</h1>
-                <p className="text-t2 text-sm">{restaurant.city} · {restaurant.cuisine}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-full ${restaurant.is_live ? 'bg-green-100 text-green-700' : 'bg-surface2 text-t3'}`}>
-                    {restaurant.is_live ? '🟢 Live' : '⏸ Paused'}
+          <div className="space-y-5">
+            {/* Welcome header */}
+            <div>
+              <p className="text-[13px] text-[#888] mb-1">Welcome back</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="font-display text-[26px] font-extrabold text-white leading-tight">
+                  {restaurant.name}
+                </h1>
+                {restaurant.rating > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full"
+                    style={{ border: '1px solid rgba(234,179,8,0.4)', background: '#1A1A1A', color: '#EAB308' }}
+                  >
+                    <IconStar size={12} fill="currentColor" />
+                    {restaurant.rating.toFixed(1)}
                   </span>
-                  {restaurant.rating > 0 && <span className="text-[12px] text-t2">⭐ {restaurant.rating}</span>}
-                </div>
+                )}
               </div>
-              <div className="w-14 h-14 rounded-brands bg-surface2 flex items-center justify-center text-3xl shrink-0">🍽️</div>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <span className="flex items-center gap-1.5 text-[12px] text-[#888]">
+                  <span className="w-2 h-2 rounded-full" style={{ background: restaurant.is_live ? BLUE : '#666' }} />
+                  {restaurant.is_live ? 'Live · accepting claims' : 'Paused · not accepting claims'}
+                </span>
+                <span
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full border border-[#333] bg-[#141414]"
+                >
+                  <IconStar size={11} style={{ color: '#EAB308' }} fill="currentColor" />
+                  <span className="text-[#CCC]">{tierLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => setTab('settings')}
+                    className="text-[11px] font-bold ml-1"
+                    style={{ color: BLUE }}
+                  >
+                    Plans &gt;
+                  </button>
+                </span>
+              </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {STATS.map((s) => (
-                <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
-                  <div className="text-2xl mb-1">{s.emoji}</div>
-                  <div className="font-display text-2xl font-extrabold" style={{ color: s.highlight ? '#16A34A' : 'var(--tx)' }}>{s.value}</div>
-                  <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
+
+            {/* Primary redeem CTA — blue card like app */}
+            <button
+              type="button"
+              onClick={() => setTab('scanner')}
+              className="w-full flex items-center gap-4 rounded-2xl p-4 transition-all hover:opacity-95 text-left"
+              style={{ background: BLUE }}
+            >
+              <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                <IconQrcode size={24} className="text-white" stroke={1.5} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-[16px] text-white">Redeem a customer QR code</p>
+                <p className="text-[12px] text-white/70">Scan the QR they show you at checkout</p>
+              </div>
+              <IconArrowRight size={20} className="text-white/80 flex-shrink-0" />
+            </button>
+
+            {/* 2×2 metrics grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Awaiting scan',   value: awaitingCount,  icon: IconQrcode,  color: '#FF7A30' },
+                { label: 'Active deals',    value: activeDealCount, icon: IconTag,     color: BLUE },
+                { label: 'Redeemed',        value: redeemedCount,  icon: IconCheck,   color: GREEN },
+                { label: 'Collab requests', value: openCollabs.length, icon: IconStar, color: '#A855F7' },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div
+                  key={label}
+                  className="rounded-2xl p-4"
+                  style={{ background: '#141414', border: '1px solid #222' }}
+                >
+                  <Icon size={20} style={{ color }} className="mb-2" stroke={1.5} />
+                  <div className="font-display text-[28px] font-extrabold text-white leading-none">{value}</div>
+                  <div className="text-[12px] text-[#888] mt-1">{label}</div>
                 </div>
               ))}
             </div>
-            {/* Quick action — QR redemption */}
-            <a
-              href="/restaurant/redeem"
-              className="flex items-center gap-4 rounded-brand border-2 p-4 transition-all hover:shadow-md"
-              style={{ borderColor: '#22C55E', background: 'rgba(34,197,94,0.06)' }}
-            >
-              <div className="w-11 h-11 rounded-brands flex items-center justify-center text-2xl flex-shrink-0" style={{ background: 'rgba(34,197,94,0.12)' }}>
-                📷
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-[15px]" style={{ color: '#16A34A' }}>Redeem a customer QR code</p>
-                <p className="text-[12px] text-t2">Tap to open the staff redemption terminal</p>
-              </div>
-              <span className="text-[20px] text-t3">→</span>
-            </a>
 
-            {/* Recent deals summary */}
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display text-lg font-bold">Active deals</h2>
-                <button onClick={() => setTab('deals')} className="text-[13px] text-brand font-semibold hover:underline">
-                  View all →
-                </button>
-              </div>
-              {loading ? (
-                <div className="space-y-2">{[1,2].map((n) => <div key={n} className="h-16 bg-surface animate-pulse rounded-brands" />)}</div>
-              ) : activeDeals.length === 0 ? (
-                <div className="bg-surface rounded-brand border-2 border-dashed border-[var(--bd2)] p-6 text-center">
-                  <p className="text-t2 text-sm mb-3">No active deals. Create your first promotion!</p>
-                  <button onClick={() => setTab('deals')} className="inline-flex items-center gap-1.5 px-4 h-9 rounded-brands text-sm font-semibold text-white" style={{ background: GREEN }}>
-                    <IconPlus size={15} /> Create a deal
+            {/* Quick actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateDeal(true)}
+                className="rounded-2xl p-4 flex flex-col items-center gap-2 transition-all hover:bg-[#1A1A1A]"
+                style={{ background: '#141414', border: '1px solid #222' }}
+              >
+                <div className="w-10 h-10 rounded-full border border-[#444] flex items-center justify-center">
+                  <IconPlus size={18} className="text-white" />
+                </div>
+                <span className="text-[13px] font-semibold text-white">New deal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('analytics')}
+                className="rounded-2xl p-4 flex flex-col items-center gap-2 transition-all hover:bg-[#1A1A1A]"
+                style={{ background: '#141414', border: '1px solid #222' }}
+              >
+                <div className="w-10 h-10 rounded-full border border-[#444] flex items-center justify-center">
+                  <IconChartBar size={18} className="text-white" />
+                </div>
+                <span className="text-[13px] font-semibold text-white">Analytics</span>
+              </button>
+            </div>
+
+            {/* Active deals preview */}
+            {!loading && activeDeals.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-display text-[15px] font-bold text-white">Active deals</h2>
+                  <button type="button" onClick={() => setTab('deals')} className="text-[12px] font-semibold text-brand">
+                    View all →
                   </button>
                 </div>
-              ) : (
                 <div className="space-y-2">
                   {activeDeals.slice(0, 3).map((deal) => (
-                    <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
-                      <span className="text-2xl shrink-0">{deal.emoji}</span>
+                    <div
+                      key={deal.id}
+                      className="rounded-xl p-3 flex items-center gap-3"
+                      style={{ background: '#141414', border: '1px solid #222' }}
+                    >
+                      <span className="text-xl shrink-0">{deal.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
-                        <div className="text-[12px] text-t2">{deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}{deal.max_claims ? ` / ${deal.max_claims} max` : ''}</div>
+                        <div className="font-semibold text-[13px] text-white truncate">{deal.title}</div>
+                        <div className="text-[11px] text-[#888]">
+                          {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
+                          {deal.max_claims ? ` / ${deal.max_claims} max` : ''}
+                        </div>
                         {deal.max_claims !== null && deal.max_claims > 0 && (
-                          <div className="mt-1.5 h-1.5 bg-surface2 rounded-full overflow-hidden">
-                            <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }} />
+                          <div className="mt-1.5 h-1 bg-[#222] rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%`,
+                                background: '#FF7A30',
+                              }}
+                            />
                           </div>
                         )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-            {openCollabs.length > 0 && (
-              <section>
-                <h2 className="font-display text-lg font-bold mb-3">
-                  Collab requests
-                  <span className="ml-2 text-[13px] font-semibold text-brand bg-brandlt px-2 py-0.5 rounded-full">{openCollabs.length}</span>
-                </h2>
-                <div className="space-y-2">
-                  {openCollabs.map((c) => (
-                    <div key={c.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-brands bg-[#FDF4FF] flex items-center justify-center text-xl shrink-0">📸</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-tx truncate">{c.deliverables ?? 'Collab request'}</div>
-                        <div className="text-[12px] text-t2">
-                          {c.offer_amount_min && c.offer_amount_max ? `$${c.offer_amount_min}–$${c.offer_amount_max}` : 'Offer TBD'}
-                          {' · '}<span className={c.status === 'negotiating' ? 'text-brand' : 'text-t3'}>{c.status}</span>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -1911,7 +1939,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               <h2 className="font-display text-xl font-bold">Your Deals</h2>
               <button onClick={() => setShowCreateDeal(true)}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-brands text-sm font-semibold text-white"
-                style={{ background: GREEN }}>
+                style={{ background: BLUE }}>
                 <IconPlus size={15} /> Create deal
               </button>
             </div>
@@ -1922,7 +1950,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                 <div className="text-4xl mb-3">🎫</div>
                 <p className="font-semibold text-tx mb-1">No deals yet</p>
                 <p className="text-t2 text-sm mb-4">Create your first deal to start attracting customers</p>
-                <button onClick={() => setShowCreateDeal(true)} className="inline-flex items-center gap-1.5 px-5 h-10 rounded-brands text-sm font-semibold text-white" style={{ background: GREEN }}>
+                <button onClick={() => setShowCreateDeal(true)} className="inline-flex items-center gap-1.5 px-5 h-10 rounded-brands text-sm font-semibold text-white" style={{ background: BLUE }}>
                   <IconPlus size={15} /> Create your first deal
                 </button>
               </div>
@@ -2000,7 +2028,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               {STATS.map((s) => (
                 <div key={s.label} className="bg-surface rounded-brands shadow-brand p-4 text-center">
                   <div className="text-2xl mb-1">{s.emoji}</div>
-                  <div className="font-display text-2xl font-extrabold" style={{ color: s.highlight ? '#16A34A' : 'var(--tx)' }}>{s.value}</div>
+                  <div className="font-display text-2xl font-extrabold" style={{ color: s.highlight ? GREEN : 'var(--tx)' }}>{s.value}</div>
                   <div className="text-[12px] text-t2 mt-0.5">{s.label}</div>
                 </div>
               ))}
@@ -2019,7 +2047,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-tx truncate">{deal.title}</div>
                         <div className="h-1.5 bg-surface2 rounded-full overflow-hidden mt-1">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${totalClaims > 0 ? Math.round((deal.current_claims / totalClaims) * 100) : 0}%`, background: GREEN }} />
+                          <div className="h-full rounded-full transition-all" style={{ width: `${totalClaims > 0 ? Math.round((deal.current_claims / totalClaims) * 100) : 0}%`, background: BLUE }} />
                         </div>
                       </div>
                       <span className="text-[13px] font-bold text-tx shrink-0">{deal.current_claims}</span>
@@ -2043,9 +2071,14 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
           </div>
         )}
 
+        {/* ── SCANNER TAB ───────────────────────────────────────── */}
+        {tab === 'scanner' && (
+          <ScannerPanel restaurantId={restaurant.id} />
+        )}
+
         {/* ── PROFILE TAB ───────────────────────────────────────── */}
         {tab === 'profile' && (
-          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} />
+          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} user={user} onGoSettings={() => setTab('settings')} trialLabel={tierLabel} />
         )}
 
         {/* ── SETTINGS TAB ──────────────────────────────────────── */}
@@ -2091,41 +2124,83 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
 
-function ProfileTab({ restaurant, setRestaurant, supabase }: {
+function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, trialLabel }: {
   restaurant: Restaurant;
   setRestaurant: (r: Restaurant) => void;
   supabase: ReturnType<typeof createClient>;
+  user: SupabaseUser;
+  onGoSettings: () => void;
+  trialLabel: string;
 }) {
-  const [form,   setForm]   = useState({
+  const [form, setForm] = useState({
     name:       restaurant.name ?? '',
     cuisine:    restaurant.cuisine ?? '',
+    city:       restaurant.city ?? '',
     address:    restaurant.address ?? '',
     phone:      restaurant.phone ?? '',
     website:    restaurant.website ?? '',
     instagram:  ((restaurant as unknown) as Record<string, unknown>).instagram as string ?? '',
     description:((restaurant as unknown) as Record<string, unknown>).description as string ?? '',
   });
-  const [saving,        setSaving]        = useState(false);
-  const [saved,         setSaved]         = useState(false);
-  const [isLive,        setIsLive]        = useState(restaurant.is_live);
-  const [collabs,       setCollabs]       = useState(((restaurant as unknown) as Record<string, unknown>).open_to_collabs as boolean ?? false);
+  const [hoursEntries, setHoursEntries] = useState<Record<string, HoursEntry>>(
+    () => hoursRecordToEntries(restaurant.hours),
+  );
+  const [saving,         setSaving]         = useState(false);
+  const [saved,          setSaved]          = useState(false);
+  const [isLive,         setIsLive]         = useState(restaurant.is_live);
+  const [collabs,        setCollabs]        = useState(((restaurant as unknown) as Record<string, unknown>).open_to_collabs as boolean ?? false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverPreview,   setCoverPreview]   = useState<string | null>(restaurant.cover_url ?? null);
+  const [editing,        setEditing]        = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const GREEN = '#1249A9';
+  const BLUE   = '#1249A9';
+  const PURPLE = '#A855F7';
+
+  const ONTARIO_CITIES = [
+    'Toronto', 'Mississauga', 'Brampton', 'Markham', 'Vaughan',
+    'Richmond Hill', 'Oakville', 'Burlington', 'Hamilton',
+    'Waterloo', 'Kitchener', 'Cambridge', 'Guelph', 'London', 'Ottawa',
+  ];
+
+  const updateHours = (day: string, field: keyof HoursEntry, value: string | boolean) => {
+    setHoursEntries((prev) => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value },
+    }));
+  };
+
+  const handlePlaceSelect = (place: PlaceResult) => {
+    if (place.place_id === '__manual__') return;
+    const matched      = ONTARIO_CITIES.find((c) => place.address.includes(c));
+    const fallbackCity = place.address.split(',')[1]?.trim() ?? form.city;
+    setForm((f) => ({
+      ...f,
+      name:    place.name,
+      address: place.address,
+      city:    matched ?? fallbackCity,
+      phone:   place.phone   ?? f.phone,
+      website: place.website ?? f.website,
+    }));
+    if (place.hours_raw && place.hours_raw.length > 0) {
+      setHoursEntries(parseGoogleHours(place.hours_raw));
+    }
+    setEditing(true);
+  };
 
   const save = async () => {
     setSaving(true);
+    const hoursRecord = entriesToHoursRecord(hoursEntries);
     const { data } = await supabase
       .from('restaurants')
-      .update({ ...form, is_live: isLive, open_to_collabs: collabs })
+      .update({ ...form, hours: hoursRecord, is_live: isLive, open_to_collabs: collabs })
       .eq('id', restaurant.id)
       .select()
       .single();
     if (data) setRestaurant(data as Restaurant);
     setSaving(false);
     setSaved(true);
+    setEditing(false);
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -2134,144 +2209,274 @@ function ProfileTab({ restaurant, setRestaurant, supabase }: {
     try {
       const preview = URL.createObjectURL(file);
       setCoverPreview(preview);
-
       const ext  = file.name.split('.').pop() ?? 'jpg';
       const path = `covers/${restaurant.id}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('restaurant-photos')
         .upload(path, file, { upsert: true });
-
       if (upErr) { setCoverPreview(restaurant.cover_url ?? null); return; }
-
-      const { data: pub } = supabase.storage
-        .from('restaurant-photos')
-        .getPublicUrl(path);
-
+      const { data: pub } = supabase.storage.from('restaurant-photos').getPublicUrl(path);
       if (!pub.publicUrl) return;
-
       const { data: updated } = await supabase
         .from('restaurants')
         .update({ cover_url: pub.publicUrl })
         .eq('id', restaurant.id)
         .select()
         .single();
-
       if (updated) { setRestaurant(updated as Restaurant); setCoverPreview(pub.publicUrl); }
     } finally {
       setCoverUploading(false);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <h2 className="font-display text-xl font-bold">Restaurant Profile</h2>
+  const inputCls = 'w-full h-11 px-3 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#1249A9] transition-colors';
+  const labelCls = 'block text-[12px] font-semibold text-[#888] mb-1.5';
 
-      {/* ── Cover photo ──────────────────────────────────────────────────── */}
-      <div className="bg-surface rounded-brand shadow-brand p-5">
-        <h3 className="font-semibold text-base mb-3">Cover Photo</h3>
-        <div className="flex items-start gap-4">
-          {/* Preview */}
-          <div className="w-28 h-20 rounded-brands overflow-hidden bg-surface2 border border-[var(--bd)] flex-shrink-0">
+  return (
+    <div className="space-y-4 pb-8">
+      {/* Plans & billing card */}
+      <button
+        type="button"
+        onClick={onGoSettings}
+        className="w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-all hover:bg-[#1A1A1A]"
+        style={{ background: '#141414', border: '1px solid #222' }}
+      >
+        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${BLUE}22` }}>
+          <IconStar size={18} style={{ color: BLUE }} fill="currentColor" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-[14px] text-white">Plans & billing</p>
+          <p className="text-[12px] text-[#888]">{trialLabel}</p>
+        </div>
+        <IconChevronRight size={18} className="text-[#666] flex-shrink-0" />
+      </button>
+
+      {/* Restaurant summary card */}
+      <div className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[16px] text-white">{restaurant.name}</p>
+            <p className="text-[12px] text-[#888] mt-0.5">
+              {restaurant.city} · {restaurant.cuisine}
+              {restaurant.rating > 0 && (
+                <span className="ml-2 inline-flex items-center gap-0.5 text-amber-400">
+                  <IconStar size={11} fill="currentColor" /> {restaurant.rating.toFixed(1)}
+                </span>
+              )}
+            </p>
+            <p className="text-[12px] text-[#666] mt-1 truncate">{user.email}</p>
+          </div>
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0"
+            style={{
+              background: `${BLUE}18`,
+              border: `1px solid ${BLUE}44`,
+              color: BLUE,
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: BLUE }} />
+            {isLive ? 'Visible' : 'Hidden'}
+          </span>
+        </div>
+      </div>
+
+      {/* Profile edit card */}
+      <div className="rounded-2xl p-4 space-y-4" style={{ background: '#141414', border: '1px solid #222' }}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-[15px] text-white">Profile</h3>
+          {editing && (
+            <button type="button" onClick={() => setEditing(false)} className="text-[13px] font-semibold" style={{ color: BLUE }}>
+              Cancel
+            </button>
+          )}
+        </div>
+
+        {/* Google search */}
+        <div>
+          <label className={labelCls}>Find on Google (recommended)</label>
+          <RestaurantSearch
+            variant="dark"
+            placeholder="Search for your restaurant…"
+            onSelect={handlePlaceSelect}
+          />
+        </div>
+
+        {/* Cover photo */}
+        <div>
+          <label className={labelCls}>Cover photo</label>
+          <div className="rounded-xl overflow-hidden mb-2" style={{ background: '#1A1A1A' }}>
             {coverPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+              <img src={coverPreview} alt="Cover" className="w-full h-36 object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <IconPhoto size={24} className="text-t3" />
+              <div className="w-full h-36 flex items-center justify-center">
+                <IconPhoto size={32} className="text-[#444]" />
               </div>
             )}
           </div>
-          {/* Upload controls */}
-          <div className="flex-1">
-            <p className="text-[13px] text-t2 mb-3">
-              Your cover photo appears on deal cards and your restaurant listing.
-              JPG, PNG, or WebP · max 5 MB.
-            </p>
-            <input
-              ref={coverInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleCoverUpload(f);
-                e.target.value = '';
-              }}
-            />
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleCoverUpload(f);
+              e.target.value = '';
+            }}
+          />
+          <div className="flex gap-4">
             <button
+              type="button"
               onClick={() => coverInputRef.current?.click()}
               disabled={coverUploading}
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-brands border border-[var(--bd2)] text-[13px] font-semibold text-t2 hover:border-[#1249A9] hover:text-[#1249A9] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold disabled:opacity-50"
+              style={{ color: BLUE }}
             >
-              {coverUploading ? (
-                <><IconLoader2 size={14} className="animate-spin" /> Uploading…</>
-              ) : (
-                <><IconUpload size={14} /> {coverPreview ? 'Change photo' : 'Upload photo'}</>
-              )}
+              {coverUploading ? <IconLoader2 size={14} className="animate-spin" /> : <IconPencil size={14} />}
+              Change
             </button>
+            {coverPreview && (
+              <button
+                type="button"
+                onClick={() => { setCoverPreview(null); }}
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-red-400"
+              >
+                <IconX size={14} /> Remove
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Restaurant details */}
-      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
-        <h3 className="font-semibold text-base">Restaurant Details</h3>
-        {([
-          { key: 'name',        label: 'Restaurant name' },
-          { key: 'cuisine',     label: 'Cuisine type' },
-          { key: 'address',     label: 'Address' },
-          { key: 'phone',       label: 'Phone number' },
-          { key: 'website',     label: 'Website' },
-          { key: 'instagram',   label: 'Instagram handle' },
-        ] as { key: keyof typeof form; label: string }[]).map(({ key, label }) => (
-          <div key={key}>
-            <label className="block text-[12px] font-semibold text-t2 mb-1">{label}</label>
-            <input
-              value={form[key]}
-              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-              className="w-full h-10 px-3 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#1249A9] transition-colors bg-white"
-            />
-          </div>
-        ))}
+        {/* Form fields */}
         <div>
-          <label className="block text-[12px] font-semibold text-t2 mb-1">Description</label>
+          <label className={labelCls}>Restaurant name *</label>
+          <input value={form.name} onChange={(e) => { setForm((f) => ({ ...f, name: e.target.value })); setEditing(true); }} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Cuisine</label>
+          <select
+            value={form.cuisine}
+            onChange={(e) => { setForm((f) => ({ ...f, cuisine: e.target.value })); setEditing(true); }}
+            className={inputCls}
+          >
+            {CUISINES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>City</label>
+          <input value={form.city} onChange={(e) => { setForm((f) => ({ ...f, city: e.target.value })); setEditing(true); }} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Address</label>
           <textarea
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            rows={3}
-            className="w-full px-3 py-2 rounded-brands text-[14px] text-tx outline-none border border-[var(--bd)] focus:border-[#1249A9] transition-colors bg-white resize-none"
+            value={form.address}
+            onChange={(e) => { setForm((f) => ({ ...f, address: e.target.value })); setEditing(true); }}
+            rows={2}
+            className={`${inputCls} h-auto py-2 resize-none`}
           />
         </div>
-      </div>
+        <div>
+          <label className={labelCls}>Phone</label>
+          <input value={form.phone} onChange={(e) => { setForm((f) => ({ ...f, phone: e.target.value })); setEditing(true); }} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Website</label>
+          <input value={form.website} onChange={(e) => { setForm((f) => ({ ...f, website: e.target.value })); setEditing(true); }} className={inputCls} />
+        </div>
 
-      {/* Status toggles */}
-      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
-        <h3 className="font-semibold text-base">Status</h3>
-        {[
-          { label: 'Live on RepEAT', sub: 'Customers can see and claim your deals', val: isLive, set: setIsLive },
-          { label: 'Open to influencer collabs', sub: 'Creators can send you collab proposals', val: collabs, set: setCollabs },
-        ].map(({ label, sub, val, set }) => (
-          <div key={label} className="flex items-center justify-between gap-4">
+        {/* Opening hours */}
+        <div>
+          <label className={`${labelCls} flex items-center gap-1.5`}>
+            <IconClock size={14} /> Opening hours
+          </label>
+          <div className="space-y-2 mt-2">
+            {RESTAURANT_DAYS.map((day) => {
+              const entry = hoursEntries[day];
+              return (
+                <div key={day} className="flex items-center gap-2">
+                  <span className="w-9 text-[12px] font-bold text-[#888] shrink-0">{day}</span>
+                  {entry.closed ? (
+                    <button
+                      type="button"
+                      onClick={() => updateHours(day, 'closed', false)}
+                      className="flex-1 h-9 px-3 rounded-lg text-[13px] text-[#888] border border-[#333] bg-[#1A1A1A] text-left"
+                    >
+                      Closed
+                    </button>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={`${entry.open}–${entry.close}`}
+                        onChange={(e) => {
+                          const parts = e.target.value.split(/[–\-]/);
+                          if (parts.length >= 2) {
+                            updateHours(day, 'open', parts[0].trim());
+                            updateHours(day, 'close', parts[1].trim());
+                          }
+                          setEditing(true);
+                        }}
+                        className="flex-1 h-9 px-3 rounded-lg text-[13px] text-white border border-[#333] bg-[#1A1A1A] outline-none focus:border-[#1249A9]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateHours(day, 'closed', true)}
+                        className="h-9 px-3 rounded-lg text-[12px] font-semibold text-[#888] border border-[#333] bg-[#1A1A1A] hover:text-white transition-colors shrink-0"
+                      >
+                        Closed
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Toggles */}
+        <div className="space-y-4 pt-2 border-t border-[#222]">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="text-sm font-semibold text-tx">{label}</div>
-              <div className="text-[12px] text-t2">{sub}</div>
+              <div className="text-[14px] font-semibold text-white">Go Live</div>
+              <div className="text-[12px] text-[#888]">Publish your restaurant listing (use Settings to pause visibility anytime)</div>
             </div>
             <button
-              onClick={() => set(!val)}
-              className="relative w-10 h-6 rounded-full transition-colors shrink-0"
-              style={{ background: val ? GREEN : '#D1D5DB' }}>
-              <span className="absolute top-0.5 transition-transform w-5 h-5 rounded-full bg-white shadow"
-                style={{ left: val ? 'calc(100% - 22px)' : 2 }} />
+              type="button"
+              onClick={() => { setIsLive(!isLive); setEditing(true); }}
+              className="relative w-11 h-6 rounded-full transition-colors shrink-0"
+              style={{ background: isLive ? BLUE : '#333' }}
+            >
+              <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
+                style={{ left: isLive ? 'calc(100% - 22px)' : 2 }} />
             </button>
           </div>
-        ))}
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-[14px] font-semibold text-white">Open to creator collabs</div>
+              <div className="text-[12px] text-[#888]">Receive paid collab requests</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setCollabs(!collabs); setEditing(true); }}
+              className="relative w-11 h-6 rounded-full transition-colors shrink-0"
+              style={{ background: collabs ? PURPLE : '#333' }}
+            >
+              <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
+                style={{ left: collabs ? 'calc(100% - 22px)' : 2 }} />
+            </button>
+          </div>
+        </div>
       </div>
 
       <button
-        onClick={save} disabled={saving}
-        className="w-full h-11 rounded-brands text-white font-semibold text-[15px] transition-all disabled:opacity-50"
-        style={{ background: GREEN }}>
-        {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save changes'}
+        type="button"
+        onClick={save}
+        disabled={saving}
+        className="w-full h-12 rounded-xl text-white font-bold text-[15px] transition-all disabled:opacity-50"
+        style={{ background: BLUE }}
+      >
+        {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save changes'}
       </button>
     </div>
   );
