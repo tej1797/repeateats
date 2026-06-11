@@ -28,7 +28,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Claim not found' }, { status: 404 });
   }
 
-  if (claim.status !== 'claimed') {
+  // Allow cancelling both active ('claimed') and reserved ('scheduled') claims
+  if (claim.status !== 'claimed' && claim.status !== 'scheduled') {
     return NextResponse.json(
       { error: `Cannot revert a claim with status '${claim.status}'` },
       { status: 409 },

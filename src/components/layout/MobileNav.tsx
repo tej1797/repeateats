@@ -19,10 +19,10 @@ interface NavItem {
 
 const NAV_ITEMS: Record<Portal, NavItem[]> = {
   customer: [
-    { href: '/customer',                          icon: <IconTag size={22} />,    label: 'Deals' },
-    { href: '/customer/profile?tab=claims',       icon: <IconTicket size={22} />, label: 'Claims' },
-    { href: '/customer/points',                   icon: <IconStar size={22} />,   label: 'Rewards' },
-    { href: '/customer/profile',                  icon: <IconUser size={22} />,   label: 'Profile' },
+    { href: '/customer',           icon: <IconTag size={22} />,    label: 'Deals' },
+    { href: '/customer/claims',    icon: <IconTicket size={22} />, label: 'Claims' },
+    { href: '/customer/points',    icon: <IconStar size={22} />,   label: 'Rewards' },
+    { href: '/customer/profile',   icon: <IconUser size={22} />,   label: 'Profile' },
   ],
   restaurant: [
     { href: '/restaurant',        icon: <IconLayoutDashboard size={22} />, label: 'Dashboard' },

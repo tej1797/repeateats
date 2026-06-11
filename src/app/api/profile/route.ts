@@ -75,21 +75,47 @@ export async function GET() {
     if (city) citiesSet.add(city);
   }
 
+  // Claims made this month (by claimed_at)
+  const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).getTime();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const claimsThisMonth = (claimRows ?? []).filter((c: any) => new Date(c.claimed_at).getTime() >= monthCutoff).length;
+
+  // Saved-deals count
+  const { count: savedCount } = await supabase
+    .from('saved_deals')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+
+  // Points balance
+  const { data: pointsRow } = await supabase
+    .from('customer_points')
+    .select('balance')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const tier        = profile?.repeat_plus_tier ?? 'free';
+  const isRepeatPlus = tier !== 'free' || (profile?.is_repeat_plus ?? false);
+
   return NextResponse.json({
     data: {
       id: user.id,
       email: user.email ?? '',
-      display_name: profile?.display_name ?? user.user_metadata?.full_name ?? null,
+      display_name: profile?.name ?? user.user_metadata?.full_name ?? null,
       avatar_url: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? null,
+      phone: profile?.phone ?? null,
       member_since: profile?.member_since ?? user.created_at,
-      is_repeat_plus: profile?.is_repeat_plus ?? false,
+      is_repeat_plus: isRepeatPlus,
+      tier,
       city: profile?.city ?? null,
       radius_km: profile?.radius_km ?? 30,
       favourite_cuisine: profile?.favourite_cuisine ?? null,
       streak_days: profile?.streak_days ?? 0,
+      points_balance: pointsRow?.balance ?? 0,
+      saved_count: savedCount ?? 0,
       stats: {
         total_claims: totalClaims,
         total_saved_cents: totalSavedCents,
+        claims_this_month: claimsThisMonth,
         unique_deals: new Set((claimRows ?? []).map((c) => (c as { deal_id: string; status: string }).deal_id)).size,
         cities_explored: citiesSet.size,
         last_claim_at: lastClaimAt,
@@ -109,11 +135,13 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json() as Record<string, unknown>;
-  const allowed = ['display_name', 'avatar_url', 'city', 'radius_km', 'favourite_cuisine'];
+  const allowed = ['avatar_url', 'city', 'radius_km', 'favourite_cuisine', 'phone'];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];
   }
+  // display_name maps to the users.name column
+  if ('display_name' in body) patch.name = body.display_name;
 
   const { data, error } = await supabase
     .from('users')

@@ -207,7 +207,7 @@ function ProfileDrawer({ user, onClose, onSignOut }: { user: User; onClose: () =
   const navItems = [
     { href: '/customer',                       label: 'Browse Deals',      icon: '🏠' },
     { href: '/customer/profile',               label: 'My Profile',        icon: '👤' },
-    { href: '/customer/profile?tab=claims',    label: 'My Claims',         icon: '🎟️' },
+    { href: '/customer/claims',                label: 'My Claims',         icon: '🎟️' },
     { href: '/customer/profile?tab=savings',   label: 'Savings Dashboard', icon: '💰' },
   ];
 
@@ -308,12 +308,19 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
   );
 }
 
-// ─── LocationModal ────────────────────────────────────────────────────────
+// ─── LocationModal — bottom-sheet (mobile parity) ──────────────────────────
+const RADIUS_CHIPS = [2, 5, 10, 25, 50, 100];
+
 function LocationModal({ city, radius, onApply, onClose }: { city: string; radius: number; onApply: (c: string, r: number) => void; onClose: () => void }) {
   const [localCity,   setLocalCity]   = useState(city);
   const [localRadius, setLocalRadius] = useState(radius);
+  const [query,       setQuery]       = useState('');
   const [locating,    setLocating]    = useState(false);
   const [locateErr,   setLocateErr]   = useState('');
+
+  const matches = query.trim()
+    ? CITIES.filter(c => c.toLowerCase().includes(query.toLowerCase()))
+    : CITIES;
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) { setLocateErr('Geolocation not supported'); return; }
@@ -322,7 +329,6 @@ function LocationModal({ city, radius, onApply, onClose }: { city: string; radiu
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude: lat, longitude: lon } = pos.coords;
-        // Find nearest Ontario city by Euclidean distance on lat/lon
         let nearest = 'GTA Area';
         let minDist = Infinity;
         for (const [name, [clat, clon]] of Object.entries(CITY_COORDS)) {
@@ -337,50 +343,95 @@ function LocationModal({ city, radius, onApply, onClose }: { city: string; radiu
     );
   };
 
+  const apply = (nextCity = localCity, nextRadius = localRadius) => {
+    onApply(nextCity, nextRadius);
+    onClose();
+  };
+
   return (
-    <Overlay onClose={onClose}>
-      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-sm p-6 animate-[slideUp_0.2s_ease]">
-        <div className="flex justify-between items-center mb-5">
-          <span className="font-display text-[17px] font-bold">Location &amp; Radius</span>
-          <button onClick={onClose} className="p-1 text-t2 hover:text-tx transition-colors"><IconX size={18} /></button>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose} />
+      <div
+        className="relative w-full sm:max-w-md rounded-t-[24px] sm:rounded-[24px] px-5 pt-5 pb-[max(20px,env(safe-area-inset-bottom))] animate-[slideUp_0.22s_ease] max-h-[88vh] overflow-y-auto"
+        style={{ background: CUSTOMER_UI.bgElevated, color: CUSTOMER_UI.textPrimary, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
+      >
+        <div className="flex items-start justify-between mb-1">
+          <h2 className="font-display text-[22px] font-extrabold">Location</h2>
+          <button onClick={onClose} className="p-1" style={{ color: CUSTOMER_UI.textSecondary }}><IconX size={20} /></button>
+        </div>
+        <p className="text-[14px] mb-4" style={{ color: CUSTOMER_UI.textSecondary }}>
+          Search a city or adjust your search radius
+        </p>
+
+        {/* Search city */}
+        <div className="relative mb-2">
+          <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: CUSTOMER_UI.textMuted }} />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search city (e.g. Mississauga)"
+            className="w-full h-12 pl-10 pr-3 rounded-xl text-[14px] outline-none placeholder:opacity-60"
+            style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary }}
+          />
         </div>
 
-        {/* Use My Location button */}
-        <button
-          onClick={handleUseMyLocation}
-          disabled={locating}
-          className="w-full h-10 mb-4 flex items-center justify-center gap-2 border border-brand text-brand font-semibold text-[13px] rounded-brands hover:bg-brandlt transition-all disabled:opacity-60"
-        >
-          <IconMapPin size={14} />
-          {locating ? 'Detecting location…' : '📍 Use My Location'}
-        </button>
-        {locateErr && <p className="text-[12px] text-red-500 mb-3 -mt-1">{locateErr}</p>}
-
-        <p className="text-[13px] font-semibold text-t2 mb-2">Quick select</p>
-        <div className="flex flex-wrap gap-2 mb-5">
-          {CITIES.map(c => (
+        {/* City matches */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {matches.map(c => (
             <button
               key={c}
-              onClick={() => setLocalCity(c)}
-              className={`text-[13px] font-semibold px-3 py-1.5 rounded-full border transition-all ${localCity === c ? 'bg-brand text-white border-brand' : 'bg-surface border-[var(--bd2)] text-t2 hover:border-brand hover:text-brand'}`}
+              onClick={() => { setLocalCity(c); setQuery(''); }}
+              className="text-[13px] font-semibold px-3 py-1.5 rounded-full transition-all"
+              style={localCity === c
+                ? { background: CUSTOMER_UI.accent, color: '#fff' }
+                : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}
             >
-              {c === 'GTA Area' ? '🗺️ ' : '📍 '}{c}
+              {c}
             </button>
           ))}
         </div>
-        <div className="flex justify-between items-baseline mb-2">
-          <p className="text-[13px] text-t2 font-medium">Radius from <span className="text-brand font-bold">{localCity}</span></p>
-          <p className="font-display text-[24px] font-extrabold text-brand">{localRadius} km</p>
+
+        <button
+          onClick={handleUseMyLocation}
+          disabled={locating}
+          className="w-full h-10 mb-5 flex items-center justify-center gap-2 rounded-xl text-[13px] font-semibold disabled:opacity-60"
+          style={{ border: `1px solid ${CUSTOMER_UI.accent}`, color: CUSTOMER_UI.accent }}
+        >
+          <IconMapPin size={14} />
+          {locating ? 'Detecting location…' : 'Use my location'}
+        </button>
+        {locateErr && <p className="text-[12px] mb-3 -mt-3" style={{ color: '#f87171' }}>{locateErr}</p>}
+
+        {/* Search radius */}
+        <h3 className="font-display text-[18px] font-bold mb-0.5">Search radius</h3>
+        <p className="text-[13px] mb-3" style={{ color: CUSTOMER_UI.textSecondary }}>Show restaurants within</p>
+        <div className="grid grid-cols-3 gap-2.5 mb-5">
+          {RADIUS_CHIPS.map(r => {
+            const active = localRadius === r;
+            return (
+              <button
+                key={r}
+                onClick={() => setLocalRadius(r)}
+                className="h-12 rounded-xl text-[14px] font-bold transition-all"
+                style={active
+                  ? { background: CUSTOMER_UI.accent, color: '#fff' }
+                  : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}
+              >
+                {r} km
+              </button>
+            );
+          })}
         </div>
-        <input type="range" min={5} max={100} step={5} value={localRadius} onChange={e => setLocalRadius(Number(e.target.value))} className="w-full mb-1 accent-brand" />
-        <div className="flex justify-between text-[11px] text-t3 mb-5">
-          <span>5 km</span><span>25</span><span>50</span><span>75</span><span>100 km</span>
-        </div>
-        <button onClick={() => { onApply(localCity, localRadius); onClose(); }} className="w-full h-11 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors">
-          Show deals in this area
+
+        <button
+          onClick={() => apply()}
+          className="w-full py-3.5 rounded-2xl text-[16px] font-bold text-white"
+          style={{ background: CUSTOMER_UI.accent }}
+        >
+          Show deals in {localCity}
         </button>
       </div>
-    </Overlay>
+    </div>
   );
 }
 
@@ -1005,7 +1056,7 @@ export default function CustomerPage() {
               <p className="text-[13px] font-semibold flex-1" style={{ color: CUSTOMER_UI.textPrimary }}>
                 You have <span style={{ color: CUSTOMER_UI.accent }}>{activeCount} active claim{activeCount !== 1 ? 's' : ''}</span>
                 {' '}— remember to redeem before they expire!{' '}
-                <Link href="/customer/profile?tab=claims" className="underline text-brand hover:text-brand2">View QR codes →</Link>
+                <Link href="/customer/claims" className="underline text-brand hover:text-brand2">View QR codes →</Link>
               </p>
               <button onClick={() => setClaimsBannerDismissed(true)} className="text-t3 hover:text-tx flex-shrink-0">
                 <IconX size={15} />

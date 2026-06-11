@@ -1,11 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { IconX, IconCheck, IconShare2, IconCircleCheck, IconChevronRight } from '@tabler/icons-react';
+import { IconArrowLeft, IconShare2, IconCircleCheck, IconChevronRight, IconClock, IconLayoutGrid } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
-import { formatDiscountValue } from '@/lib/utils';
+import { CUSTOMER_UI } from '@/lib/customerUI';
 
 // Unsplash fallback images per cuisine category
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -25,60 +25,12 @@ const CATEGORY_IMAGES: Record<string, string> = {
   default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80',
 };
 
-// ─── Soft upsell shown when the daily limit is hit ────────────────────────────
-function DailyLimitReached({ plan }: { plan: string }) {
-  const router = useRouter();
-
-  const messages: Record<string, { title: string; sub: string; cta: string }> = {
-    free: {
-      title: "You've used your 1 free claim for today",
-      sub:   'Upgrade to Starter to claim up to 3 deals per day, or Pro for full week access.',
-      cta:   'See RepEAT+ plans →',
-    },
-    starter: {
-      title: "You've used all 3 claims for today",
-      sub:   'Upgrade to Pro for 30 deals/month and full week deal previews.',
-      cta:   'Upgrade to Pro →',
-    },
-  };
-
-  const msg = messages[plan] ?? messages.free;
-
-  return (
-    <div
-      style={{
-        background:    'rgba(255, 122, 0, 0.08)',
-        border:        '1px solid rgba(255, 122, 0, 0.25)',
-        borderRadius:  12,
-        padding:       '14px 16px',
-      }}
-    >
-      <p style={{ fontSize: 14, fontWeight: 500, color: '#FF7A00', margin: '0 0 4px' }}>
-        {msg.title}
-      </p>
-      <p style={{ fontSize: 13, color: 'var(--t2)', margin: '0 0 10px', lineHeight: 1.5 }}>
-        {msg.sub}
-      </p>
-      <button
-        onClick={() => router.push('/repeat-plus')}
-        style={{
-          display:        'inline-flex',
-          alignItems:     'center',
-          gap:            6,
-          background:     '#FF7A00',
-          color:          '#fff',
-          border:         'none',
-          borderRadius:   8,
-          padding:        '8px 14px',
-          fontSize:       13,
-          fontWeight:     500,
-          cursor:         'pointer',
-        }}
-      >
-        {msg.cta}
-      </button>
-    </div>
-  );
+// ─── Title-case helper for deal_types chips (dine-in → Dine-In) ──────────────
+function titleCase(s: string): string {
+  return s
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('-');
 }
 
 interface DealDetailModalProps {
@@ -100,7 +52,6 @@ interface DealDetailModalProps {
 export default function DealDetailModal({
   deal,
   user,
-  planTier           = 'free',
   onClose,
   onClaim,
   claiming           = false,
@@ -114,197 +65,277 @@ export default function DealDetailModal({
 }: DealDetailModalProps) {
   const router = useRouter();
 
-  const spotsLeft      = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
-  const soldOut        = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
-  const canSeeSchedule = planTier === 'starter' || planTier === 'pro' || planTier === 'yearly';
-  const progressPct    = deal.max_claims ? Math.min(100, (deal.current_claims / deal.max_claims) * 100) : 0;
+  const spotsLeft   = deal.max_claims !== null ? deal.max_claims - deal.current_claims : null;
+  const soldOut     = deal.max_claims !== null && spotsLeft !== null && spotsLeft <= 0;
+  const progressPct = deal.max_claims ? Math.min(100, (deal.current_claims / deal.max_claims) * 100) : 0;
 
-  // Header image: deal photo → cuisine Unsplash fallback
   const cuisine   = (deal.restaurant?.category ?? deal.restaurant?.cuisine ?? 'default').toLowerCase();
   const headerImg = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
 
-  // Deal type badge text
-  const badgeLabel = deal.deal_types?.length > 0 ? deal.deal_types[0].toUpperCase() : null;
+  const dealTypeChips = deal.deal_types ?? [];
+  const dayChips      = (deal.available_days ?? []).filter(d => d.toLowerCase() !== 'all');
 
-  // Show the upsell block when daily limit hit and no pending claim already active
-  const showLimitUpsell = dailyLimitReached && !alreadyClaimed && !isRedeemed && user;
+  // Terms list — mirrors mobile copy
+  const terms = [
+    'One redemption per customer per deal',
+    'Show the QR code at the restaurant',
+    'Cannot be combined with other offers',
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ background: 'rgba(0,0,0,0.7)' }}
         onClick={onClose}
       />
 
-      <div className="relative bg-surface rounded-t-[24px] sm:rounded-[20px] shadow-brand2 w-full max-w-sm overflow-hidden max-h-[93vh] overflow-y-auto animate-[slideUp_0.22s_ease] flex flex-col">
-
-        {/* ── Header image area ── */}
-        <div className="relative h-[180px] flex-shrink-0 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={headerImg}
-            alt={deal.restaurant?.name ?? ''}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/20" />
-
-          {/* Large emoji centre */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-7xl drop-shadow-lg">{deal.emoji ?? '🍽️'}</span>
-          </div>
-
-          {/* Close button top-left */}
+      <div
+        className="relative w-full sm:max-w-md overflow-hidden sm:rounded-[24px] max-h-screen sm:max-h-[93vh] overflow-y-auto flex flex-col"
+        style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}
+      >
+        {/* ── Top bar (restaurant name + grid icon) ── */}
+        <div
+          className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
+          style={{ background: CUSTOMER_UI.bg }}
+        >
           <button
             onClick={onClose}
-            className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-colors"
-            aria-label="Close"
+            className="flex items-center gap-2 text-[15px] font-semibold truncate"
+            style={{ color: CUSTOMER_UI.textPrimary }}
           >
-            <IconX size={16} />
+            <IconArrowLeft size={18} className="flex-shrink-0" />
+            <span className="truncate">{deal.restaurant?.name ?? 'Deal'}</span>
           </button>
+          <IconLayoutGrid size={18} style={{ color: CUSTOMER_UI.textSecondary }} className="flex-shrink-0" />
+        </div>
 
-          {/* Share button */}
+        {/* ── Restaurant title + category row ── */}
+        <div className="px-4 pb-3 text-center">
+          <p className="text-[16px] font-extrabold" style={{ color: CUSTOMER_UI.accent }}>
+            {deal.restaurant?.name}
+          </p>
+          <p className="text-[12px] mt-0.5" style={{ color: CUSTOMER_UI.textSecondary }}>
+            {deal.restaurant?.name}
+            {deal.deal_types?.[0] ? ` · ${deal.deal_types[0].toUpperCase()}` : ''}
+          </p>
+        </div>
+
+        {/* ── Header image ── */}
+        <div className="relative h-[190px] flex-shrink-0 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={headerImg} alt={deal.restaurant?.name ?? ''} className="w-full h-full object-cover" />
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(to top, ${CUSTOMER_UI.bg} 4%, transparent 55%)` }}
+          />
           {onShare && (
             <button
               onClick={onShare}
-              className="absolute top-3 right-14 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+              className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(0,0,0,0.5)', color: '#fff' }}
               aria-label="Share deal"
             >
               <IconShare2 size={16} />
             </button>
           )}
-
-          {/* Claim count badge top-right */}
           {deal.current_claims > 0 && (
-            <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white text-[12px] font-bold px-2.5 py-1 rounded-full">
+            <div
+              className="absolute top-3 left-3 text-[12px] font-bold px-2.5 py-1 rounded-full"
+              style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+            >
               🔥 {deal.current_claims} claimed
             </div>
           )}
         </div>
 
         {/* ── Body ── */}
-        <div className="px-5 pt-4 pb-5 flex flex-col gap-4">
+        <div className="px-4 pt-1 pb-6 flex flex-col gap-5">
 
-          {/* Deal type badge + title */}
+          {/* Big title */}
           <div>
-            {badgeLabel && (
-              <span className="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full mb-2 bg-brand text-white uppercase tracking-wide">
-                {badgeLabel}
-              </span>
-            )}
-            <div className="font-display text-[32px] font-extrabold text-brand leading-none mb-1">
-              {formatDiscountValue(deal.discount_value)}
-            </div>
-            <p className="text-[14px] font-semibold text-tx leading-snug">
+            <h1 className="font-display text-[34px] font-extrabold leading-[1.05]" style={{ color: CUSTOMER_UI.textPrimary }}>
               {deal.title}
-              {canSeeSchedule && deal.available_days && deal.available_days[0] !== 'all' && (
-                <span className="text-t2 font-normal"> — {deal.available_days.join(', ')}</span>
-              )}
-              {!canSeeSchedule && (
-                <button
-                  onClick={() => { window.location.href = '/repeat-plus'; }}
-                  className="ml-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(212,175,55,0.12)', color: '#B8971F' }}
-                >
-                  🔒 Schedule
-                </button>
-              )}
-            </p>
+            </h1>
+            {deal.description && (
+              <p className="text-[15px] mt-1" style={{ color: CUSTOMER_UI.textSecondary }}>
+                {deal.description}
+              </p>
+            )}
           </div>
 
-          {/* Restaurant row — tappable */}
+          {/* Restaurant card */}
           {deal.restaurant?.id && (
             <button
               onClick={() => { onClose(); router.push(`/customer/restaurant/${deal.restaurant!.id}`); }}
-              className="flex items-center gap-3 w-full bg-surface2 rounded-brands px-3 py-2.5 hover:bg-[var(--bd)] transition-colors text-left"
+              className="flex items-center gap-3 w-full rounded-2xl px-3.5 py-3 text-left"
+              style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
             >
-              <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center flex-shrink-0 text-white font-bold text-[16px]">
-                {deal.emoji ?? '🍽️'}
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 text-[20px]"
+                style={{ background: CUSTOMER_UI.accent }}
+              >
+                {deal.emoji ?? '🏪'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-[14px] text-tx truncate">{deal.restaurant.name}</p>
-                <p className="text-[12px] text-t2 truncate">
+                <p className="font-bold text-[15px] truncate" style={{ color: CUSTOMER_UI.textPrimary }}>
+                  {deal.restaurant.name}
+                </p>
+                <p className="text-[13px] truncate" style={{ color: CUSTOMER_UI.textSecondary }}>
                   {deal.restaurant.cuisine && `${deal.restaurant.cuisine} · `}{deal.restaurant.city ?? ''}
                 </p>
               </div>
-              <IconChevronRight size={16} className="text-t3 flex-shrink-0" />
+              <IconChevronRight size={18} style={{ color: CUSTOMER_UI.textMuted }} className="flex-shrink-0" />
             </button>
           )}
 
-          {/* Claims progress bar */}
+          {/* Claimed progress bar */}
           {deal.max_claims !== null && (
-            <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[11px] font-bold text-t3 uppercase tracking-wide">Claims</span>
-                <span className="text-[12px] font-bold text-tx">{deal.current_claims} / {deal.max_claims}</span>
+            <div
+              className="rounded-2xl px-4 py-3.5"
+              style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
+            >
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CUSTOMER_UI.textMuted }}>
+                  Claimed
+                </span>
+                <span className="text-[13px] font-bold" style={{ color: CUSTOMER_UI.textPrimary }}>
+                  {deal.current_claims} / {deal.max_claims}
+                </span>
               </div>
-              <div className="h-2 bg-[var(--bd2)] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-brand rounded-full transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
-                />
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPct}%`, background: CUSTOMER_UI.accent }} />
               </div>
             </div>
           )}
 
-          {/* About this deal */}
-          {deal.description && (
+          {/* Where & When */}
+          {(dealTypeChips.length > 0 || dayChips.length > 0) && (
             <div>
-              <p className="text-[11px] font-bold text-t3 uppercase tracking-wide mb-1.5">About this deal</p>
-              <p className="text-[14px] text-t2 leading-relaxed">{deal.description}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide mb-2.5" style={{ color: CUSTOMER_UI.textMuted }}>
+                Where &amp; When
+              </p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {dealTypeChips.map(t => (
+                  <span
+                    key={t}
+                    className="text-[13px] font-semibold px-3.5 py-1.5 rounded-full"
+                    style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary }}
+                  >
+                    {titleCase(t)}
+                  </span>
+                ))}
+              </div>
+              {dayChips.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {dayChips.map(d => (
+                    <span
+                      key={d}
+                      className="text-[13px] font-semibold px-3.5 py-1.5 rounded-full"
+                      style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary }}
+                    >
+                      {titleCase(d)}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Validity */}
-          {canSeeSchedule && deal.valid_until && (
-            <p className="text-[12px] text-t3">Ends {deal.valid_until}</p>
-          )}
+          {/* Terms */}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide mb-2.5" style={{ color: CUSTOMER_UI.textMuted }}>
+              Terms
+            </p>
+            <ul className="space-y-2">
+              {terms.map(t => (
+                <li key={t} className="flex items-start gap-2.5">
+                  <IconCircleCheck size={17} className="flex-shrink-0 mt-0.5" style={{ color: CUSTOMER_UI.gold }} />
+                  <span className="text-[14px]" style={{ color: CUSTOMER_UI.textSecondary }}>{t}</span>
+                </li>
+              ))}
+              {deal.valid_until && (
+                <li className="flex items-start gap-2.5">
+                  <IconClock size={17} className="flex-shrink-0 mt-0.5" style={{ color: CUSTOMER_UI.gold }} />
+                  <span className="text-[14px]" style={{ color: CUSTOMER_UI.textSecondary }}>Expires {deal.valid_until}</span>
+                </li>
+              )}
+            </ul>
+          </div>
 
-          {/* API error (non-limit errors only) */}
+          {/* Error */}
           {claimError && !dailyLimitReached && (
-            <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-brands px-3 py-2">
+            <p
+              className="text-[13px] rounded-xl px-3 py-2.5"
+              style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)' }}
+            >
               {claimError}
             </p>
           )}
 
-          {/* Daily limit upsell — shown instead of the error string when limit is hit */}
-          {showLimitUpsell && <DailyLimitReached plan={planTier} />}
+          {dailyLimitReached && !alreadyClaimed && !isRedeemed && user && (
+            <div
+              className="rounded-xl px-4 py-3.5"
+              style={{ background: CUSTOMER_UI.accentSoft, border: `1px solid ${CUSTOMER_UI.accent}` }}
+            >
+              <p className="text-[14px] font-bold mb-1" style={{ color: CUSTOMER_UI.accent }}>
+                You&apos;ve hit your redemption limit
+              </p>
+              <p className="text-[13px] mb-3" style={{ color: CUSTOMER_UI.textSecondary }}>
+                Upgrade to RepEAT+ for more daily redemptions and full-week access.
+              </p>
+              <button
+                onClick={() => router.push('/repeat-plus')}
+                className="inline-flex h-9 px-4 rounded-lg text-[13px] font-bold text-white items-center"
+                style={{ background: CUSTOMER_UI.accent }}
+              >
+                See RepEAT+ plans →
+              </button>
+            </div>
+          )}
+        </div>
 
-          {/* CTA */}
+        {/* ── Sticky CTA ── */}
+        <div
+          className="sticky bottom-0 px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))]"
+          style={{ background: CUSTOMER_UI.bg, borderTop: `1px solid ${CUSTOMER_UI.glassBorder}` }}
+        >
           {deal.is_coming ? (
-            <div className="w-full h-12 rounded-brands bg-surface2 border border-[var(--bd2)] flex items-center justify-center text-[15px] font-semibold text-t2">
+            <div className="w-full h-13 py-3.5 rounded-2xl flex items-center justify-center text-[15px] font-semibold" style={{ background: CUSTOMER_UI.glassBg, color: CUSTOMER_UI.textSecondary }}>
               Available next week
             </div>
           ) : soldOut ? (
-            <div className="w-full h-12 rounded-brands bg-surface2 border border-[var(--bd2)] flex items-center justify-center text-[15px] font-semibold text-t2">
+            <div className="w-full py-3.5 rounded-2xl flex items-center justify-center text-[15px] font-semibold" style={{ background: CUSTOMER_UI.glassBg, color: CUSTOMER_UI.textSecondary }}>
               Fully claimed
             </div>
           ) : !user ? (
             <Link
               href="/customer/login"
-              className="w-full h-12 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands flex items-center justify-center transition-colors text-[15px]"
+              className="w-full py-3.5 rounded-2xl flex items-center justify-center transition-opacity text-[16px] font-bold text-white hover:opacity-90"
+              style={{ background: CUSTOMER_UI.accent }}
             >
-              Sign in to claim this deal
+              Sign in to claim
             </Link>
           ) : isRedeemed ? (
-            <div className="w-full h-12 rounded-brands bg-green-50 border border-green-200 flex items-center justify-center gap-2 text-[15px] font-semibold text-green-700">
+            <div className="w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>
               <IconCircleCheck size={18} /> Redeemed — deal used
             </div>
           ) : alreadyClaimed && existingQrCode ? (
             <button
               onClick={() => onViewExisting?.(existingQrCode)}
-              className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-brands transition-colors text-[15px] flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-2xl transition-opacity text-[16px] font-bold text-white hover:opacity-90 flex items-center justify-center gap-2"
+              style={{ background: '#16A34A' }}
             >
-              <IconCheck size={18} /> Already claimed — View QR Code
+              <IconCircleCheck size={18} /> View QR code
             </button>
           ) : (
-            // Normal claim button — muted + non-interactive when daily limit reached
             <button
               onClick={dailyLimitReached ? undefined : onClaim}
               disabled={claiming || dailyLimitReached}
-              className="w-full h-12 bg-brand text-white font-semibold rounded-brands transition-colors text-[15px]"
-              style={dailyLimitReached ? { opacity: 0.4, cursor: 'default' } : {}}
+              className="w-full py-3.5 rounded-2xl transition-opacity text-[16px] font-bold text-white"
+              style={{ background: CUSTOMER_UI.accent, opacity: dailyLimitReached ? 0.4 : 1, cursor: dailyLimitReached ? 'default' : 'pointer' }}
             >
-              {claiming ? 'Claiming…' : 'Claim Deal'}
+              {claiming ? 'Claiming…' : 'Claim now'}
             </button>
           )}
         </div>

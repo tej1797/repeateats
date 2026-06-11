@@ -1,319 +1,97 @@
 'use client';
 
-// Customer portal profile dashboard — wraps the same profile content in PortalHeader + MobileNav
-// Route: /customer/profile  (linked from ProfileDrawer nav items)
+// Customer Profile — mobile parity (dark theme)
+// Sections: avatar header · View plans · stat grid · Points + Saved cards · Account list · Switch portal / Sign out
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
-  IconEdit, IconCrown, IconMapPin, IconTrophy,
-  IconX, IconLogout, IconCheck, IconAlertTriangle,
-  IconQrcode,
+  IconCrown, IconCamera, IconStar, IconHeart, IconChevronRight,
+  IconUser, IconDeviceMobile, IconMapPin, IconMail,
+  IconArrowsLeftRight, IconLogout, IconCheck, IconSparkles,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
-import StarRating from '@/components/StarRating';
-import { VanishingQR } from '@/components/deals/VanishingQR';
-import PortalHeader from '@/components/layout/PortalHeader';
 import MobileNav from '@/components/layout/MobileNav';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface ProfileStats {
-  total_claims:      number;
-  total_saved_cents: number;
-  unique_deals:      number;
-  cities_explored:   number;
-  last_claim_at:     string | null;
-}
-
-interface RecentClaim {
-  id:           string;
-  qr_code:      string;
-  status:       'claimed' | 'redeemed' | 'expired' | 'reverted';
-  claimed_at:   string;
-  redeemed_at:  string | null;
-  expires_at:   string | null;
-  reverted_at:  string | null;
-  deals: {
-    title:          string;
-    emoji:          string;
-    discount_value: string | null;
-    restaurants:    { name: string; city: string; category: string | null };
-  } | null;
-}
-
-interface FavRestaurant {
-  restaurant: { id: string; name: string; cuisine: string | null; category: string | null; city: string; rating: number };
-  count:      number;
-}
+import { CUSTOMER_UI } from '@/lib/customerUI';
 
 interface ProfileData {
-  id:                   string;
-  email:                string;
-  display_name:         string | null;
-  avatar_url:           string | null;
-  member_since:         string | null;
-  is_repeat_plus:       boolean;
-  city:                 string | null;
-  radius_km:            number;
-  favourite_cuisine:    string | null;
-  streak_days:          number;
-  stats:                ProfileStats;
-  recent_claims:        RecentClaim[];
-  favourite_restaurants: FavRestaurant[];
+  id:                string;
+  email:             string;
+  display_name:      string | null;
+  avatar_url:        string | null;
+  phone:             string | null;
+  member_since:      string | null;
+  is_repeat_plus:    boolean;
+  tier:              string;
+  city:              string | null;
+  radius_km:         number;
+  points_balance:    number;
+  saved_count:       number;
+  stats: {
+    total_claims:       number;
+    total_saved_cents:  number;
+    claims_this_month:  number;
+    unique_deals:       number;
+    cities_explored:    number;
+    last_claim_at:      string | null;
+  };
 }
 
-type FullClaim = RecentClaim;
-
-const CITIES   = ['GTA Area', 'Mississauga', 'Brampton', 'Toronto', 'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville'];
-const CUISINES = ['Indian', 'Italian', 'BBQ', 'Bar & Grill', 'Canadian', 'Burgers', 'Chinese', 'Sushi', 'Pizza', 'Desserts', 'Vegan', 'Bubble Tea'];
-
-// ─── Count-up hook ────────────────────────────────────────────────────────────
-function useCountUp(target: number, duration = 1200) {
-  const [value, setValue] = useState(0);
-  const ref     = useRef<HTMLDivElement | null>(null);
-  const started = useRef(false);
-
-  useEffect(() => {
-    if (!ref.current) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !started.current) {
-        started.current = true;
-        const start = Date.now();
-        const tick  = () => {
-          const elapsed  = Date.now() - start;
-          const progress = Math.min(elapsed / duration, 1);
-          const eased    = 1 - Math.pow(1 - progress, 3);
-          setValue(Math.round(eased * target));
-          if (progress < 1) requestAnimationFrame(tick);
-        };
-        tick();
-      }
-    }, { threshold: 0.3 });
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [target, duration]);
-
-  return { value, ref };
-}
-
-function StatCard({ icon, value, label, prefix = '', suffix = '', highlight = false }: {
-  icon: string; value: number; label: string;
-  prefix?: string; suffix?: string; highlight?: boolean;
+function StatCard({ value, label, color, prefix = '', suffix = '' }: {
+  value: number | string; label: string; color: string; prefix?: string; suffix?: string;
 }) {
-  const { value: animated, ref } = useCountUp(value);
   return (
     <div
-      ref={ref}
-      className="bg-surface rounded-brand border border-[var(--bd)] p-4 text-center"
-      style={highlight ? { borderColor: '#16a34a', background: 'rgba(22,163,74,0.04)' } : {}}
+      className="rounded-2xl px-4 py-5 text-center"
+      style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
     >
-      <div className="text-2xl mb-1">{icon}</div>
-      <p className={`font-display text-[26px] font-extrabold leading-none mb-1 ${highlight ? 'text-green-600' : 'text-tx'}`}>
-        {prefix}{highlight && value > 0 ? animated.toLocaleString() : animated}{suffix}
+      <p className="font-display text-[30px] font-extrabold leading-none mb-1.5" style={{ color }}>
+        {prefix}{value}{suffix}
       </p>
-      <p className="text-[12px] text-t3 font-medium">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CUSTOMER_UI.textMuted }}>
+        {label}
+      </p>
     </div>
   );
 }
 
-// Monthly claim counts (we no longer track $ saved per claim directly)
-function buildMonthlyData(claims: FullClaim[]) {
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
-    return {
-      key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-      month: d.toLocaleString('en', { month: 'short' }),
-    };
-  });
-  const counts: Record<string, number> = {};
-  for (const m of months) counts[m.key] = 0;
-  for (const c of claims) {
-    if (c.status === 'reverted') continue;
-    const d   = new Date(c.claimed_at);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (key in counts) counts[key]++;
-  }
-  return months.map((m) => ({ month: m.month, saved: counts[m.key] }));
-}
-
-// ─── Countdown timer component ────────────────────────────────────────────────
-function ClaimCountdown({ expiresAt, claimedAt, onExpired }: {
-  expiresAt: string | null;
-  claimedAt: string;
-  onExpired?: () => void;
-}) {
-  const getMs = () => {
-    const target = expiresAt
-      ? new Date(expiresAt).getTime()
-      : new Date(claimedAt).getTime() + 45 * 60 * 1000; // fallback: claimed + 45min
-    return Math.max(0, target - Date.now());
-  };
-
-  const [msLeft, setMsLeft] = useState(getMs);
-
-  useEffect(() => {
-    if (msLeft <= 0) { onExpired?.(); return; }
-    const id = setInterval(() => {
-      const remaining = getMs();
-      setMsLeft(remaining);
-      if (remaining <= 0) { clearInterval(id); onExpired?.(); }
-    }, 1000);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const totalMs  = 45 * 60 * 1000;
-  const progress = Math.max(0, Math.min(1, msLeft / totalMs));
-  const mins     = Math.floor(msLeft / 60000);
-  const secs     = Math.floor((msLeft % 60000) / 1000);
-  const urgent   = mins < 10;
-
-  if (msLeft <= 0) return <span className="text-[12px] font-bold text-red-500">Expired</span>;
-
+function AccountRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex flex-col items-end gap-1">
-      <span className={`text-[13px] font-bold tabular-nums ${urgent ? 'text-red-500' : 'text-brand'}`}>
-        {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-      </span>
-      <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${urgent ? 'bg-red-500' : 'bg-brand'}`}
-          style={{ width: `${progress * 100}%` }}
-        />
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,255,255,0.06)', color: CUSTOMER_UI.textSecondary }}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CUSTOMER_UI.textMuted }}>{label}</p>
+        <p className="text-[14px] font-semibold truncate" style={{ color: CUSTOMER_UI.textPrimary }}>{value || '—'}</p>
       </div>
     </div>
   );
 }
 
-// ─── Format deal title for display ───────────────────────────────────────────
-function formatDealTitle(deal: FullClaim['deals']): string {
-  if (!deal) return 'Deal';
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const d = deal as any;
-  if (d.deal_category === 'bogo' || d.discount_type === 'bogo') return 'BUY 1 GET 1';
-  if (d.discount_type === 'percentage' && d.discount_value) return `${d.discount_value}% OFF`;
-  if (d.discount_type === 'fixed' && d.discount_value) {
-    const num = parseFloat(String(d.discount_value).replace(/[^0-9.]/g, ''));
-    return isNaN(num) ? deal.title : `$${num} OFF`;
-  }
-  return deal.title;
-}
-
-// ─── QR modal — uses VanishingQR, no raw code display, no cancel button ──────
-function ProfileQrModal({ claim, onClose }: {
-  claim: FullClaim;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-surface rounded-brand shadow-brand2 w-full max-w-[340px] pt-6 pb-5 text-center animate-[slideUp_0.22s_ease]">
-        <div className="flex justify-between items-center mb-3 px-5">
-          <div className="text-left">
-            <h3 className="font-display text-[17px] font-bold leading-tight">
-              {claim.deals?.emoji} {formatDealTitle(claim.deals)}
-            </h3>
-            <p className="text-[12px] text-t2">{claim.deals?.restaurants?.name}</p>
-          </div>
-          <button onClick={onClose} className="p-1 text-t2 hover:text-tx flex-shrink-0">
-            <IconX size={18} />
-          </button>
-        </div>
-
-        {claim.status === 'claimed' && (
-          <div className="flex justify-center mb-3">
-            <ClaimCountdown expiresAt={claim.expires_at} claimedAt={claim.claimed_at} />
-          </div>
-        )}
-
-        <VanishingQR claimId={claim.id} />
-
-        <div className="px-5 mt-4">
-          <button
-            onClick={onClose}
-            className="w-full h-11 bg-brand hover:bg-brand2 text-white font-semibold rounded-brands transition-colors text-[14px]"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const CAT_EMOJI: Record<string, string> = {
-  indian: '🍛', bbq: '🥩', italian: '🍝', bar: '🍺', canadian: '🍁',
-  burgers: '🍔', chinese: '🥢', sushi: '🍣', pizza: '🍕', desserts: '🧁',
-  vegan: '🥗', bubbletea: '🧋',
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    claimed:  'bg-blue-50 text-blue-700 border-blue-200',
-    redeemed: 'bg-green-50 text-green-700 border-green-200',
-    expired:  'bg-gray-100 text-gray-500 border-gray-200',
-    reverted: 'bg-gray-100 text-gray-500 border-gray-200',
-  };
-  const labels: Record<string, string> = {
-    claimed:  'Active',
-    redeemed: 'Redeemed',
-    expired:  'Expired',
-    reverted: 'Cancelled',
-  };
-  return (
-    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${styles[status] ?? 'bg-gray-100 text-gray-500'}`}>
-      {labels[status] ?? status}
-    </span>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
 export default function CustomerProfilePage() {
   const router   = useRouter();
   const supabase = useRef(createClient()).current;
+  const fileRef  = useRef<HTMLInputElement>(null);
 
-  const [profile,       setProfile]       = useState<ProfileData | null>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [allClaims,     setAllClaims]     = useState<FullClaim[]>([]);
-  const [claimsLoading, setClaimsLoading] = useState(false);
-  const [claimsFilter,  setClaimsFilter]  = useState<'all' | 'month' | 'week'>('all');
-  const [claimsPage,    setClaimsPage]    = useState(1);
-  const [claimsTotal,   setClaimsTotal]   = useState(0);
-  const [hasMore,       setHasMore]       = useState(false);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
-  const [qrClaim,      setQrClaim]      = useState<FullClaim | null>(null);
-  const [claimsTab,    setClaimsTab]    = useState<'active' | 'past'>('active');
-
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput,   setNameInput]   = useState('');
-  const [savingName,  setSavingName]  = useState(false);
-
-  const [prefCity,    setPrefCity]    = useState('GTA Area');
-  const [prefRadius,  setPrefRadius]  = useState(30);
-  const [prefCuisine, setPrefCuisine] = useState('');
-  const [savingPrefs, setSavingPrefs] = useState(false);
-  const [prefSaved,   setPrefSaved]   = useState(false);
-
-  const [showDelete,   setShowDelete]   = useState(false);
-  const [deleteInput,  setDeleteInput]  = useState('');
-  const [deletingAcct, setDeletingAcct] = useState(false);
+  const [editing,   setEditing]   = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [saving,    setSaving]    = useState(false);
 
   useEffect(() => {
     fetch('/api/profile')
-      .then((r) => r.json())
-      .then((json) => {
+      .then(r => r.json())
+      .then(json => {
         if (json.data) {
-          const p: ProfileData = json.data;
-          setProfile(p);
-          setNameInput(p.display_name ?? '');
-          setPrefCity(p.city ?? 'GTA Area');
-          setPrefRadius(p.radius_km ?? 30);
-          setPrefCuisine(p.favourite_cuisine ?? '');
+          setProfile(json.data);
+          setNameInput(json.data.display_name ?? '');
+          setPhoneInput(json.data.phone ?? '');
         } else {
           router.replace('/customer/login');
         }
@@ -322,65 +100,39 @@ export default function CustomerProfilePage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  const loadClaims = useCallback((filter: string, page: number, append = false) => {
-    setClaimsLoading(true);
-    fetch(`/api/profile/claims?filter=${filter}&page=${page}&limit=10`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.data) {
-          setAllClaims((prev) => append ? [...prev, ...json.data] : json.data);
-          setClaimsTotal(json.count ?? 0);
-          setHasMore((page * 10) < (json.count ?? 0));
-        }
-      })
-      .finally(() => setClaimsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    loadClaims(claimsFilter, 1);
-    setClaimsPage(1);
-  }, [claimsFilter, loadClaims]);
-
-  // Scroll to section when ?tab=claims or ?tab=savings is present
-  useEffect(() => {
-    if (loading) return;
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab');
-    if (!tab) return;
-    const id = tab === 'claims' ? 'claims' : tab === 'savings' ? 'savings' : null;
-    if (!id) return;
-    // small delay so the DOM is rendered
-    setTimeout(() => {
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
-  }, [loading]);
-
-  const handleSaveName = async () => {
-    if (!nameInput.trim()) return;
-    setSavingName(true);
-    await fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ display_name: nameInput.trim() }) });
-    setProfile((p) => p ? { ...p, display_name: nameInput.trim() } : p);
-    setSavingName(false);
-    setEditingName(false);
+  const handleSave = async () => {
+    setSaving(true);
+    await fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: nameInput.trim(), phone: phoneInput.trim() }),
+    });
+    setProfile(p => p ? { ...p, display_name: nameInput.trim(), phone: phoneInput.trim() } : p);
+    setSaving(false);
+    setEditing(false);
   };
 
-  const handleSavePrefs = async () => {
-    setSavingPrefs(true);
+  const handleAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+    setUploading(true);
     try {
-      const res  = await fetch('/api/profile', {
-        method:  'PATCH',
+      const ext  = file.name.split('.').pop() ?? 'jpg';
+      const path = `${profile.id}/avatar.${ext}`;
+      const { error: upErr } = await supabase.storage.from('user-avatars').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('user-avatars').getPublicUrl(path);
+      const busted = `${publicUrl}?t=${Date.now()}`;
+      await fetch('/api/profile', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ city: prefCity, radius_km: prefRadius, favourite_cuisine: prefCuisine }),
+        body: JSON.stringify({ avatar_url: busted }),
       });
-      const json = await res.json() as { error?: string };
-      if (!res.ok || json.error) throw new Error(json.error ?? 'Failed to save');
-      setPrefSaved(true);
-      setTimeout(() => setPrefSaved(false), 2000);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save preferences');
+      setProfile(p => p ? { ...p, avatar_url: busted } : p);
+    } catch {
+      alert('Could not upload photo. Please try again.');
     } finally {
-      setSavingPrefs(false);
+      setUploading(false);
     }
   };
 
@@ -391,393 +143,178 @@ export default function CustomerProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-[3px] border-brand border-t-transparent animate-spin" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: CUSTOMER_UI.bg }}>
+        <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: CUSTOMER_UI.accent }} />
       </div>
     );
   }
-
   if (!profile) return null;
 
-  const { stats }         = profile;
-  const totalSavedDollars = (stats.total_saved_cents ?? 0) / 100;
-  const monthlyData       = buildMonthlyData(allClaims);
-  const displayName       = profile.display_name ?? profile.email.split('@')[0];
-
-  const headerUser = {
-    email:        profile.email,
-    name:         profile.display_name ?? undefined,
-    avatarUrl:    profile.avatar_url,
-    isRepeatPlus: profile.is_repeat_plus,
-  };
+  const displayName = profile.display_name ?? profile.email.split('@')[0];
+  const initials    = displayName.charAt(0).toUpperCase();
+  const estSaved    = (profile.stats.total_saved_cents ?? 0) / 100;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
-      <PortalHeader portal="customer" user={headerUser} onSignOut={handleSignOut} />
-
-      <main className="max-w-[900px] mx-auto px-5 py-8 pb-28 space-y-8">
-
-        {/* ── Back to deals ────────────────────────────────────────── */}
-        <Link href="/customer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-t2 hover:text-brand transition-colors">
-          ← Back to deals
+    <div className="min-h-screen pb-28" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
+      {/* Header */}
+      <header className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between" style={{ background: CUSTOMER_UI.bg }}>
+        <Link href="/customer" className="font-display text-[18px] font-extrabold">
+          <span style={{ color: CUSTOMER_UI.textPrimary }}>Rep</span>
+          <span style={{ color: CUSTOMER_UI.accent }}>EAT</span>
         </Link>
+        <span className="text-[13px]" style={{ color: CUSTOMER_UI.textSecondary }}>Profile</span>
+      </header>
 
-        {/* ── SECTION 1: Profile Header ────────────────────────────── */}
-        <div className="bg-surface rounded-brand border border-[var(--bd)] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <div className="relative flex-shrink-0">
-            {profile.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatar_url} alt={displayName} className="w-20 h-20 rounded-full object-cover border-4 border-[var(--bg)]" />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-brand flex items-center justify-center border-4 border-[var(--bg)]">
-                <span className="font-display text-[32px] font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
-              </div>
-            )}
-            {profile.is_repeat_plus && (
-              <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#F59E0B] flex items-center justify-center">
-                <IconCrown size={14} className="text-white" />
-              </div>
-            )}
-          </div>
+      <main className="max-w-[700px] mx-auto px-4 py-2 space-y-5">
 
-          <div className="flex-1 min-w-0">
-            {editingName ? (
-              <div className="flex items-center gap-2 mb-1">
-                <input
-                  autoFocus
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
-                  className="h-9 px-3 border border-brand rounded-brands bg-surface text-tx text-[16px] font-bold outline-none focus:ring-2 focus:ring-brand/10"
-                />
-                <button onClick={handleSaveName} disabled={savingName} className="h-9 px-3 bg-brand text-white rounded-brands text-[13px] font-semibold disabled:opacity-60 transition-colors hover:bg-brand2">
-                  {savingName ? '…' : 'Save'}
-                </button>
-                <button onClick={() => setEditingName(false)} className="h-9 px-2 text-t2 hover:text-tx">
-                  <IconX size={15} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="font-display text-[22px] font-bold truncate">{displayName}</h1>
-                <button onClick={() => setEditingName(true)} className="text-t3 hover:text-brand transition-colors flex-shrink-0">
-                  <IconEdit size={15} />
-                </button>
-              </div>
-            )}
-            <p className="text-[13px] text-t2 mb-1">{profile.email}</p>
-            <p className="text-[12px] text-t3">
-              Member since {profile.member_since ? new Date(profile.member_since).toLocaleDateString('en', { month: 'long', year: 'numeric' }) : 'today'}
-            </p>
-            {totalSavedDollars > 0 && (
-              <p className="text-[12px] font-bold text-green-600 mt-1">💰 ${totalSavedDollars.toFixed(2)} saved with RepEAT</p>
-            )}
-          </div>
-
-          <div className="flex-shrink-0">
-            {profile.is_repeat_plus ? (
-              <div className="flex flex-col items-end gap-1.5">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B', border: '1.5px solid #F59E0B' }}>
-                  <IconCrown size={14} /> RepEAT+ Member
-                </div>
-                <button
-                  onClick={async () => {
-                    const res  = await fetch('/api/stripe/portal', { method: 'POST' });
-                    const json = await res.json() as { url?: string };
-                    if (json.url) window.location.href = json.url;
-                  }}
-                  className="text-[11px] text-t3 hover:text-brand underline transition-colors"
-                >
-                  Manage subscription →
-                </button>
-              </div>
-            ) : (
-              <Link href="/repeat-plus" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold border border-[var(--bd2)] text-t2 hover:border-brand hover:text-brand transition-all">
-                <IconCrown size={14} /> Upgrade to RepEAT+
-              </Link>
-            )}
-          </div>
-        </div>
-
-        {/* ── SECTION 2: Savings Dashboard ────────────────────────── */}
-        <div id="savings">
-          <h2 className="font-display text-[18px] font-bold mb-4">Your RepEAT Impact</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <StatCard icon="💰" value={Math.round(totalSavedDollars * 100)} prefix="$" label="Total Saved" highlight={totalSavedDollars > 0} />
-            <StatCard icon="🎟️" value={stats.total_claims} label="Deals Claimed" />
-            <StatCard icon="🏆" value={stats.unique_deals} label="Unique Deals" />
-            <StatCard icon="🏙️" value={stats.cities_explored || 1} label="Cities" />
-          </div>
-          {stats.last_claim_at && (
-            <p className="text-[13px] text-t3 mb-5">
-              Last claimed {(() => {
-                const diff = Math.floor((Date.now() - new Date(stats.last_claim_at).getTime()) / 86400000);
-                return diff === 0 ? 'today' : diff === 1 ? '1 day ago' : `${diff} days ago`;
-              })()}
-            </p>
-          )}
-          <div className="bg-surface rounded-brand border border-[var(--bd)] p-5">
-            <p className="text-[14px] font-bold mb-4">Monthly Claims</p>
-            {monthlyData.some((d) => d.saved > 0) ? (
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={monthlyData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip formatter={(v) => [v, 'Claims']} contentStyle={{ borderRadius: 9, border: '1px solid var(--bd)', fontSize: 13 }} />
-                  <Bar dataKey="saved" fill="#E85D04" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[160px] flex items-center justify-center text-t3 text-[14px]">
-                Claim your first deal to see activity here
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── SECTION 3: Claim History ─────────────────────────────── */}
-        <div id="claims">
-          <h2 className="font-display text-[18px] font-bold mb-4">My Claims</h2>
-
-          {/* Tab switcher: Active / Past */}
-          <div className="flex gap-1 mb-4 bg-surface2 p-1 rounded-brands w-fit">
-            {(['active', 'past'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setClaimsTab(t)}
-                className={`px-5 py-1.5 rounded-[7px] text-[13px] font-semibold transition-all ${claimsTab === t ? 'bg-surface text-tx shadow-sm' : 'text-t2 hover:text-tx'}`}
-              >
-                {t === 'active' ? '🎟️ Active' : '📋 History'}
-              </button>
-            ))}
-          </div>
-
-          {/* Filter row (past tab only) */}
-          {claimsTab === 'past' && (
-            <div className="flex gap-2 mb-4">
-              {([['all', 'All'], ['month', 'This month'], ['week', 'This week']] as const).map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setClaimsFilter(id)}
-                  className={`px-4 py-1.5 rounded-full text-[13px] font-semibold border transition-all ${claimsFilter === id ? 'bg-brand text-white border-brand' : 'text-t2 border-[var(--bd2)] hover:border-brand hover:text-brand'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {claimsLoading && allClaims.length === 0 ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => <div key={i} className="h-20 bg-surface2 rounded-brand animate-pulse" />)}
-            </div>
-          ) : (() => {
-            const activeClaims = allClaims.filter(c => c.status === 'claimed');
-            const pastClaims   = allClaims.filter(c => c.status !== 'claimed');
-            const shown        = claimsTab === 'active' ? activeClaims : pastClaims;
-
-            if (shown.length === 0) {
-              return (
-                <div className="text-center py-12 text-t3 bg-surface rounded-brand border border-[var(--bd)]">
-                  <p className="text-3xl mb-2">{claimsTab === 'active' ? '🎟️' : '📋'}</p>
-                  {claimsTab === 'active' ? (
-                    <>
-                      <p className="text-[15px] font-semibold">No active claims</p>
-                      <p className="text-[13px] mt-1">Claimed deals appear here with a live countdown timer.</p>
-                      <Link href="/customer" className="inline-flex mt-4 h-9 px-5 bg-brand text-white text-[13px] font-semibold rounded-brands items-center hover:bg-brand2 transition-colors">
-                        Browse deals →
-                      </Link>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-[15px] font-semibold">No past claims</p>
-                      <p className="text-[13px] mt-1">Redeemed and expired claims appear here.</p>
-                    </>
-                  )}
-                </div>
-              );
-            }
-
-            return (
-              <div className="space-y-2.5">
-                {shown.map((c) => (
-                  <div
-                    key={c.id}
-                    className={`bg-surface rounded-brand border p-4 flex items-center gap-3 transition-all ${
-                      c.status === 'claimed' ? 'border-brand/30 shadow-sm' : 'border-[var(--bd)]'
-                    }`}
-                  >
-                    <div className="w-11 h-11 rounded-brands bg-brandlt flex items-center justify-center text-[22px] flex-shrink-0">
-                      {c.deals?.emoji ?? '🍽️'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[14px] truncate">{formatDealTitle(c.deals)}</p>
-                      <p className="text-[12px] text-t2 truncate">
-                        {c.deals?.restaurants?.name} · {new Date(c.claimed_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                      {c.deals?.discount_value && (
-                        <p className="text-[12px] font-bold text-brand mt-0.5">{c.deals.discount_value}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      {c.status === 'claimed' ? (
-                        <>
-                          <ClaimCountdown
-                            expiresAt={c.expires_at}
-                            claimedAt={c.claimed_at}
-                            onExpired={() => {
-                              setAllClaims(prev => prev.map(x => x.id === c.id ? { ...x, status: 'expired' } : x));
-                            }}
-                          />
-                          <button
-                            onClick={() => setQrClaim(c)}
-                            className="flex items-center gap-1.5 text-[12px] font-bold text-white bg-brand hover:bg-brand2 transition-colors px-2.5 py-1 rounded-brands"
-                          >
-                            <IconQrcode size={13} /> Show QR to redeem
-                          </button>
-                        </>
-                      ) : (
-                        <StatusBadge status={c.status} />
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {claimsTab === 'past' && hasMore && (
-                  <button
-                    onClick={() => { const next = claimsPage + 1; setClaimsPage(next); loadClaims(claimsFilter, next, true); }}
-                    disabled={claimsLoading}
-                    className="w-full h-10 text-[13px] font-semibold text-t2 border border-[var(--bd2)] rounded-brands hover:border-brand hover:text-brand transition-all disabled:opacity-50"
-                  >
-                    {claimsLoading ? 'Loading…' : `Load more (${claimsTotal - allClaims.length} remaining)`}
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* ── SECTION 4: Favourite Restaurants ────────────────────── */}
-        {profile.favourite_restaurants.length > 0 && (
-          <div>
-            <h2 className="font-display text-[18px] font-bold mb-4">Favourite Restaurants</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {profile.favourite_restaurants.map(({ restaurant: r, count }, idx) => (
-                <Link
-                  key={r.id}
-                  href={`/customer/restaurant/${r.id}`}
-                  className="bg-surface rounded-brand border border-[var(--bd)] p-4 relative hover:border-brand/40 hover:shadow-brand transition-all"
-                >
-                  {idx === 0 && (
-                    <div className="absolute top-3 right-3 flex items-center gap-1 text-[11px] font-bold text-[#F59E0B]">
-                      <IconTrophy size={12} /> #1 Spot
-                    </div>
-                  )}
-                  <div className="w-10 h-10 rounded-brands bg-brandlt flex items-center justify-center text-[20px] mb-3">
-                    {CAT_EMOJI[r.category ?? ''] ?? '🍽️'}
-                  </div>
-                  <p className="font-bold text-[14px] leading-snug mb-0.5">{r.name}</p>
-                  <p className="text-[12px] text-t2 mb-2">{r.city}</p>
-                  {r.rating > 0 && <StarRating rating={r.rating} size="sm" />}
-                  <p className="text-[12px] text-t3 mt-2">{count} claim{count !== 1 ? 's' : ''}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── SECTION 5: Preferences ──────────────────────────────── */}
-        <div className="bg-surface rounded-brand border border-[var(--bd)] p-6">
-          <h2 className="font-display text-[18px] font-bold mb-5">Preferences</h2>
-          <div className="space-y-5">
-            <div>
-              <label className="block text-[13px] font-semibold text-t2 mb-1.5">
-                <IconMapPin size={13} className="inline mr-1 text-brand" /> Default City
-              </label>
-              <select value={prefCity} onChange={(e) => setPrefCity(e.target.value)} className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-brand">
-                {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <div className="flex justify-between items-baseline mb-1.5">
-                <label className="text-[13px] font-semibold text-t2">Search Radius</label>
-                <span className="font-display text-[22px] font-extrabold text-brand">{prefRadius} km</span>
-              </div>
-              <input type="range" min={5} max={100} step={5} value={prefRadius} onChange={(e) => setPrefRadius(Number(e.target.value))} className="w-full accent-brand" />
-            </div>
-            <div>
-              <label className="block text-[13px] font-semibold text-t2 mb-1.5">Favourite Cuisine</label>
-              <select value={prefCuisine} onChange={(e) => setPrefCuisine(e.target.value)} className="w-full h-11 px-3.5 border border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-brand">
-                <option value="">No preference</option>
-                {CUISINES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <button onClick={handleSavePrefs} disabled={savingPrefs} className="h-11 px-6 bg-brand hover:bg-brand2 disabled:opacity-60 text-white font-semibold rounded-brands transition-colors flex items-center gap-2">
-              {prefSaved ? <><IconCheck size={15} /> Saved!</> : savingPrefs ? 'Saving…' : 'Save preferences'}
-            </button>
-          </div>
-        </div>
-
-        {/* ── SECTION 6: RepEAT+ upsell ───────────────────────────── */}
-        {!profile.is_repeat_plus && (
-          <Link href="/repeat-plus" className="block bg-[#0A0A0A] rounded-brand border border-white/10 p-5 hover:border-[#F59E0B]/50 transition-all group">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-display text-[16px] font-bold text-white mb-1 flex items-center gap-2">
-                  <IconCrown size={16} style={{ color: '#F59E0B' }} /> Unlock exclusive deals with RepEAT+
-                </p>
-                <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>7-day free trial · $4.99/month · Cancel anytime</p>
-              </div>
-              <div className="text-white/40 group-hover:text-[#F59E0B] transition-colors">→</div>
-            </div>
-          </Link>
-        )}
-
-        {/* ── SECTION 7: Account ──────────────────────────────────── */}
-        <div className="bg-surface rounded-brand border border-[var(--bd)] p-6">
-          <h2 className="font-display text-[18px] font-bold mb-5">Account</h2>
-          <div className="space-y-3">
-            <button onClick={handleSignOut} className="flex items-center gap-2 h-11 px-5 border border-[var(--bd2)] rounded-brands text-[14px] font-semibold text-t2 hover:border-red-300 hover:text-red-600 transition-all">
-              <IconLogout size={16} /> Sign out
-            </button>
-            <div className="pt-3 border-t border-[var(--bd)]">
-              <p className="text-[12px] font-bold text-t3 uppercase tracking-wide mb-3">Danger Zone</p>
-              {!showDelete ? (
-                <button onClick={() => setShowDelete(true)} className="flex items-center gap-2 text-[13px] font-semibold text-red-500 hover:text-red-700 transition-colors">
-                  <IconAlertTriangle size={14} /> Delete account
-                </button>
+        {/* Avatar card */}
+        <div className="rounded-2xl px-5 py-6 text-center" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+          <div className="relative inline-block">
+            <button onClick={() => fileRef.current?.click()} className="relative block">
+              {profile.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatar_url} alt={displayName} className="w-24 h-24 rounded-full object-cover" />
               ) : (
-                <div className="border border-red-200 rounded-brands p-4 bg-red-50">
-                  <p className="text-[13px] font-semibold text-red-700 mb-2">
-                    Type <strong>DELETE</strong> to permanently delete your account and all data.
-                  </p>
-                  <input value={deleteInput} onChange={(e) => setDeleteInput(e.target.value)} placeholder="Type DELETE to confirm" className="w-full h-10 px-3 border border-red-300 rounded-brands text-[14px] outline-none bg-white text-red-700 mb-3" />
-                  <div className="flex gap-2">
-                    <button onClick={() => { setShowDelete(false); setDeleteInput(''); }} className="flex-1 h-9 border border-[var(--bd2)] rounded-brands text-[13px] font-semibold text-t2">Cancel</button>
-                    <button
-                      disabled={deleteInput !== 'DELETE' || deletingAcct}
-                      className="flex-1 h-9 bg-red-600 disabled:opacity-40 text-white rounded-brands text-[13px] font-semibold"
-                      onClick={async () => { setDeletingAcct(true); await supabase.auth.signOut(); router.replace('/'); }}
-                    >
-                      {deletingAcct ? 'Deleting…' : 'Delete account'}
-                    </button>
-                  </div>
+                <div className="w-24 h-24 rounded-full flex items-center justify-center" style={{ background: CUSTOMER_UI.accent }}>
+                  <span className="font-display text-[36px] font-bold text-white">{initials}</span>
                 </div>
               )}
-            </div>
+              <span className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: CUSTOMER_UI.bgElevated, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+                <IconCamera size={14} style={{ color: CUSTOMER_UI.textSecondary }} />
+              </span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleAvatar} />
           </div>
+          <p className="text-[12px] mt-2" style={{ color: CUSTOMER_UI.textMuted }}>
+            {uploading ? 'Uploading…' : 'Tap to change photo'}
+          </p>
+
+          <h1 className="font-display text-[22px] font-extrabold mt-2 flex items-center justify-center gap-1.5">
+            {displayName}
+            {profile.is_repeat_plus && <IconCrown size={18} fill={CUSTOMER_UI.gold} color={CUSTOMER_UI.gold} />}
+          </h1>
+          <p className="text-[13px]" style={{ color: CUSTOMER_UI.textSecondary }}>{profile.email}</p>
+
+          {profile.is_repeat_plus ? (
+            <span className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-full text-[13px] font-bold" style={{ border: `1px solid ${CUSTOMER_UI.gold}`, color: CUSTOMER_UI.gold }}>
+              <IconSparkles size={14} /> RepEAT+ Member
+            </span>
+          ) : (
+            <Link href="/repeat-plus" className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-full text-[13px] font-bold" style={{ border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}>
+              <IconCrown size={14} /> Upgrade to RepEAT+
+            </Link>
+          )}
         </div>
 
+        {/* View plans button */}
+        <Link
+          href="/repeat-plus"
+          className="flex items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold"
+          style={{ border: `1px solid ${CUSTOMER_UI.gold}`, color: CUSTOMER_UI.gold }}
+        >
+          View plans &amp; subscription →
+        </Link>
+
+        {/* Stat grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard value={profile.saved_count} label="Saved" color={CUSTOMER_UI.claimBlue} />
+          <StatCard value={profile.stats.total_claims} label="Claimed" color={CUSTOMER_UI.accent} />
+          <StatCard value={profile.stats.claims_this_month} label="This month" color="#22C55E" />
+          <StatCard value={estSaved > 0 ? `$${estSaved.toFixed(0)}` : '0¢'} label="Est. saved" color={CUSTOMER_UI.gold} />
+        </div>
+
+        {/* Points card */}
+        <Link href="/customer/points" className="flex items-center gap-3 rounded-2xl px-4 py-3.5" style={{ background: CUSTOMER_UI.accentSoft, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,107,0,0.2)' }}>
+            <IconStar size={18} style={{ color: CUSTOMER_UI.accent }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[15px]">RepEAT Points</p>
+            <p className="text-[12px]" style={{ color: CUSTOMER_UI.textSecondary }}>{profile.points_balance} pts · earn on every QR scan</p>
+          </div>
+          <IconChevronRight size={16} style={{ color: CUSTOMER_UI.textMuted }} />
+        </Link>
+
+        {/* Saved deals card */}
+        <Link href="/customer?tab=saved" className="flex items-center gap-3 rounded-2xl px-4 py-3.5" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,107,0,0.12)' }}>
+            <IconHeart size={18} style={{ color: CUSTOMER_UI.accent }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[15px]">Saved deals</p>
+            <p className="text-[12px]" style={{ color: CUSTOMER_UI.textSecondary }}>{profile.saved_count} active deal{profile.saved_count !== 1 ? 's' : ''}</p>
+          </div>
+          <IconChevronRight size={16} style={{ color: CUSTOMER_UI.textMuted }} />
+        </Link>
+
+        {/* Account */}
+        <div>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CUSTOMER_UI.textMuted }}>Account</p>
+            <button onClick={() => setEditing(v => !v)} className="text-[13px] font-bold" style={{ color: CUSTOMER_UI.accent }}>
+              {editing ? 'Close' : 'Edit'}
+            </button>
+          </div>
+
+          {editing ? (
+            <div className="rounded-2xl p-4 space-y-3" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CUSTOMER_UI.textMuted }}>Name</label>
+                <input
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  className="w-full h-11 mt-1 px-3 rounded-xl text-[14px] outline-none"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary }}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wide" style={{ color: CUSTOMER_UI.textMuted }}>Phone</label>
+                <input
+                  value={phoneInput}
+                  onChange={e => setPhoneInput(e.target.value)}
+                  placeholder="Add phone number"
+                  className="w-full h-11 mt-1 px-3 rounded-xl text-[14px] outline-none"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary }}
+                />
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-60"
+                style={{ background: CUSTOMER_UI.accent }}
+              >
+                {saving ? 'Saving…' : <><IconCheck size={16} /> Save changes</>}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl divide-y" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+              <div style={{ borderColor: CUSTOMER_UI.glassBorder }}><AccountRow icon={<IconUser size={16} />} label="Name" value={displayName} /></div>
+              <div style={{ borderColor: CUSTOMER_UI.glassBorder }} className="border-t"><AccountRow icon={<IconDeviceMobile size={16} />} label="Phone" value={profile.phone ?? ''} /></div>
+              <div style={{ borderColor: CUSTOMER_UI.glassBorder }} className="border-t"><AccountRow icon={<IconMapPin size={16} />} label="City" value={profile.city ?? 'GTA Area'} /></div>
+              <div style={{ borderColor: CUSTOMER_UI.glassBorder }} className="border-t"><AccountRow icon={<IconMail size={16} />} label="Email" value={profile.email} /></div>
+            </div>
+          )}
+        </div>
+
+        {/* Other */}
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide mb-2 px-1" style={{ color: CUSTOMER_UI.textMuted }}>Other</p>
+          <div className="rounded-2xl" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+            <Link href="/" className="flex items-center gap-3 px-4 py-3.5 border-b" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
+              <IconArrowsLeftRight size={18} style={{ color: CUSTOMER_UI.textSecondary }} />
+              <span className="flex-1 text-[14px] font-semibold">Switch portal</span>
+              <IconChevronRight size={16} style={{ color: CUSTOMER_UI.textMuted }} />
+            </Link>
+            <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-3.5">
+              <IconLogout size={18} style={{ color: '#f87171' }} />
+              <span className="flex-1 text-left text-[14px] font-semibold" style={{ color: '#f87171' }}>Sign out</span>
+              <IconChevronRight size={16} style={{ color: CUSTOMER_UI.textMuted }} />
+            </button>
+          </div>
+        </div>
       </main>
 
       <MobileNav portal="customer" />
-
-      {/* QR modal */}
-      {qrClaim && (
-        <ProfileQrModal
-          claim={qrClaim}
-          onClose={() => setQrClaim(null)}
-        />
-      )}
     </div>
   );
 }
