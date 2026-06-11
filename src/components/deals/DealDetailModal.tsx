@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconArrowLeft, IconShare2, IconCircleCheck, IconChevronRight, IconClock, IconLayoutGrid, IconCalendarClock, IconBolt } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
@@ -79,6 +79,13 @@ export default function DealDetailModal({
 }: DealDetailModalProps) {
   const router = useRouter();
 
+  // Lock background scroll while the sheet is open (hides the page scrollbar).
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // Starter / Pro / yearly can schedule a future visit start time.
   const canSchedule = planTier === 'starter' || planTier === 'pro' || planTier === 'yearly';
   const [scheduling, setScheduling] = useState(false);
@@ -139,7 +146,7 @@ export default function DealDetailModal({
       />
 
       <div
-        className="relative w-full sm:max-w-md overflow-hidden sm:rounded-[24px] max-h-screen sm:max-h-[93vh] overflow-y-auto flex flex-col"
+        className="relative w-full sm:max-w-md overflow-hidden sm:rounded-[24px] max-h-screen sm:max-h-[93vh] overflow-y-auto scrollbar-none flex flex-col"
         style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}
       >
         {/* ── Top bar (restaurant name + grid icon) ── */}

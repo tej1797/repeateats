@@ -1,8 +1,8 @@
 'use client';
 
-import { IconHeart, IconCrown } from '@tabler/icons-react';
+import { useState } from 'react';
+import { IconHeart, IconStar, IconCrown, IconFlame } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
-import { formatDiscountValue } from '@/lib/utils';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
 
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -20,6 +20,26 @@ const CATEGORY_IMAGES: Record<string, string> = {
   seafood:   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&q=80',
   default:   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&q=80',
 };
+
+// Headline offer label derived from discount type (mobile parity).
+function offerLabel(deal: DealWithRestaurant): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dt = ((deal as any).discount_type as string | null) ?? '';
+  const val = deal.discount_value ?? '';
+  const t = deal.title.toLowerCase();
+  if (dt === 'bogo' || (t.includes('buy') && t.includes('get'))) return 'Buy 1 Get 1';
+  if (dt === 'free_item' || dt === 'free') return 'Free Item';
+  if (dt === 'percentage') {
+    const num = String(val).replace(/[^0-9.]/g, '');
+    return num ? `${num}% Off` : '% Off';
+  }
+  if (dt === 'fixed' || dt === 'set_price') {
+    const num = String(val).replace(/[^0-9.]/g, '');
+    return num ? `$${num} Off` : (val || 'Deal');
+  }
+  if (t.includes('happy hour')) return 'Happy Hour';
+  return val || 'Deal';
+}
 
 interface DiscoverDealCardProps {
   deal:           DealWithRestaurant;
@@ -40,65 +60,121 @@ export default function DiscoverDealCard({
   showCrown = false,
   locked = false,
 }: DiscoverDealCardProps) {
-  const img = CATEGORY_IMAGES[deal.restaurant?.category ?? ''] ?? CATEGORY_IMAGES.default;
+  const cuisine = (deal.restaurant?.category ?? deal.restaurant?.cuisine ?? 'default').toLowerCase();
+  // Prefer the restaurant's real cover (Google Places) → photo proxy → cuisine fallback.
+  const proxySrc = deal.restaurant
+    ? `/api/restaurant-photo?name=${encodeURIComponent(deal.restaurant.name)}&city=${encodeURIComponent(deal.restaurant.city ?? '')}&cuisine=${encodeURIComponent(cuisine)}`
+    : (CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const initialSrc = ((deal.restaurant as any)?.cover_url as string | undefined) ?? proxySrc;
+  const [imgSrc, setImgSrc] = useState(initialSrc);
+
+  const headline = offerLabel(deal);
+  const rating   = deal.restaurant?.rating ?? 0;
+  const maxClaims = deal.max_claims;
+  const pct = maxClaims && maxClaims > 0 ? Math.min(100, (deal.current_claims / maxClaims) * 100) : 0;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-2xl overflow-hidden transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+      className="w-full text-left rounded-2xl overflow-hidden transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
       style={{
         background: CUSTOMER_UI.glassBg,
         border: `1px solid ${CUSTOMER_UI.glassBorder}`,
         opacity: locked ? 0.75 : 1,
       }}
     >
-      <div className="relative h-[130px] overflow-hidden">
+      {/* Image — restaurant photo, no number overlay */}
+      <div className="relative h-[140px] overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={img} alt="" className="w-full h-full object-cover" loading="lazy" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+        <img
+          src={imgSrc}
+          alt={deal.restaurant?.name ?? ''}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => {
+            const fb = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
+            if (imgSrc !== fb) setImgSrc(fb);
+          }}
+        />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent 55%)' }} />
 
+        {/* X claimed badge — top-left */}
         {deal.current_claims > 0 && (
           <span
-            className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ background: 'rgba(0,0,0,0.65)', color: '#fff' }}
+            className="absolute top-2 left-2 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}
           >
+            <IconFlame size={10} style={{ color: CUSTOMER_UI.accent }} />
             {deal.current_claims} claimed
           </span>
         )}
 
-        {showCrown && (
+        {/* Crown (Pro) */}
+        {showCrown && !onToggleSave && (
           <span className="absolute top-2 right-2" style={{ color: METALLIC_GOLD.base }}>
             <IconCrown size={16} fill={METALLIC_GOLD.base} />
           </span>
         )}
 
+        {/* Heart save — top-right */}
         {onToggleSave && (
           <span
             role="button"
             tabIndex={0}
             onClick={e => { e.stopPropagation(); onToggleSave(); }}
             onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onToggleSave(); } }}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
+            className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
           >
-            <IconHeart size={14} style={{ color: saved ? '#ef4444' : '#fff', fill: saved ? '#ef4444' : 'none' }} />
+            <IconHeart size={15} style={{ color: saved ? '#ef4444' : '#fff', fill: saved ? '#ef4444' : 'none' }} />
           </span>
         )}
-
-        <span className="absolute bottom-2 left-2.5 font-display text-[20px] font-extrabold text-white drop-shadow-lg">
-          {formatDiscountValue(deal.discount_value)}
-        </span>
       </div>
 
+      {/* Body */}
       <div className="p-3">
-        <p className="text-[13px] font-bold leading-snug line-clamp-2 mb-1" style={{ color: CUSTOMER_UI.textPrimary }}>
+        {/* Offer headline + item name */}
+        <p className="font-display text-[17px] font-extrabold leading-tight" style={{ color: CUSTOMER_UI.textPrimary }}>
+          {headline}
+        </p>
+        <p className="text-[13px] font-semibold leading-snug line-clamp-1 mb-1.5" style={{ color: CUSTOMER_UI.textSecondary }}>
           {deal.title}
         </p>
-        <p className="text-[11px] truncate" style={{ color: CUSTOMER_UI.textMuted }}>
-          {deal.restaurant?.name}
-          {deal.restaurant?.city ? ` · ${deal.restaurant.city}` : ''}
-        </p>
+
+        {/* Restaurant · city · rating */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[11px] truncate" style={{ color: CUSTOMER_UI.textMuted }}>
+            {deal.restaurant?.name}
+            {deal.restaurant?.city ? ` · ${deal.restaurant.city}` : ''}
+          </p>
+          {rating > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold flex-shrink-0" style={{ color: CUSTOMER_UI.gold }}>
+              <IconStar size={11} fill={CUSTOMER_UI.gold} /> {rating.toFixed(1)}
+            </span>
+          )}
+        </div>
+
+        {/* Claims progress bar with current/max on the right */}
+        {maxClaims && maxClaims > 0 ? (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: CUSTOMER_UI.accent }} />
+            </div>
+            <span className="text-[10px] font-bold flex-shrink-0" style={{ color: CUSTOMER_UI.textMuted }}>
+              {deal.current_claims}/{maxClaims}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.1)' }} />
+            <span className="text-[10px] font-bold flex-shrink-0" style={{ color: CUSTOMER_UI.textMuted }}>
+              {deal.current_claims} claimed
+            </span>
+          </div>
+        )}
+
         {claimed && (
           <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>
             Active claim

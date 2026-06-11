@@ -13,16 +13,39 @@ interface ClaimResult {
   alreadyClaimed?: boolean;
 }
 
+interface ClaimFailure {
+  error:        string;
+  limitReached?: boolean;
+}
+
+type ClaimOutcome = ClaimResult | ClaimFailure;
+
 interface ClaimOpts {
   claim_for_date?:  string;
   timer_starts_at?: string;
 }
 
 interface UseClaimsResult {
-  claimDeal:   (dealId: string, opts?: ClaimOpts) => Promise<ClaimResult | null>;
+  claimDeal:   (dealId: string, opts?: ClaimOpts) => Promise<ClaimOutcome | null>;
   fetchClaims: () => Promise<ClaimWithDeal[]>;
   loading:     boolean;
   error:       string | null;
+}
+
+// Map edge-function error codes to friendly, actionable copy.
+const CLAIM_ERROR_COPY: Record<string, string> = {
+  already_redeemed:         "You've already redeemed this deal.",
+  deal_not_available:       "This deal isn't running today. Upgrade to RepEAT+ to claim deals up to 7 days ahead.",
+  'deal not claimable':     'This deal is not currently claimable.',
+  'deal sold out':          'This deal is fully claimed.',
+  'deal not found':         'This deal could not be found.',
+  daily_redemption_limit:   "You've hit your daily redemption limit. Upgrade for more.",
+  monthly_redemption_limit: "You've hit your monthly redemption limit. Upgrade for more.",
+};
+
+export function friendlyClaimError(code: string | undefined): string {
+  if (!code) return 'Could not claim this deal. Please try again.';
+  return CLAIM_ERROR_COPY[code] ?? code;
 }
 
 export function useClaims(): UseClaimsResult {
@@ -31,8 +54,8 @@ export function useClaims(): UseClaimsResult {
 
   const claimDeal = async (
     dealId: string,
-    opts?: { claim_for_date?: string; timer_starts_at?: string },
-  ): Promise<ClaimResult | null> => {
+    opts?: ClaimOpts,
+  ): Promise<ClaimOutcome | null> => {
     setLoading(true);
     setError(null);
 
@@ -49,20 +72,23 @@ export function useClaims(): UseClaimsResult {
       const json = await res.json() as {
         data?: Claim & { qr_code: string; claim_id?: string; status?: string; expires_at?: string | null; timer_starts_at?: string | null };
         error?: string;
+        limitReached?: boolean;
         alreadyClaimed?: boolean;
       };
 
-      // 409 already-redeemed is a real block — surface the message
-      if (res.status === 409) {
-        throw new Error(json.error ?? 'Cannot claim this deal');
-      }
-
+      // Real rejection — surface a friendly message instead of swallowing it.
       if (!res.ok && !json.alreadyClaimed) {
-        throw new Error(json.error ?? 'Failed to claim deal');
+        const message = friendlyClaimError(json.error);
+        setError(message);
+        return { error: message, limitReached: json.limitReached };
       }
 
       const qrCode = json.data?.qr_code;
-      if (!qrCode) return null;
+      if (!qrCode) {
+        const message = friendlyClaimError(json.error);
+        setError(message);
+        return { error: message };
+      }
 
       return {
         qr_code:         qrCode,
@@ -72,9 +98,10 @@ export function useClaims(): UseClaimsResult {
         timer_starts_at: json.data?.timer_starts_at ?? null,
         alreadyClaimed:  json.alreadyClaimed,
       };
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      return null;
+    } catch {
+      const message = 'Network error — please try again.';
+      setError(message);
+      return { error: message };
     } finally {
       setLoading(false);
     }

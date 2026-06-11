@@ -189,18 +189,19 @@ export default function RestaurantDetailPage() {
     if (!user) { setShowSignIn(true); return; }
     setClaimError(null);
     const result = await claimDeal(activeDeal.id);
-    if (result) {
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    if (result && 'qr_code' in result) {
+      const isScheduled = result.status === 'scheduled';
+      const expiresAt = result.expires_at ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
         ...prev,
-        [activeDeal.id]: { id: result.claim_id ?? '', qr_code: result.qr_code, status: 'claimed', expires_at: expiresAt },
+        [activeDeal.id]: { id: result.claim_id ?? '', qr_code: result.qr_code, status: isScheduled ? 'scheduled' : 'claimed', expires_at: expiresAt },
       }));
-      setQrCode(result.qr_code);
-      if ((result as { claim_id?: string }).claim_id) {
-        setActiveClaimId((result as { claim_id?: string }).claim_id!);
+      if (!isScheduled) {
+        setQrCode(result.qr_code);
+        if (result.claim_id) setActiveClaimId(result.claim_id);
       }
     } else {
-      setClaimError('Could not claim this deal. Please try again.');
+      setClaimError(result?.error ?? 'Could not claim this deal. Please try again.');
     }
   };
 

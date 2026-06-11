@@ -506,7 +506,8 @@ export default function CustomerPage() {
   const [category,   setCategory]   = useState('all');
   const [dealType,      setDealType]      = useState<QuickDealFilterId>('all');
   const [sheetOffer,    setSheetOffer]    = useState<DealFilterId>('all');
-  const [dietFilter,    setDietFilter]    = useState<'all' | 'veg' | 'egg' | 'nonveg'>('all');
+  // Veg mode is ON by default (mobile parity). 'veg' = veg mode on, 'all' = non-veg mode.
+  const [dietFilter,    setDietFilter]    = useState<'all' | 'veg' | 'egg' | 'nonveg'>('veg');
   const [serviceMode,   setServiceMode]   = useState<ServiceMode>('all');
   const [sortBy,        setSortBy]        = useState<SortBy>('relevance');
   const [minRating,     setMinRating]     = useState<number | null>(null);
@@ -863,7 +864,7 @@ export default function CustomerPage() {
     }
     setClaimError(null);
     const result = await claimDeal(activeDeal.id, opts);
-    if (result) {
+    if (result && 'qr_code' in result) {
       const isScheduled = result.status === 'scheduled';
       const expiresAt = result.expires_at ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
       setUserClaimMap(prev => ({
@@ -885,18 +886,20 @@ export default function CustomerPage() {
         if (result.claim_id) setActiveClaimId(result.claim_id);
       }
     } else {
-      setClaimError('Could not claim this deal. Please try again.');
+      setClaimError(result?.error ?? 'Could not claim this deal. Please try again.');
     }
   };
 
   // ── Derived booleans ─────────────────────────────────────────
   // Diet filter (veg = veg only; egg = veg+egg; nonveg/all = everything)
+  // Veg mode ON: hide only explicitly non-veg deals (unmarked deals still show).
+  // Veg mode OFF ('all'): show everything including non-veg.
   const dietFilteredDeals = dietFilter === 'veg'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? filteredDeals.filter(d => (d as any).diet_type === 'veg')
+    ? filteredDeals.filter(d => ((d as any).diet_type ?? 'veg') !== 'nonveg')
     : dietFilter === 'egg'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? filteredDeals.filter(d => ['veg', 'egg'].includes((d as any).diet_type ?? 'nonveg'))
+    ? filteredDeals.filter(d => ['veg', 'egg'].includes((d as any).diet_type ?? 'veg'))
     : dietFilter === 'nonveg'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? filteredDeals.filter(d => ((d as any).diet_type ?? 'nonveg') === 'nonveg')

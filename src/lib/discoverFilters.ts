@@ -16,6 +16,7 @@ export const QUICK_DEAL_FILTERS = [
   { id: 'bogo',       label: 'BOGO',       icon: '🔥' },
   { id: 'percentage', label: '% Off' },
   { id: 'under10',    label: 'Under CA$10' },
+  { id: 'under6',     label: 'Under CA$6' },
 ] as const;
 
 export type QuickDealFilterId = typeof QUICK_DEAL_FILTERS[number]['id'];
@@ -40,12 +41,13 @@ export function applyDealTypeFilter(deals: DealWithRestaurant[], dealType: strin
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return deals.filter(d => (d as any).discount_type === 'percentage');
   }
-  if (dealType === 'under10') {
+  if (dealType === 'under10' || dealType === 'under6') {
+    const cap = dealType === 'under6' ? 600 : 1000;
     return deals.filter(d => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dt = (d as any).discount_type as string | null;
       const cents = parsePriceCents(d.discount_value);
-      if (cents !== null && cents <= 1000) return true;
+      if (cents !== null) return cents <= cap;
       return dt === 'set_price' || dt === 'fixed';
     });
   }
