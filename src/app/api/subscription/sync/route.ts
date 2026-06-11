@@ -100,12 +100,10 @@ export async function POST(request: NextRequest) {
   const { error: dbError } = await admin
     .from('users')
     .update({
-      is_repeat_plus:         true,
       repeat_plus_tier:       tier,
       repeat_plus_plan:       billingCycle,
       stripe_customer_id:     customerId,
       stripe_subscription_id: sub.id,
-      repeat_plus_since:      new Date().toISOString(),
       repeat_plus_expires_at: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
     })
     .eq('id', userId);

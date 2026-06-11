@@ -51,12 +51,10 @@ export async function POST(request: NextRequest) {
         null;
 
       const updatePayload: Record<string, unknown> = {
-        is_repeat_plus:         true,
         repeat_plus_tier:       tier,
         repeat_plus_plan:       billingCycle,
         stripe_customer_id:     customerId,
         stripe_subscription_id: subscriptionId,
-        repeat_plus_since:      new Date().toISOString(),
         repeat_plus_expires_at: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       };
 
@@ -81,7 +79,6 @@ export async function POST(request: NextRequest) {
       const tier         = resolveStripeTier(priceId);
 
       const { error: wErr } = await supabase.from('users').update({
-        is_repeat_plus:         isActive,
         repeat_plus_tier:       isActive ? tier : 'free',
         repeat_plus_expires_at: isActive && periodEnd
           ? new Date(periodEnd * 1000).toISOString()
@@ -96,7 +93,6 @@ export async function POST(request: NextRequest) {
       const invoice    = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
       const { error: wErr } = await supabase.from('users').update({
-        is_repeat_plus:   false,
         repeat_plus_tier: 'free',
       }).eq('stripe_customer_id', customerId);
       if (wErr) console.error('[webhook] invoice.payment_failed DB error:', JSON.stringify(wErr));

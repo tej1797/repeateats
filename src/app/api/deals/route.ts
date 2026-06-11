@@ -77,12 +77,11 @@ export async function GET(request: NextRequest) {
     if (user) {
       const { data: userRow } = await supabase
         .from('users')
-        .select('repeat_plus_tier, is_repeat_plus')
+        .select('repeat_plus_tier')
         .eq('id', user.id)
         .maybeSingle();
       const raw = userRow?.repeat_plus_tier as string | null | undefined;
-      if (raw === 'starter' || raw === 'pro') callerTier = raw;
-      else if (userRow?.is_repeat_plus) callerTier = 'pro';
+      if (raw === 'starter' || raw === 'pro' || raw === 'yearly') callerTier = raw === 'yearly' ? 'pro' : raw;
     }
   } catch { /* no-op — public browse remains free */ }
 

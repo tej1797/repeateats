@@ -93,8 +93,12 @@ export async function GET() {
     .eq('user_id', user.id)
     .maybeSingle();
 
+  // Effective plus status: paid tier OR an active 3-day trial
   const tier        = profile?.repeat_plus_tier ?? 'free';
-  const isRepeatPlus = tier !== 'free' || (profile?.is_repeat_plus ?? false);
+  const trialActive = profile?.repeat_plus_trial_ends_at
+    ? new Date(profile.repeat_plus_trial_ends_at) > new Date()
+    : false;
+  const isRepeatPlus = tier !== 'free' || trialActive;
 
   return NextResponse.json({
     data: {

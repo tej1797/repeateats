@@ -123,11 +123,11 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   // ── Daily quota check ────────────────────────────────────────────────────
   const { data: customerRow } = await supabase
     .from('users')
-    .select('is_repeat_plus, repeat_plus_tier')
+    .select('repeat_plus_tier')
     .eq('id', claimAny.user_id)
     .maybeSingle();
 
-  const customerTier = customerRow?.repeat_plus_tier ?? (customerRow?.is_repeat_plus ? 'pro' : 'free');
+  const customerTier = customerRow?.repeat_plus_tier ?? 'free';
   const dailyLimit   = customerTier === 'free' ? 1 : 3;
   const today        = new Date().toISOString().split('T')[0];
 

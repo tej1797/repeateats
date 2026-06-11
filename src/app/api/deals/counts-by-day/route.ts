@@ -42,12 +42,11 @@ export async function GET(request: NextRequest) {
     if (user) {
       const { data: row } = await supabase
         .from('users')
-        .select('repeat_plus_tier, is_repeat_plus')
+        .select('repeat_plus_tier')
         .eq('id', user.id)
         .maybeSingle();
       const raw = row?.repeat_plus_tier as string | null | undefined;
-      if (raw === 'starter' || raw === 'pro') tier = raw;
-      else if (row?.is_repeat_plus) tier = 'pro';
+      if (raw === 'starter' || raw === 'pro' || raw === 'yearly') tier = raw === 'yearly' ? 'pro' : raw;
     }
   } catch { /* treat as free */ }
 
