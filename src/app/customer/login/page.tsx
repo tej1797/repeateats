@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { IconEye, IconEyeOff, IconCheck } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import { startGoogleOAuth } from '@/lib/portalAuth';
+import { handleOAuthReturn } from '@/lib/oauthCallback';
 
 // ─── Google SVG ───────────────────────────────────────────────────────────────
 function GoogleIcon() {
@@ -138,6 +139,15 @@ export default function CustomerLoginPage() {
   // Cursor glow on left panel
   const leftRef = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    void handleOAuthReturn(supabase, 'customer').then((result) => {
+      if (result === 'handled') return;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) router.replace('/customer');
+      });
+    });
+  }, [supabase, router]);
 
   useEffect(() => {
     const el = leftRef.current;

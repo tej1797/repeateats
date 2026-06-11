@@ -33,6 +33,7 @@ import {
 } from '@/lib/discoverFilters';
 import { createClient } from '@/lib/supabase/client';
 import { startGoogleOAuth } from '@/lib/portalAuth';
+import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
@@ -574,7 +575,9 @@ export default function CustomerPage() {
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const boot = async () => {
+      await handleOAuthReturn(supabase, 'customer');
+      const { data: { session } } = await supabase.auth.getSession();
       if (!mounted) return;
       if (session?.user) {
         handleSession(session.user);
@@ -583,7 +586,9 @@ export default function CustomerPage() {
           if (mounted) router.replace('/customer/login');
         }, 3000);
       }
-    });
+    };
+
+    void boot();
 
     return () => {
       mounted = false;

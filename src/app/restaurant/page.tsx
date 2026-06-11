@@ -59,6 +59,7 @@ import {
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
 import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
+import { handleOAuthReturn } from '@/lib/oauthCallback';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -231,6 +232,7 @@ export default function RestaurantPage() {
 
     const init = async () => {
       try {
+        await handleOAuthReturn(supabase, 'restaurant');
         // Use getUser() (validates JWT server-side) instead of getSession() (reads localStorage).
         // This prevents a stale cached session from loading the wrong restaurant.
         const { data: { user: verifiedUser } } = await supabase.auth.getUser();

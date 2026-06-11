@@ -57,7 +57,8 @@ export function clearPortalIntent(): void {
 
 export function oauthCallbackUrl(portal: Portal): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}/auth/callback?portal=${portal}`;
+  // Return directly to the portal page — PKCE exchange runs there in the browser.
+  return `${origin}${portalPath(portal)}`;
 }
 
 type SupabaseBrowserClient = ReturnType<typeof import('@/lib/supabase/client').createClient>;

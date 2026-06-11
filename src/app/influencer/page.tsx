@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { startGoogleOAuth } from '@/lib/portalAuth';
+import { handleOAuthReturn } from '@/lib/oauthCallback';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Influencer, CollabWithDetails } from '@/types';
 import { useCollabs } from '@/hooks/useCollabs';
@@ -68,6 +69,7 @@ export default function InfluencerPage() {
 
     const init = async () => {
       try {
+        await handleOAuthReturn(supabase, 'influencer');
         const { data: { session } } = await supabase.auth.getSession();
         if (!mounted) return;
         // If session found immediately (email/password login or warm cookie), proceed.

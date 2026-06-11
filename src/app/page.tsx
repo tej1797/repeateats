@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { resolvePortalIntent, readPortalCookie, clearPortalIntent, portalPath } from '@/lib/portalAuth';
+import { handleOAuthReturn as completeOAuthReturn } from '@/lib/oauthCallback';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const GOLD = '#D4AF37';
@@ -161,7 +162,7 @@ export default function LandingPage() {
 
   // ── OAuth code exchange — must be preserved ──────────────────────────────────
   useEffect(() => {
-    const handleOAuthReturn = async () => {
+    const processOAuthReturn = async () => {
       const params = new URLSearchParams(window.location.search);
       const code   = params.get('code');
       const error  = params.get('error');
@@ -174,26 +175,23 @@ export default function LandingPage() {
       if (!code) return;
       setProcessing(true);
       try {
-        const supabase = createClient();
-        const { error: authError } = await supabase.auth.exchangeCodeForSession(code);
-        if (authError) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            const portal = resolvePortalIntent(null, readPortalCookie());
-            clearPortalIntent();
-            router.replace(portal === 'customer' ? '/customer/login?error=auth' : `${portalPath(portal)}?error=auth`);
-            return;
-          }
-        }
         const portal = resolvePortalIntent(null, readPortalCookie());
+        const supabase = createClient();
+        const result = await completeOAuthReturn(supabase, portal);
         clearPortalIntent();
+        if (result === 'handled') {
+          window.history.replaceState({}, '', '/');
+          router.replace(portalPath(portal));
+          return;
+        }
         window.history.replaceState({}, '', '/');
         router.replace(portalPath(portal));
       } catch {
-        router.replace('/customer/login?error=auth');
+        const portal = resolvePortalIntent(null, readPortalCookie());
+        router.replace(portal === 'customer' ? '/customer/login?error=auth' : `${portalPath(portal)}?error=auth`);
       }
     };
-    void handleOAuthReturn();
+    void processOAuthReturn();
   }, [router]);
 
   useEffect(() => {

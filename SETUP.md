@@ -305,11 +305,21 @@ In **Supabase Dashboard → Authentication → Settings**:
 
 3. **Site URL** → `https://repeateats.ca`
 
-4. **Redirect URLs** → add:
+4. **Redirect URLs** → add (all required for Google OAuth return paths):
+   - `https://repeateats.ca/restaurant`
+   - `https://repeateats.ca/customer`
+   - `https://repeateats.ca/influencer`
    - `https://repeateats.ca/auth/callback`
+   - `https://www.repeateats.ca/restaurant`
+   - `https://www.repeateats.ca/customer`
+   - `https://www.repeateats.ca/influencer`
    - `https://www.repeateats.ca/auth/callback`
+   - `https://repeateats.ca` (homepage fallback)
+   - `https://www.repeateats.ca`
+   - `http://localhost:3000/restaurant`
+   - `http://localhost:3000/customer`
+   - `http://localhost:3000/influencer`
    - `http://localhost:3000/auth/callback`
-   - `http://localhost:3001/auth/callback`
 
    That's it — just 3. Portal routing is handled server-side via the `rp_portal` cookie.
 
