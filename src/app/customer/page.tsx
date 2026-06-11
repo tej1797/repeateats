@@ -21,6 +21,8 @@ import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
 import DayTabStrip from '@/components/customer/DayTabStrip';
 import CuisineCarousel from '@/components/customer/CuisineCarousel';
 import DiscoverDealCard from '@/components/customer/DiscoverDealCard';
+import QuotaChips from '@/components/customer/QuotaChips';
+import DietFilterPills from '@/components/customer/DietFilterPills';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
@@ -833,6 +835,9 @@ export default function CustomerPage() {
     : dietFilter === 'egg'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? filteredDeals.filter(d => ['veg', 'egg'].includes((d as any).diet_type ?? 'nonveg'))
+    : dietFilter === 'nonveg'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? filteredDeals.filter(d => ((d as any).diet_type ?? 'nonveg') === 'nonveg')
     : filteredDeals;
 
   // Hide deals the user has already redeemed from the main feed
@@ -964,6 +969,17 @@ export default function CustomerPage() {
             />
           )}
 
+          {user && !plan.loading && (
+            <QuotaChips
+              dailyUsed={plan.daily_used}
+              dailyLimit={plan.effective_daily_cap}
+              monthlyUsed={plan.monthly_used}
+              monthlyLimit={plan.effective_monthly_cap}
+              planLabel={plan.tier !== 'free' ? plan.planLabel : null}
+              onUpgrade={() => router.push('/repeat-plus')}
+            />
+          )}
+
           <div className="flex items-center justify-end gap-2 pb-1">
             <button
               type="button"
@@ -1017,6 +1033,11 @@ export default function CustomerPage() {
 
       {/* ── Main content ───────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-4 py-4 pb-28">
+
+        {/* Diet preference pills */}
+        {tab !== 'all' && !isSearching && (
+          <DietFilterPills value={dietFilter} onChange={setDietFilter} className="mb-3" />
+        )}
 
         {/* Cuisine carousel */}
         {tab !== 'all' && !isSearching && (
