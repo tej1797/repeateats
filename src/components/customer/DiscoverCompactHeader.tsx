@@ -2,9 +2,10 @@
 
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { IconMapPin, IconClock, IconLock } from '@tabler/icons-react';
-import { CUSTOMER_UI, METALLIC_GOLD, METALLIC_SILVER } from '@/lib/customerUI';
+import { IconClock, IconLock, IconStar } from '@tabler/icons-react';
+import { CUSTOMER_UI } from '@/lib/customerUI';
 import { RepEATLogo } from '@/components/RepEATLogo';
+import VegModeToggle from '@/components/customer/VegModeToggle';
 
 interface DiscoverCompactHeaderProps {
   city:              string;
@@ -13,22 +14,19 @@ interface DiscoverCompactHeaderProps {
   dailyUsed:         number;
   effectiveDailyCap: number;
   pointsBalance:     number;
-  dietFilter:        'all' | 'veg' | 'nonveg';
-  onDietChange:      (v: 'all' | 'veg' | 'nonveg') => void;
-  activeClaimLabel?: string | null;
+  vegMode:           boolean;
+  onVegModeChange:   (veg: boolean) => void;
+  activeClaimTime?:  string | null;
 }
 
-const glassBar: CSSProperties = {
+const cellBase: CSSProperties = {
   background:   CUSTOMER_UI.glassBg,
-  border:       `1px solid ${CUSTOMER_UI.glassBorder}`,
-  borderRadius: 14,
-  height:       28,
+  borderRadius: 10,
+  height:       36,
   display:      'flex',
   alignItems:   'center',
   justifyContent: 'center',
-  fontSize:     11,
-  fontWeight:   600,
-  color:        CUSTOMER_UI.textPrimary,
+  overflow:     'hidden',
 };
 
 export default function DiscoverCompactHeader({
@@ -38,74 +36,101 @@ export default function DiscoverCompactHeader({
   dailyUsed,
   effectiveDailyCap,
   pointsBalance,
-  dietFilter,
-  onDietChange,
-  activeClaimLabel,
+  vegMode,
+  onVegModeChange,
+  activeClaimTime,
 }: DiscoverCompactHeaderProps) {
-  const planTag = tier === 'pro' || tier === 'yearly'
-    ? { label: 'pro', color: METALLIC_GOLD.base }
-    : tier === 'starter'
-    ? { label: 'starter', color: METALLIC_SILVER.base }
-    : null;
-
-  const isVeg = dietFilter === 'veg';
-
   return (
-    <div className="mb-3">
+    <div className="mb-2">
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0">
-          <div className="flex items-center gap-1.5">
-            <RepEATLogo portal="customer" size="sm" />
-            {planTag && (
-              <span
-                className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                style={{ color: planTag.color, background: `${planTag.color}22` }}
-              >
-                {planTag.label}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 mt-1" style={{ color: CUSTOMER_UI.textSecondary }}>
-            <IconMapPin size={12} />
-            <span className="text-[11px]">{city} · {radiusKm} km</span>
+        <div className="flex-shrink-0 min-w-0">
+          <RepEATLogo portal="dark" size="sm" planTier={tier} />
+          <div className="flex items-center gap-1 mt-1.5" style={{ color: CUSTOMER_UI.textSecondary }}>
+            <span className="text-[11px] truncate">{city}</span>
+            <span className="text-[11px]">· {radiusKm} km</span>
           </div>
         </div>
 
         {/* 2×2 grid — right column 170px */}
-        <div className="ml-auto" style={{ width: 170 }}>
-          <div className="grid" style={{ gridTemplateColumns: '90px 72px', gap: '3px 8px' }}>
-            <div style={{ ...glassBar, width: 90 }}>
-              {dailyUsed}/{effectiveDailyCap}{' '}
-              <span style={{ color: CUSTOMER_UI.textMuted, fontWeight: 500 }}>redeemed</span>
+        <div className="ml-auto flex-shrink-0" style={{ width: 170 }}>
+          <div className="grid" style={{ gridTemplateColumns: '90px 72px', gap: '4px 8px' }}>
+            {/* Redeem bar — orange numbers, REDEEMED label */}
+            <div
+              style={{
+                ...cellBase,
+                width: 90,
+                flexDirection: 'column',
+                gap: 0,
+                border: `1px solid ${CUSTOMER_UI.glassBorder}`,
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 800, color: CUSTOMER_UI.accent, lineHeight: 1 }}>
+                {dailyUsed}/{effectiveDailyCap}
+              </span>
+              <span
+                style={{
+                  fontSize: 7,
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  color: CUSTOMER_UI.textSecondary,
+                  lineHeight: 1.2,
+                  marginTop: 2,
+                }}
+              >
+                REDEEMED
+              </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onDietChange(isVeg ? 'all' : 'veg')}
-              style={{ ...glassBar, width: 72, cursor: 'pointer' }}
-              aria-pressed={isVeg}
+            {/* Veg mode toggle */}
+            <div
+              style={{
+                ...cellBase,
+                width: 72,
+                border: `1px solid ${CUSTOMER_UI.glassBorder}`,
+                padding: '0 4px',
+              }}
             >
-              <span style={{ fontSize: 9, lineHeight: 1.1, textAlign: 'center' }}>
-                {isVeg ? 'Veg' : 'Non-Veg'}
-              </span>
-            </button>
+              <VegModeToggle vegMode={vegMode} onChange={onVegModeChange} />
+            </div>
 
-            <div style={{ ...glassBar, width: 90, gap: 4 }}>
-              {activeClaimLabel ? (
+            {/* Active claim timer — blue */}
+            <div
+              style={{
+                ...cellBase,
+                width: 90,
+                gap: 4,
+                border: `1px solid ${CUSTOMER_UI.claimBlue}`,
+                color: CUSTOMER_UI.claimBlue,
+              }}
+            >
+              {activeClaimTime ? (
                 <>
-                  <IconClock size={11} style={{ color: CUSTOMER_UI.accent }} />
-                  <span className="truncate">{activeClaimLabel}</span>
+                  <IconClock size={12} style={{ flexShrink: 0 }} />
+                  <span className="truncate" style={{ fontSize: 10, fontWeight: 700 }}>
+                    {activeClaimTime}
+                  </span>
                 </>
               ) : (
-                <span style={{ color: CUSTOMER_UI.textMuted }}>No active</span>
+                <span style={{ fontSize: 9, fontWeight: 600, color: CUSTOMER_UI.textMuted }}>
+                  No active
+                </span>
               )}
             </div>
 
+            {/* Points — orange border + star */}
             <Link
               href="/customer/points"
-              style={{ ...glassBar, width: 72, textDecoration: 'none', color: CUSTOMER_UI.gold }}
+              style={{
+                ...cellBase,
+                width: 72,
+                gap: 3,
+                textDecoration: 'none',
+                border: `1px solid ${CUSTOMER_UI.accent}`,
+                color: CUSTOMER_UI.accent,
+              }}
             >
-              ☆ {pointsBalance} pts
+              <IconStar size={11} stroke={1.8} />
+              <span style={{ fontSize: 10, fontWeight: 700 }}>{pointsBalance} pts</span>
             </Link>
           </div>
         </div>

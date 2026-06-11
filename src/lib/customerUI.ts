@@ -12,6 +12,7 @@ export const CUSTOMER_UI = {
   textMuted:     '#78716C',
   glassBg:       'rgba(28,26,24,0.55)',
   glassBorder:   'rgba(255,255,255,0.14)',
+  claimBlue:     '#5B9BD5',
   cardRadius:    16,
   dockRadius:    32,
   filterHeight:  36,

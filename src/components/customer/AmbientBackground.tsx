@@ -5,25 +5,16 @@ import { CUSTOMER_UI } from '@/lib/customerUI';
 export default function AmbientBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10" aria-hidden>
+      {/* Bottom-up orange glow — mobile parity */}
       <div
-        className="absolute -top-32 -left-24 w-[420px] h-[420px] rounded-full blur-[100px]"
+        className="absolute inset-0"
         style={{
-          background: `radial-gradient(circle, ${CUSTOMER_UI.accent}55 0%, transparent 70%)`,
-          animation: 'customerGlow 8s ease-in-out infinite',
+          background: `linear-gradient(to top, ${CUSTOMER_UI.accent}55 0%, ${CUSTOMER_UI.accent}22 18%, ${CUSTOMER_UI.accent}08 35%, transparent 55%, ${CUSTOMER_UI.bg} 100%)`,
         }}
       />
       <div
-        className="absolute top-[30%] -right-20 w-[360px] h-[360px] rounded-full blur-[90px]"
-        style={{
-          background: `radial-gradient(circle, ${CUSTOMER_UI.gold}33 0%, transparent 70%)`,
-          animation: 'customerGlow 10s ease-in-out infinite 2s',
-        }}
-      />
-      <div
-        className="absolute bottom-0 left-1/3 w-[300px] h-[300px] rounded-full blur-[80px]"
-        style={{
-          background: 'radial-gradient(circle, rgba(255,107,0,0.12) 0%, transparent 70%)',
-        }}
+        className="absolute -top-24 -left-16 w-[380px] h-[380px] rounded-full blur-[110px] opacity-40"
+        style={{ background: `radial-gradient(circle, ${CUSTOMER_UI.accent}44 0%, transparent 70%)` }}
       />
     </div>
   );

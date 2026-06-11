@@ -12,17 +12,25 @@ import {
   IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
   IconHeart, IconClock,
 } from '@tabler/icons-react';
-import { DEAL_FILTERS, type DealFilterId } from '@/lib/constants';
+import { type DealFilterId } from '@/lib/constants';
 import { getBrowseDayTabs } from '@/lib/dealVisibility';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { usePlan } from '@/hooks/usePlan';
 import AmbientBackground from '@/components/customer/AmbientBackground';
 import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
-import DayTabStrip from '@/components/customer/DayTabStrip';
-import CuisineCarousel from '@/components/customer/CuisineCarousel';
+import CuisineCircles from '@/components/customer/CuisineCircles';
 import DiscoverDealCard from '@/components/customer/DiscoverDealCard';
-import QuotaChips from '@/components/customer/QuotaChips';
-import DietFilterPills from '@/components/customer/DietFilterPills';
+import DiscoverFilterBar from '@/components/customer/DiscoverFilterBar';
+import DiscoverFiltersSheet from '@/components/customer/DiscoverFiltersSheet';
+import {
+  applyDealTypeFilter,
+  applyRatingFilter,
+  applyServiceMode,
+  sortDeals,
+  type QuickDealFilterId,
+  type ServiceMode,
+  type SortBy,
+} from '@/lib/discoverFilters';
 import { createClient } from '@/lib/supabase/client';
 import { useDeals } from '@/hooks/useDeals';
 import { useClaims } from '@/hooks/useClaims';
@@ -444,8 +452,14 @@ function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 export default function CustomerPage() {
   // ── Filter state ────────────────────────────────────────────
   const [category,   setCategory]   = useState('all');
-  const [dealType,   setDealType]   = useState<DealFilterId>('all');
-  const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'egg' | 'nonveg'>('all');
+  const [dealType,      setDealType]      = useState<QuickDealFilterId>('all');
+  const [sheetOffer,    setSheetOffer]    = useState<DealFilterId>('all');
+  const [dietFilter,    setDietFilter]    = useState<'all' | 'veg' | 'egg' | 'nonveg'>('all');
+  const [serviceMode,   setServiceMode]   = useState<ServiceMode>('all');
+  const [sortBy,        setSortBy]        = useState<SortBy>('relevance');
+  const [minRating,     setMinRating]     = useState<number | null>(null);
+  const [priceFilter,   setPriceFilter]   = useState<'all' | 'under10'>('all');
+  const [showFilters,   setShowFilters]   = useState(false);
   const [tab,        setTab]        = useState<Tab>('today');
   const [search,     setSearch]     = useState('');
   const [city,       setCity]       = useState('GTA Area');
@@ -641,9 +655,8 @@ export default function CustomerPage() {
     } catch { /* user cancelled share */ }
   };
 
-  // Reset visible count + deal type filter when filters change
-  useEffect(() => { setVisibleCount(12); }, [tab, category, dealType, city]);
-  useEffect(() => { setDealType('all'); }, [tab]);
+  // Reset visible count when filters change
+  useEffect(() => { setVisibleCount(12); }, [tab, category, dealType, city, serviceMode, sortBy, minRating]);
   // Snap back to 'today' if plan loads and the current tab is no longer visible
   useEffect(() => {
     if (plan.loading) return;
@@ -653,8 +666,8 @@ export default function CustomerPage() {
 
   // ── Data hooks (unchanged) ───────────────────────────────────
   // Only pass server-side type filter for deal_types[] filters; discount_type is client-side
-  const serverTypeFilter = (dealType === 'dine-in' || dealType === 'pickup')
-    ? dealType as 'dine-in' | 'pickup'
+  const serverTypeFilter = (serviceMode === 'dine-in' || serviceMode === 'pickup')
+    ? serviceMode
     : undefined;
 
   // Always fetch active deals — day filtering happens client-side so we can
@@ -698,35 +711,13 @@ export default function CustomerPage() {
       results = results.filter(d => dealAvailableOnTab(d, tab));
     }
 
-    // Discount-type filters applied client-side
-    if (dealType === 'bogo') {
-      results = results.filter(d => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const dt = (d as any).discount_type as string | null;
-        const t = d.title.toLowerCase();
-        return dt === 'bogo' || (t.includes('buy') && t.includes('get'));
-      });
-    } else if (dealType === 'percentage') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      results = results.filter(d => (d as any).discount_type === 'percentage');
-    } else if (dealType === 'free') {
-      results = results.filter(d => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const dt = (d as any).discount_type as string | null;
-        return dt === 'free_item' || dt === 'free' || d.title.toLowerCase().includes('free');
-      });
-    } else if (dealType === 'combo') {
-      results = results.filter(d => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const dt = (d as any).discount_type as string | null;
-        return dt === 'combo' || d.title.toLowerCase().includes('combo');
-      });
-    } else if (dealType === 'happy_hour') {
-      results = results.filter(d => {
-        const t = (d.title + ' ' + (d.description ?? '')).toLowerCase();
-        return t.includes('happy hour');
-      });
-    }
+    // Offer / quick filters
+    const activeOffer = sheetOffer !== 'all' ? sheetOffer : dealType;
+    results = applyDealTypeFilter(results, activeOffer);
+    if (priceFilter === 'under10') results = applyDealTypeFilter(results, 'under10');
+    results = applyServiceMode(results, serviceMode);
+    results = applyRatingFilter(results, minRating);
+    results = sortDeals(results, sortBy);
 
     // Search filter
     if (!search.trim()) return results;
@@ -736,7 +727,7 @@ export default function CustomerPage() {
       (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
       (d.description ?? '').toLowerCase().includes(q)
     );
-  }, [dealsWithLive, search, dealType, tab]);
+  }, [dealsWithLive, search, dealType, sheetOffer, tab, serviceMode, minRating, priceFilter, sortBy]);
 
   const filteredRests = useMemo(() => {
     if (!search.trim()) return restaurants;
@@ -846,6 +837,25 @@ export default function CustomerPage() {
   const loading    = tab === 'all' ? restsLoading : dealsLoading;
   const tabDeals   = tab === 'all' ? [] : visibleFilteredDeals;
   const isEmpty    = !loading && (tab === 'all' ? filteredRests.length === 0 : tabDeals.length === 0);
+  const activeClaimTime = useMemo(() => {
+    const times = Object.values(userClaimMap)
+      .filter(c => c.status === 'claimed' && c.expires_at && new Date(c.expires_at) > new Date())
+      .map(c => new Date(c.expires_at!).getTime())
+      .sort((a, b) => a - b);
+    if (!times.length) return null;
+    return new Date(times[0]).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }, [userClaimMap]);
+
+  const filterBadgeCount = useMemo(() => {
+    let n = 0;
+    if (sortBy !== 'relevance') n++;
+    if (minRating) n++;
+    if (priceFilter === 'under10') n++;
+    if (sheetOffer !== 'all') n++;
+    if (tab !== 'today') n++;
+    return n;
+  }, [sortBy, minRating, priceFilter, sheetOffer, tab]);
+
   const isSearching = search.length >= 2;
   const hasSearchDropdown = searchFocused && isSearching && (
     searchResults.restaurants.length > 0 ||
@@ -872,13 +882,9 @@ export default function CustomerPage() {
               dailyUsed={plan.daily_used}
               effectiveDailyCap={plan.effective_daily_cap}
               pointsBalance={plan.points_balance}
-              dietFilter={dietFilter === 'veg' ? 'veg' : 'nonveg'}
-              onDietChange={(v) => setDietFilter(v === 'veg' ? 'veg' : 'all')}
-              activeClaimLabel={
-                Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length > 0
-                  ? `${Object.keys(userClaimMap).filter(id => isActiveClaim(id)).length} active`
-                  : null
-              }
+              vegMode={dietFilter === 'veg'}
+              onVegModeChange={(veg) => setDietFilter(veg ? 'veg' : 'all')}
+              activeClaimTime={activeClaimTime}
             />
           )}
 
@@ -958,28 +964,6 @@ export default function CustomerPage() {
             )}
           </div>
 
-          {/* 7-day browse tabs */}
-          {!plan.loading && (
-            <DayTabStrip
-              tabs={visibleTabs}
-              activeKey={tab === 'all' ? '' : tab}
-              onSelect={(key) => setTab(key as Tab)}
-              restaurantsActive={tab === 'all'}
-              onRestaurants={() => setTab('all')}
-            />
-          )}
-
-          {user && !plan.loading && (
-            <QuotaChips
-              dailyUsed={plan.daily_used}
-              dailyLimit={plan.effective_daily_cap}
-              monthlyUsed={plan.monthly_used}
-              monthlyLimit={plan.effective_monthly_cap}
-              planLabel={plan.tier !== 'free' ? plan.planLabel : null}
-              onUpgrade={() => router.push('/repeat-plus')}
-            />
-          )}
-
           <div className="flex items-center justify-end gap-2 pb-1">
             <button
               type="button"
@@ -1034,39 +1018,19 @@ export default function CustomerPage() {
       {/* ── Main content ───────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-4 py-4 pb-28">
 
-        {/* Diet preference pills */}
+        {/* Cuisine circles + filter bar (mobile layout) */}
         {tab !== 'all' && !isSearching && (
-          <DietFilterPills value={dietFilter} onChange={setDietFilter} className="mb-3" />
-        )}
-
-        {/* Cuisine carousel */}
-        {tab !== 'all' && !isSearching && (
-          <CuisineCarousel selected={category} onChange={setCategory} className="mb-4" />
-        )}
-
-        {/* Deal type filter pills */}
-        {tab !== 'all' && (
-          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 mb-4">
-            {DEAL_FILTERS.map(({ id, label, icon }) => {
-              const active = dealType === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setDealType(id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap flex-shrink-0 transition-all"
-                  style={
-                    active
-                      ? { background: CUSTOMER_UI.accent, color: '#fff' }
-                      : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }
-                  }
-                >
-                  {icon && <span className="text-[13px] leading-none">{icon}</span>}
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <>
+            <CuisineCircles selected={category} onChange={setCategory} className="mb-3" />
+            <DiscoverFilterBar
+              dealType={dealType}
+              onDealType={(id) => { setDealType(id); setSheetOffer('all'); }}
+              serviceMode={serviceMode}
+              onServiceMode={setServiceMode}
+              onOpenFilters={() => setShowFilters(true)}
+              filterCount={filterBadgeCount}
+            />
+          </>
         )}
 
         {/* Results header */}
@@ -1143,7 +1107,10 @@ export default function CustomerPage() {
         {tab === 'today' && !dealsLoading && trendingDeals.length > 0 && !isSearching && (
           <section className="mb-8">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[16px] font-bold">🔥 Trending Now</h3>
+              <div className="flex items-center gap-2">
+                <span className="w-1 h-5 rounded-full flex-shrink-0" style={{ background: CUSTOMER_UI.accent }} />
+                <h3 className="text-[16px] font-bold">Trending Now</h3>
+              </div>
               <span className="text-[12px] text-t3">Most claimed this week</span>
             </div>
             <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
@@ -1378,6 +1345,32 @@ export default function CustomerPage() {
           onSignOut={async () => { setShowDrawer(false); await supabase.auth.signOut(); }}
         />
       )}
+
+      <DiscoverFiltersSheet
+        open={showFilters}
+        onClose={() => setShowFilters(false)}
+        sortBy={sortBy}
+        onSortBy={setSortBy}
+        dayTabs={visibleTabs}
+        activeDay={tab === 'all' ? 'today' : tab}
+        onDaySelect={(key) => setTab(key as Tab)}
+        minRating={minRating}
+        onMinRating={setMinRating}
+        offerType={sheetOffer}
+        onOfferType={setSheetOffer}
+        priceFilter={priceFilter}
+        onPriceFilter={setPriceFilter}
+        onApply={() => setDealType('all')}
+        onClear={() => {
+          setSortBy('relevance');
+          setMinRating(null);
+          setPriceFilter('all');
+          setSheetOffer('all');
+          setDealType('all');
+          setServiceMode('all');
+          setTab('today');
+        }}
+      />
 
       {/* ── Mobile nav ─────────────────────────────────────────────── */}
       <MobileNav portal="customer" />
