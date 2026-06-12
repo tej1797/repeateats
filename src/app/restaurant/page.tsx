@@ -1640,7 +1640,7 @@ function firstAllowedTab(managerMode: boolean, perms: ManagerPerms): DashTab {
   return found?.id ?? 'scanner';
 }
 
-type DealFilter = 'all' | 'active' | 'redeemed' | 'expired';
+type DealFilter = 'all' | 'active' | 'sold_out' | 'expired';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -1656,14 +1656,14 @@ function isDealSoldOut(deal: Deal): boolean {
 }
 
 /** Single bucket per deal for filter tabs (expired > sold out > active > other). */
-function dealFilterBucket(deal: Deal): 'active' | 'redeemed' | 'expired' | 'other' {
+function dealFilterBucket(deal: Deal): 'active' | 'sold_out' | 'expired' | 'other' {
   if (isDealExpired(deal)) return 'expired';
-  if (isDealSoldOut(deal)) return 'redeemed';
+  if (isDealSoldOut(deal)) return 'sold_out';
   if (deal.is_active && !deal.is_coming) return 'active';
   return 'other';
 }
 
-function classifyDeal(deal: Deal): 'active' | 'redeemed' | 'expired' | 'other' {
+function classifyDeal(deal: Deal): 'active' | 'sold_out' | 'expired' | 'other' {
   return dealFilterBucket(deal);
 }
 
@@ -1714,7 +1714,7 @@ function nextDuplicateDates(deal: Deal): { valid_from: string; valid_until: stri
 function dealStatusMeta(deal: Deal): { label: string; color: string } {
   const bucket = dealFilterBucket(deal);
   if (bucket === 'expired') return { label: 'Expired', color: '#FF7A30' };
-  if (bucket === 'redeemed') return { label: 'Redeemed', color: '#22C55E' };
+  if (bucket === 'sold_out') return { label: 'Sold out', color: '#22C55E' };
   if (bucket === 'active') return { label: 'Active', color: '#1249A9' };
   if (deal.is_coming) return { label: 'Coming soon', color: '#A855F7' };
   if (!deal.is_active) return { label: 'Paused', color: '#888' };
@@ -2132,7 +2132,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               const filterCounts = {
                 all:      deals.length,
                 active:   deals.filter((d) => dealFilterBucket(d) === 'active').length,
-                redeemed: deals.filter((d) => dealFilterBucket(d) === 'redeemed').length,
+                sold_out: deals.filter((d) => dealFilterBucket(d) === 'sold_out').length,
                 expired:  deals.filter((d) => dealFilterBucket(d) === 'expired').length,
               };
               const filteredDeals = dealFilter === 'all'
@@ -2145,7 +2145,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                     {([
                       ['all',      `All ${filterCounts.all}`],
                       ['active',   `Active ${filterCounts.active}`],
-                      ['redeemed', `Redeemed ${filterCounts.redeemed}`],
+                      ['sold_out', `Sold out ${filterCounts.sold_out}`],
                       ['expired',  `Expired ${filterCounts.expired}`],
                     ] as const).map(([id, label]) => {
                       const active = dealFilter === id;
@@ -2166,7 +2166,9 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                   </div>
 
                   {filteredDeals.length === 0 ? (
-                    <p className="text-[13px] text-t2 py-4">No {dealFilter === 'all' ? '' : dealFilter} deals yet.</p>
+                    <p className="text-[13px] text-t2 py-4">
+                      No {dealFilter === 'all' ? '' : dealFilter === 'sold_out' ? 'sold out' : dealFilter} deals yet.
+                    </p>
                   ) : (
                     <div className="space-y-2.5">
                       {filteredDeals.map((deal) => {
