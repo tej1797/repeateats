@@ -8,8 +8,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  IconSearch, IconMapPin, IconX,
-  IconRefresh, IconUser, IconCrown, IconLogout, IconChevronRight,
+  IconSearch, IconX,
+  IconRefresh, IconCrown, IconLogout, IconChevronRight,
   IconHeart, IconClock,
 } from '@tabler/icons-react';
 import { type DealFilterId } from '@/lib/constants';
@@ -20,7 +20,8 @@ import { dealRunsOnOffset, firstClaimableOffset, dateForOffset } from '@/lib/dea
 import { BROWSE_DAYS } from '@/lib/tierLimits';
 import { usePlan } from '@/hooks/usePlan';
 import AmbientBackground from '@/components/customer/AmbientBackground';
-import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
+import CustomerPortalHeader from '@/components/customer/CustomerPortalHeader';
+import LocationModal from '@/components/customer/LocationModal';
 import CuisineCircles from '@/components/customer/CuisineCircles';
 import DiscoverDealCard from '@/components/customer/DiscoverDealCard';
 import DiscoverFilterBar from '@/components/customer/DiscoverFilterBar';
@@ -39,12 +40,12 @@ import { createClient } from '@/lib/supabase/client';
 import { startGoogleOAuth } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { useDeals } from '@/hooks/useDeals';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
 import { useClaims } from '@/hooks/useClaims';
 import { useRestaurants } from '@/hooks/useRestaurants';
 import DealDetailModal from '@/components/deals/DealDetailModal';
 import QRCodeModal from '@/components/deals/QRCodeModal';
 import Skeleton from '@/components/ui/Skeleton';
-import MobileNav from '@/components/layout/MobileNav';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 
@@ -88,23 +89,6 @@ interface SearchResult {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────
-const CITIES: string[] = [
-  'GTA Area', 'Mississauga', 'Brampton', 'Toronto',
-  'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville',
-];
-
-// Rough lat/lon for each Ontario city — used by geolocation "Use My Location"
-const CITY_COORDS: Record<string, [number, number]> = {
-  'GTA Area':           [43.65, -79.38],
-  'Toronto':            [43.65, -79.38],
-  'Mississauga':        [43.59, -79.64],
-  'Brampton':           [43.72, -79.76],
-  'Markham':            [43.86, -79.27],
-  'Kitchener-Waterloo': [43.45, -80.49],
-  'Hamilton':           [43.26, -79.87],
-  'Oakville':           [43.45, -79.69],
-};
-
 
 // Food images per category — used by TrendingCard
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -305,133 +289,6 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
   );
 }
 
-// ─── LocationModal — bottom-sheet (mobile parity) ──────────────────────────
-const RADIUS_CHIPS = [2, 5, 10, 25, 50, 100];
-
-function LocationModal({ city, radius, onApply, onClose }: { city: string; radius: number; onApply: (c: string, r: number) => void; onClose: () => void }) {
-  const [localCity,   setLocalCity]   = useState(city);
-  const [localRadius, setLocalRadius] = useState(radius);
-  const [query,       setQuery]       = useState('');
-  const [locating,    setLocating]    = useState(false);
-  const [locateErr,   setLocateErr]   = useState('');
-
-  const matches = query.trim()
-    ? CITIES.filter(c => c.toLowerCase().includes(query.toLowerCase()))
-    : CITIES;
-
-  const handleUseMyLocation = () => {
-    if (!navigator.geolocation) { setLocateErr('Geolocation not supported'); return; }
-    setLocating(true);
-    setLocateErr('');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lon } = pos.coords;
-        let nearest = 'GTA Area';
-        let minDist = Infinity;
-        for (const [name, [clat, clon]] of Object.entries(CITY_COORDS)) {
-          const dist = Math.hypot(lat - clat, lon - clon);
-          if (dist < minDist) { minDist = dist; nearest = name; }
-        }
-        setLocalCity(nearest);
-        setLocating(false);
-      },
-      () => { setLocateErr('Could not get location. Please select manually.'); setLocating(false); },
-      { timeout: 8000 },
-    );
-  };
-
-  const apply = (nextCity = localCity, nextRadius = localRadius) => {
-    onApply(nextCity, nextRadius);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose} />
-      <div
-        className="relative w-full sm:max-w-md rounded-t-[24px] sm:rounded-[24px] px-5 pt-5 pb-[max(20px,env(safe-area-inset-bottom))] animate-[slideUp_0.22s_ease] max-h-[88vh] overflow-y-auto scrollbar-none"
-        style={{ background: CUSTOMER_UI.bgElevated, color: CUSTOMER_UI.textPrimary, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
-      >
-        <div className="flex items-start justify-between mb-1">
-          <h2 className="font-display text-[22px] font-extrabold">Location</h2>
-          <button onClick={onClose} className="p-1" style={{ color: CUSTOMER_UI.textSecondary }}><IconX size={20} /></button>
-        </div>
-        <p className="text-[14px] mb-4" style={{ color: CUSTOMER_UI.textSecondary }}>
-          Search a city or adjust your search radius
-        </p>
-
-        {/* Search city */}
-        <div className="relative mb-2">
-          <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: CUSTOMER_UI.textMuted }} />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search city (e.g. Mississauga)"
-            className="w-full h-12 pl-10 pr-3 rounded-xl text-[14px] outline-none placeholder:opacity-60"
-            style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textPrimary }}
-          />
-        </div>
-
-        {/* City matches */}
-        <div className="flex flex-wrap gap-2 mb-3">
-          {matches.map(c => (
-            <button
-              key={c}
-              onClick={() => { setLocalCity(c); setQuery(''); }}
-              className="text-[13px] font-semibold px-3 py-1.5 rounded-full transition-all"
-              style={localCity === c
-                ? { background: CUSTOMER_UI.accent, color: '#fff' }
-                : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={handleUseMyLocation}
-          disabled={locating}
-          className="w-full h-10 mb-5 flex items-center justify-center gap-2 rounded-xl text-[13px] font-semibold disabled:opacity-60"
-          style={{ border: `1px solid ${CUSTOMER_UI.accent}`, color: CUSTOMER_UI.accent }}
-        >
-          <IconMapPin size={14} />
-          {locating ? 'Detecting location…' : 'Use my location'}
-        </button>
-        {locateErr && <p className="text-[12px] mb-3 -mt-3" style={{ color: '#f87171' }}>{locateErr}</p>}
-
-        {/* Search radius */}
-        <h3 className="font-display text-[18px] font-bold mb-0.5">Search radius</h3>
-        <p className="text-[13px] mb-3" style={{ color: CUSTOMER_UI.textSecondary }}>Show restaurants within</p>
-        <div className="grid grid-cols-3 gap-2.5 mb-5">
-          {RADIUS_CHIPS.map(r => {
-            const active = localRadius === r;
-            return (
-              <button
-                key={r}
-                onClick={() => setLocalRadius(r)}
-                className="h-12 rounded-xl text-[14px] font-bold transition-all"
-                style={active
-                  ? { background: CUSTOMER_UI.accent, color: '#fff' }
-                  : { background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}`, color: CUSTOMER_UI.textSecondary }}
-              >
-                {r} km
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          onClick={() => apply()}
-          className="w-full py-3.5 rounded-2xl text-[16px] font-bold text-white"
-          style={{ background: CUSTOMER_UI.accent }}
-        >
-          Show deals in {localCity}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── SignInModal ──────────────────────────────────────────────────────────
 function SignInModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u: User) => void }) {
   const [email,    setEmail]    = useState('');
@@ -510,8 +367,7 @@ export default function CustomerPage() {
   const [showFilters,   setShowFilters]   = useState(false);
   const [tab,        setTab]        = useState<Tab>('today');
   const [search,     setSearch]     = useState('');
-  const [city,       setCity]       = useState('GTA Area');
-  const [radius,     setRadius]     = useState(30);
+  const { city, radius, applyLocation } = useCustomerLocation();
 
   // ── Pagination ──────────────────────────────────────────────
   const [visibleCount, setVisibleCount] = useState(12);
@@ -988,38 +844,19 @@ export default function CustomerPage() {
     <div className="min-h-screen relative" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
       <AmbientBackground />
 
-      {/* ── Sticky discover header (mobile parity) ─────────────────── */}
-      <header className="sticky top-0 z-40 glass-bar border-b-0" style={{ borderBottom: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
-        <div className="max-w-[1100px] mx-auto px-4 pt-3 pb-2 space-y-3">
-
-          {!plan.loading && (
-            <DiscoverCompactHeader
-              city={city}
-              radiusKm={radius}
-              tier={plan.tier}
-              dailyUsed={plan.daily_used}
-              effectiveDailyCap={plan.effective_daily_cap}
-              pointsBalance={plan.points_balance}
-              vegMode={dietFilter === 'veg'}
-              onVegModeChange={(veg) => setDietFilter(veg ? 'veg' : 'all')}
-              activeClaimTime={activeClaimTime}
-            />
-          )}
-
-          {/* Day tabs + compact search */}
-          <div className="flex items-center gap-2 pb-1">
-            <div className="flex-1 min-w-0">
-              {!plan.loading && (
-                <DayTabStrip
-                  tabs={visibleTabs}
-                  activeKey={tab === 'all' ? 'today' : tab}
-                  onSelect={(key) => setTab(key as Tab)}
-                  restaurantsActive={tab === 'all'}
-                  onRestaurants={() => setTab('all')}
-                />
-              )}
-            </div>
-
+      {!plan.loading && (
+        <CustomerPortalHeader
+          city={city}
+          radiusKm={radius}
+          tier={plan.tier}
+          dailyUsed={plan.daily_used}
+          effectiveDailyCap={plan.effective_daily_cap}
+          pointsBalance={plan.points_balance}
+          vegMode={dietFilter === 'veg'}
+          onVegModeChange={(veg) => setDietFilter(veg ? 'veg' : 'all')}
+          activeClaimTime={activeClaimTime}
+          onLocationClick={() => setShowLocation(true)}
+          searchSlot={(
             <div className="relative flex-shrink-0 w-[132px]" ref={searchContainerRef}>
               <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" style={{ color: CUSTOMER_UI.textMuted }} />
               <input
@@ -1036,93 +873,65 @@ export default function CustomerPage() {
                 }}
               />
               {search && (
-                <button onClick={() => { setSearch(''); setSearchFocused(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10 transition-colors">
+                <button type="button" onClick={() => { setSearch(''); setSearchFocused(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10 transition-colors">
                   <IconX size={14} />
                 </button>
               )}
-
-              {/* Search suggestions dropdown */}
               {hasSearchDropdown && (
                 <div className="absolute top-full right-0 mt-1.5 w-[min(320px,calc(100vw-2rem))] rounded-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto scrollbar-none glass-panel shadow-2xl">
-                {searchResults.restaurants.length > 0 && (
-                  <>
-                    <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🍽️ Restaurants</p>
-                    {searchResults.restaurants.map(r => (
-                      <button
-                        key={r.id}
-                        onMouseDown={() => { router.push(`/customer/restaurant/${r.id}`); setSearchFocused(false); }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors"
-                      >
-                        <p className="text-[14px] font-semibold text-tx">{r.name}</p>
-                        <p className="text-[12px] text-t2">{r.cuisine} · {r.city}</p>
-                      </button>
-                    ))}
-                  </>
-                )}
-                {searchResults.deals.length > 0 && (
-                  <>
-                    <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🏷️ Deals</p>
-                    {searchResults.deals.map(d => (
-                      <button
-                        key={d.id}
-                        onMouseDown={() => setSearchFocused(false)}
-                        className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors flex items-center gap-2.5"
-                      >
-                        <span className="text-[18px]">{d.emoji}</span>
-                        <div>
-                          <p className="text-[14px] font-semibold text-tx">{formatCustomerDealTitle(d.title)}</p>
-                          {d.discount_value && <p className="text-[12px] text-brand font-bold">{d.discount_value}</p>}
-                        </div>
-                      </button>
-                    ))}
-                  </>
-                )}
-                {searchResults.cities.length > 0 && (
-                  <>
-                    <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">📍 Cities</p>
-                    {searchResults.cities.map(c => (
-                      <button
-                        key={c}
-                        onMouseDown={() => { setCity(c); setSearch(''); setSearchFocused(false); }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors text-[14px] font-semibold text-tx"
-                      >
-                        📍 {c}
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
+                  {searchResults.restaurants.length > 0 && (
+                    <>
+                      <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🍽️ Restaurants</p>
+                      {searchResults.restaurants.map(r => (
+                        <button
+                          key={r.id}
+                          onMouseDown={() => { router.push(`/customer/restaurant/${r.id}`); setSearchFocused(false); }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors"
+                        >
+                          <p className="text-[14px] font-semibold text-tx">{r.name}</p>
+                          <p className="text-[12px] text-t2">{r.cuisine} · {r.city}</p>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {searchResults.deals.length > 0 && (
+                    <>
+                      <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🏷️ Deals</p>
+                      {searchResults.deals.map(d => (
+                        <button
+                          key={d.id}
+                          onMouseDown={() => setSearchFocused(false)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors flex items-center gap-2.5"
+                        >
+                          <span className="text-[18px]">{d.emoji}</span>
+                          <div>
+                            <p className="text-[14px] font-semibold text-tx">{formatCustomerDealTitle(d.title)}</p>
+                            {d.discount_value && <p className="text-[12px] text-brand font-bold">{d.discount_value}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {searchResults.cities.length > 0 && (
+                    <>
+                      <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">📍 Cities</p>
+                      {searchResults.cities.map(c => (
+                        <button
+                          key={c}
+                          onMouseDown={() => { applyLocation(c, radius); setSearch(''); setSearchFocused(false); }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-surface2 border-b border-[var(--bd)] last:border-0 transition-colors text-[14px] font-semibold text-tx"
+                        >
+                          📍 {c}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-
-            <button
-              type="button"
-              onClick={() => setShowLocation(true)}
-              className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full"
-              style={{ background: CUSTOMER_UI.accentSoft, color: CUSTOMER_UI.accent }}
-            >
-              <IconMapPin size={11} />
-              <span className="hidden sm:inline">Location</span>
-            </button>
-            {user ? (
-              <button type="button" onClick={() => setShowDrawer(true)} className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden border" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
-                {user.user_metadata?.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.user_metadata.avatar_url as string} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[12px] font-bold" style={{ background: CUSTOMER_UI.accent, color: '#fff' }}>
-                    {((user.user_metadata?.full_name ?? user.email ?? 'U') as string).charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </button>
-            ) : (
-              <button type="button" onClick={() => setShowSignIn(true)} className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
-                <IconUser size={14} style={{ color: CUSTOMER_UI.accent }} />
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+          )}
+        />
+      )}
 
       {/* ── Active claims banner ───────────────────────────────────── */}
       {(() => {
@@ -1146,9 +955,21 @@ export default function CustomerPage() {
       })()}
 
       {/* ── Main content ───────────────────────────────────────────── */}
-      <main className="max-w-[1100px] mx-auto px-4 py-4 pb-28">
+      <main className="max-w-[1100px] mx-auto px-4 py-4 pb-8">
 
-        {/* Cuisine circles + filter bar (mobile layout) */}
+        {tab !== 'all' && !isSearching && !plan.loading && (
+          <div className="mb-3">
+            <DayTabStrip
+              tabs={visibleTabs}
+              activeKey={tab}
+              onSelect={(key) => setTab(key as Tab)}
+              restaurantsActive={false}
+              onRestaurants={() => setTab('all')}
+            />
+          </div>
+        )}
+
+        {/* Cuisine circles + filter bar */}
         {tab !== 'all' && !isSearching && (
           <>
             <CuisineCircles selected={category} onChange={setCategory} className="mb-3" />
@@ -1429,7 +1250,7 @@ export default function CustomerPage() {
       {showLocation && (
         <LocationModal
           city={city} radius={radius}
-          onApply={(c, r) => { setCity(c); setRadius(r); }}
+          onApply={applyLocation}
           onClose={() => setShowLocation(false)}
         />
       )}
@@ -1509,8 +1330,6 @@ export default function CustomerPage() {
         }}
       />
 
-      {/* ── Mobile nav ─────────────────────────────────────────────── */}
-      <MobileNav portal="customer" />
     </div>
   );
 }

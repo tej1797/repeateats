@@ -9,13 +9,15 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  IconArrowLeft, IconStar, IconQrcode, IconClock, IconChevronRight, IconLayoutGrid,
+  IconStar, IconQrcode, IconClock, IconChevronRight,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import { useCustomerPoints } from '@/hooks/useCustomerPoints';
 import { usePlan } from '@/hooks/usePlan';
 import { VanishingQR } from '@/components/deals/VanishingQR';
-import MobileNav from '@/components/layout/MobileNav';
+import CustomerPortalHeader from '@/components/customer/CustomerPortalHeader';
+import LocationModal from '@/components/customer/LocationModal';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { formatCustomerDealTitle } from '@/lib/utils';
 
@@ -99,6 +101,9 @@ export default function CustomerClaimsPage() {
   const supabase  = useRef(createClient()).current;
   const plan      = usePlan();
   const points    = useCustomerPoints(plan.tier);
+  const { city, radius, applyLocation } = useCustomerLocation();
+  const [showLocation, setShowLocation] = useState(false);
+  const [dietFilter, setDietFilter] = useState<'veg' | 'all'>('veg');
 
   const [claims,   setClaims]   = useState<ClaimRow[]>([]);
   const [loading,  setLoading]  = useState(true);
@@ -162,18 +167,20 @@ export default function CustomerClaimsPage() {
   }
 
   return (
-    <div className="min-h-screen pb-28" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
-      {/* Header */}
-      <header className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between" style={{ background: CUSTOMER_UI.bg }}>
-        <button onClick={() => router.push('/customer')} className="flex items-center gap-2">
-          <IconArrowLeft size={18} />
-          <span className="font-display text-[18px] font-extrabold">
-            <span style={{ color: CUSTOMER_UI.textPrimary }}>Rep</span>
-            <span style={{ color: CUSTOMER_UI.accent }}>EAT</span>
-          </span>
-        </button>
-        <IconLayoutGrid size={18} style={{ color: CUSTOMER_UI.textSecondary }} />
-      </header>
+    <div className="min-h-screen pb-8" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
+      {!plan.loading && (
+        <CustomerPortalHeader
+          city={city}
+          radiusKm={radius}
+          tier={plan.tier}
+          dailyUsed={plan.daily_used}
+          effectiveDailyCap={plan.effective_daily_cap}
+          pointsBalance={plan.points_balance}
+          vegMode={dietFilter === 'veg'}
+          onVegModeChange={(veg) => setDietFilter(veg ? 'veg' : 'all')}
+          onLocationClick={() => setShowLocation(true)}
+        />
+      )}
 
       <main className="max-w-[700px] mx-auto px-4 py-2 space-y-7">
         <p className="text-[13px] -mt-1" style={{ color: CUSTOMER_UI.textSecondary }}>My Claims</p>
@@ -319,7 +326,14 @@ export default function CustomerClaimsPage() {
 
       {qrClaim && <QrModal claim={qrClaim} onClose={() => setQrClaim(null)} />}
 
-      <MobileNav portal="customer" />
+      {showLocation && (
+        <LocationModal
+          city={city}
+          radius={radius}
+          onApply={applyLocation}
+          onClose={() => setShowLocation(false)}
+        />
+      )}
     </div>
   );
 }

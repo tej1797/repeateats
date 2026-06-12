@@ -12,7 +12,10 @@ import {
   IconArrowsLeftRight, IconLogout, IconCheck, IconSparkles,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
-import MobileNav from '@/components/layout/MobileNav';
+import CustomerPortalHeader from '@/components/customer/CustomerPortalHeader';
+import LocationModal from '@/components/customer/LocationModal';
+import { usePlan } from '@/hooks/usePlan';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 
 interface ProfileData {
@@ -75,6 +78,10 @@ export default function CustomerProfilePage() {
   const supabase = useRef(createClient()).current;
   const fileRef  = useRef<HTMLInputElement>(null);
 
+  const plan = usePlan();
+  const { city, radius, applyLocation } = useCustomerLocation();
+  const [showLocation, setShowLocation] = useState(false);
+  const [dietFilter, setDietFilter] = useState<'veg' | 'all'>('veg');
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -155,15 +162,20 @@ export default function CustomerProfilePage() {
   const estSaved    = (profile.stats.total_saved_cents ?? 0) / 100;
 
   return (
-    <div className="min-h-screen pb-28" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
-      {/* Header */}
-      <header className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between" style={{ background: CUSTOMER_UI.bg }}>
-        <Link href="/customer" className="font-display text-[18px] font-extrabold">
-          <span style={{ color: CUSTOMER_UI.textPrimary }}>Rep</span>
-          <span style={{ color: CUSTOMER_UI.accent }}>EAT</span>
-        </Link>
-        <span className="text-[13px]" style={{ color: CUSTOMER_UI.textSecondary }}>Profile</span>
-      </header>
+    <div className="min-h-screen pb-8" style={{ background: CUSTOMER_UI.bg, color: CUSTOMER_UI.textPrimary }}>
+      {!plan.loading && (
+        <CustomerPortalHeader
+          city={city}
+          radiusKm={radius}
+          tier={plan.tier}
+          dailyUsed={plan.daily_used}
+          effectiveDailyCap={plan.effective_daily_cap}
+          pointsBalance={plan.points_balance}
+          vegMode={dietFilter === 'veg'}
+          onVegModeChange={(veg) => setDietFilter(veg ? 'veg' : 'all')}
+          onLocationClick={() => setShowLocation(true)}
+        />
+      )}
 
       <main className="max-w-[700px] mx-auto px-4 py-2 space-y-5">
 
@@ -314,7 +326,14 @@ export default function CustomerProfilePage() {
         </div>
       </main>
 
-      <MobileNav portal="customer" />
+      {showLocation && (
+        <LocationModal
+          city={city}
+          radius={radius}
+          onApply={applyLocation}
+          onClose={() => setShowLocation(false)}
+        />
+      )}
     </div>
   );
 }
