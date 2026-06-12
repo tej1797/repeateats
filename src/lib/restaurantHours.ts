@@ -6,6 +6,32 @@ export interface HoursEntry {
 
 export const RESTAURANT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
+const DAY_KEY_MAP: Record<string, (typeof RESTAURANT_DAYS)[number]> = {
+  mon: 'Mon', monday: 'Mon',
+  tue: 'Tue', tuesday: 'Tue',
+  wed: 'Wed', wednesday: 'Wed',
+  thu: 'Thu', thursday: 'Thu',
+  fri: 'Fri', friday: 'Fri',
+  sat: 'Sat', saturday: 'Sat',
+  sun: 'Sun', sunday: 'Sun',
+  Mon: 'Mon', Tue: 'Tue', Wed: 'Wed', Thu: 'Thu', Fri: 'Fri', Sat: 'Sat', Sun: 'Sun',
+};
+
+function normalizeDayKey(key: string): (typeof RESTAURANT_DAYS)[number] | null {
+  return DAY_KEY_MAP[key] ?? DAY_KEY_MAP[key.toLowerCase()] ?? null;
+}
+
+function parseHoursString(val: string): HoursEntry | null {
+  if (val.toLowerCase() === 'closed') {
+    return { open: '10:00', close: '22:00', closed: true };
+  }
+  const parts = val.split(/[–\-]/);
+  if (parts.length >= 2) {
+    return { open: parts[0].trim(), close: parts[1].trim(), closed: false };
+  }
+  return null;
+}
+
 export function defaultHours(): Record<string, HoursEntry> {
   return Object.fromEntries(
     RESTAURANT_DAYS.map((d) => [d, { open: '10:00', close: '22:00', closed: false }]),
@@ -51,22 +77,40 @@ export function parseGoogleHours(weekdayText: string[]): Record<string, HoursEnt
   return result;
 }
 
-export function hoursRecordToEntries(hours: Record<string, string> | null): Record<string, HoursEntry> {
+export function hoursRecordToEntries(
+  hours: Record<string, string | HoursEntry> | null,
+): Record<string, HoursEntry> {
   const result = defaultHours();
   if (!hours) return result;
-  for (const day of RESTAURANT_DAYS) {
-    const val = hours[day];
-    if (!val) continue;
-    if (val.toLowerCase() === 'closed') {
-      result[day] = { ...result[day], closed: true };
-    } else {
-      const parts = val.split(/[–\-]/);
-      if (parts.length >= 2) {
-        result[day] = { open: parts[0].trim(), close: parts[1].trim(), closed: false };
-      }
+
+  for (const [rawDay, val] of Object.entries(hours)) {
+    const day = normalizeDayKey(rawDay);
+    if (!day) continue;
+
+    if (typeof val === 'object' && val !== null && 'open' in val) {
+      result[day] = val as HoursEntry;
+      continue;
     }
+
+    if (typeof val !== 'string') continue;
+    const parsed = parseHoursString(val);
+    if (parsed) result[day] = parsed;
   }
   return result;
+}
+
+/** Ordered list of days that have hours stored in the DB record. */
+export function hoursForDisplay(
+  hours: Record<string, string | HoursEntry> | null,
+): Array<{ day: string; entry: HoursEntry }> {
+  if (!hours || Object.keys(hours).length === 0) return [];
+  const entries = hoursRecordToEntries(hours);
+  const present = new Set(
+    Object.keys(hours).map(normalizeDayKey).filter(Boolean) as string[],
+  );
+  return RESTAURANT_DAYS
+    .filter((d) => present.has(d))
+    .map((day) => ({ day, entry: entries[day] }));
 }
 
 export function entriesToHoursRecord(entries: Record<string, HoursEntry>): Record<string, string> {

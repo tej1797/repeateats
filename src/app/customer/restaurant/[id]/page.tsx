@@ -19,6 +19,7 @@ import Skeleton from '@/components/ui/Skeleton';
 import MobileNav from '@/components/layout/MobileNav';
 import StarRating from '@/components/form/StarRating';
 import { getRestaurantRating, getRestaurantReviewCount } from '@/lib/utils';
+import { hoursForDisplay } from '@/lib/restaurantHours';
 import {
   IconArrowLeft, IconMapPin, IconPhone, IconGlobe,
   IconBrandInstagram, IconChevronDown, IconChevronUp,
@@ -26,7 +27,7 @@ import {
 } from '@tabler/icons-react';
 
 // ─── Hour entry shape (from the restaurant onboarding wizard) ─────────────
-interface HoursEntry { open: string; close: string; closed: boolean }
+// Parsed via hoursForDisplay() — DB stores strings like "10:00–22:00" per day key.
 
 // Unsplash fallback images per cuisine category
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -226,7 +227,7 @@ export default function RestaurantDetailPage() {
     }));
   }, [restaurant]);
 
-  const hours = restaurant?.hours as Record<string, HoursEntry> | null;
+  const hoursList = hoursForDisplay(restaurant?.hours ?? null);
 
   // ── Loading skeleton ──────────────────────────────────────────────────
   if (loading || !authChecked) {
@@ -401,7 +402,7 @@ export default function RestaurantDetailPage() {
         </div>
 
         {/* Hours accordion */}
-        {hours && Object.keys(hours).length > 0 && (
+        {hoursList.length > 0 && (
           <div className="bg-surface rounded-brands border border-[var(--bd)] mb-6 overflow-hidden">
             <button
               onClick={() => setShowHours(!showHours)}
@@ -414,7 +415,7 @@ export default function RestaurantDetailPage() {
             </button>
             {showHours && (
               <div className="border-t border-[var(--bd)]">
-                {Object.entries(hours).map(([day, entry]) => (
+                {hoursList.map(({ day, entry }) => (
                   <div key={day} className="flex justify-between items-center px-4 py-2 text-[13px] border-b border-[var(--bd)] last:border-0">
                     <span className="font-semibold w-12 text-t2">{day}</span>
                     <span className={entry.closed ? 'text-t3 italic' : 'text-tx font-medium'}>
