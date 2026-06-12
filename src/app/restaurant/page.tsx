@@ -62,6 +62,7 @@ import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
 import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
+import { formatDealTitle } from '@/lib/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1669,8 +1670,7 @@ function classifyDeal(deal: Deal): 'active' | 'paused' | 'sold_out' | 'expired' 
 }
 
 function duplicateDealTitle(title: string): string {
-  const base = title.replace(/\*+$/, '').trimEnd();
-  return `${base}*`;
+  return `${formatDealTitle(title.replace(/\*+$/, '').trimEnd())}*`;
 }
 
 function formatDealDate(iso: string | null): string {
@@ -2195,7 +2195,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                 {deal.emoji}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-[14px] text-tx truncate">{deal.title}</p>
+                                <p className="font-semibold text-[14px] text-tx truncate">{formatDealTitle(deal.title)}</p>
                                 <p className="text-[12px] mt-0.5">
                                   <span style={{ color: status.color, fontWeight: 600 }}>{status.label}</span>
                                   <span className="text-t2"> · ends {formatDealDateShort(deal.valid_until)}</span>
@@ -2203,7 +2203,6 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                 <div className="text-[12px] text-t2 mt-1">
                                   {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
                                   {deal.max_claims ? ` / ${deal.max_claims} max` : ' · No limit'}
-                                  {deal.discount_value ? ` · ${deal.discount_value}` : ''}
                                 </div>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-t2">
                                   <span>Start: <span className="text-tx font-medium">{formatDealDate(deal.valid_from)}</span></span>

@@ -15,6 +15,7 @@ import {
 import { type DealFilterId } from '@/lib/constants';
 import { getBrowseDayTabs } from '@/lib/dealVisibility';
 import { CUSTOMER_UI } from '@/lib/customerUI';
+import { formatDealTitle } from '@/lib/utils';
 import { usePlan } from '@/hooks/usePlan';
 import AmbientBackground from '@/components/customer/AmbientBackground';
 import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
@@ -1018,7 +1019,7 @@ export default function CustomerPage() {
                       >
                         <span className="text-[18px]">{d.emoji}</span>
                         <div>
-                          <p className="text-[14px] font-semibold text-tx">{d.title}</p>
+                          <p className="text-[14px] font-semibold text-tx">{formatDealTitle(d.title)}</p>
                           {d.discount_value && <p className="text-[12px] text-brand font-bold">{d.discount_value}</p>}
                         </div>
                       </button>

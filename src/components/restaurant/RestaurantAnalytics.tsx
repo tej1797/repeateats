@@ -5,6 +5,7 @@ import {
   computeRestaurantAnalytics,
   type ClaimRow,
 } from '@/lib/restaurantAnalytics';
+import { formatDealTitle } from '@/lib/utils';
 
 const BLUE   = '#1249A9';
 const GREEN  = '#22C55E';
@@ -127,7 +128,7 @@ export default function RestaurantAnalytics({
                     {deal.emoji}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-white truncate">{deal.title}</p>
+                    <p className="text-[13px] font-semibold text-white truncate">{formatDealTitle(deal.title)}</p>
                     <div className="mt-1 h-1 rounded-full overflow-hidden" style={{ background: '#222' }}>
                       <div
                         className="h-full rounded-full"

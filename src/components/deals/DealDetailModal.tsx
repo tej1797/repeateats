@@ -7,6 +7,7 @@ import type { DealWithRestaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
+import { formatDealTitle } from '@/lib/utils';
 
 // Unsplash fallback images per cuisine category
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -210,7 +211,7 @@ export default function DealDetailModal({
           {/* Big title */}
           <div>
             <h1 className="font-display text-[34px] font-extrabold leading-[1.05]" style={{ color: CUSTOMER_UI.textPrimary }}>
-              {deal.title}
+              {formatDealTitle(deal.title)}
             </h1>
             {deal.description && (
               <p className="text-[15px] mt-1" style={{ color: CUSTOMER_UI.textSecondary }}>

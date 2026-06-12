@@ -5,6 +5,7 @@ import {
   IconQrcode, IconCheck, IconX, IconLoader2, IconDeviceMobile, IconSun,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import { formatDealTitle } from '@/lib/utils';
 
 interface ClaimPreview {
   id:          string;
@@ -215,7 +216,7 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
               {preview.deal?.emoji ?? '🍽️'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-[16px] text-white">{preview.deal?.title ?? 'Deal'}</p>
+              <p className="font-bold text-[16px] text-white">{formatDealTitle(preview.deal?.title) || 'Deal'}</p>
               {preview.deal?.discount_value && (
                 <p className="text-[13px] font-bold text-brand mt-0.5">{preview.deal.discount_value}</p>
               )}
