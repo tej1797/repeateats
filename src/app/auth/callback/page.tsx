@@ -28,11 +28,16 @@ function CallbackInner() {
       const supabase = createClient();
       const result = await handleOAuthReturn(supabase, portal);
       clearPortalIntent();
-      if (result === 'handled') {
-        // Success: exchange done — go to the portal (errors redirect inside handleOAuthReturn)
+
+      if (result === 'success') {
         router.replace(portalPath(portal));
         return;
       }
+
+      if (result === 'error') {
+        return; // handleOAuthReturn already redirected
+      }
+
       router.replace(portalPath(portal));
     };
     void run().catch(() => {

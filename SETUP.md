@@ -318,8 +318,8 @@ In **Supabase Dashboard → Authentication → Settings**:
    - `repeateats://*` (mobile deep links)
    - `exp://*` (Expo dev)
 
-   Web OAuth always returns to `/auth/callback?portal=restaurant|customer|influencer`.
-   Portal routing uses the `portal` query param + `rp_portal` cookie — no per-portal URLs needed.
+   Web OAuth always returns to `/auth/callback` (no query params — must match allow list exactly).
+   Portal routing uses `rp_portal` cookie + `localStorage` set before OAuth starts.
    Mobile sets its own `redirectTo: repeateats://auth/callback` and is unaffected.
 
    That's it — just 3. Portal routing is handled server-side via the `rp_portal` cookie.

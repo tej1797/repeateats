@@ -179,11 +179,7 @@ export default function LandingPage() {
         const supabase = createClient();
         const result = await completeOAuthReturn(supabase, portal);
         clearPortalIntent();
-        if (result === 'handled') {
-          window.history.replaceState({}, '', '/');
-          router.replace(portalPath(portal));
-          return;
-        }
+        if (result === 'error') return;
         window.history.replaceState({}, '', '/');
         router.replace(portalPath(portal));
       } catch {

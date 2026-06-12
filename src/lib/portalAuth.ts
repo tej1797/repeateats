@@ -55,11 +55,12 @@ export function clearPortalIntent(): void {
   }
 }
 
-export function oauthCallbackUrl(portal: Portal): string {
+export function oauthCallbackUrl(_portal: Portal): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  // Must match Supabase Redirect URLs allow list (/auth/callback only).
+  // Must match Supabase Redirect URLs allow list exactly (no query params).
+  // Portal intent is stored in localStorage + rp_portal cookie before OAuth starts.
   // Mobile app uses repeateats://auth/callback — separate, unaffected.
-  return `${origin}/auth/callback?portal=${portal}`;
+  return `${origin}/auth/callback`;
 }
 
 type SupabaseBrowserClient = ReturnType<typeof import('@/lib/supabase/client').createClient>;

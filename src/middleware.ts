@@ -10,12 +10,16 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value))
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options))
+          if (headers) {
+            Object.entries(headers).forEach(([key, value]) =>
+              response.headers.set(key, value))
+          }
         },
       },
     }
@@ -23,6 +27,9 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session cookie — ZERO redirects
   await supabase.auth.getUser()
+
+  // Prevent CDN from caching auth responses (session leakage)
+  response.headers.set('Cache-Control', 'private, no-store')
   return response
 }
 
