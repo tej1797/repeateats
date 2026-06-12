@@ -109,13 +109,21 @@ export default function RestaurantAnalytics({
 
       {/* Top deals */}
       <div className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
-        <h3 className="font-bold text-[14px] text-white mb-4">Top deals</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-[14px] text-white">Top deals</h3>
+          <div className="flex items-center gap-3 text-[11px] text-[#888]">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: ORANGE }} /> Claimed</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: GREEN }} /> Redeemed</span>
+          </div>
+        </div>
         {topDeals.length === 0 ? (
           <p className="text-[13px] text-[#666]">No claim data yet.</p>
         ) : (
           <div className="space-y-3">
             {topDeals.map((deal, i) => {
               const maxClaims = topDeals[0]?.claims ?? 1;
+              const claimedPct = Math.round((deal.claims / maxClaims) * 100);
+              const redeemedPct = Math.round((deal.redeemed / maxClaims) * 100);
               return (
                 <div key={deal.id} className="flex items-center gap-3">
                   <span
@@ -129,11 +137,19 @@ export default function RestaurantAnalytics({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-white truncate">{formatDealTitle(deal.title)}</p>
-                    <div className="mt-1 h-1 rounded-full overflow-hidden" style={{ background: '#222' }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${Math.round((deal.claims / maxClaims) * 100)}%`, background: ORANGE }}
-                      />
+                    <div className="mt-1.5 space-y-1">
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: '#222' }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${claimedPct}%`, background: ORANGE, minWidth: deal.claims > 0 ? 4 : 0 }}
+                        />
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: '#222' }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${redeemedPct}%`, background: GREEN, minWidth: deal.redeemed > 0 ? 4 : 0 }}
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
