@@ -3,8 +3,8 @@
 // Fallback OAuth landing page when Supabase redirects here instead of a portal URL.
 // PKCE exchange must run in the browser (not a Route Handler).
 
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
   resolvePortalIntent,
@@ -14,25 +14,27 @@ import {
 } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 
-function CallbackInner() {
+export default function AuthCallbackPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [msg, setMsg] = useState('Signing you in…');
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    // Run EXACTLY once. handleOAuthReturn cleans ?code= from the URL via
+    // history.replaceState, which Next.js intercepts and re-renders — if this
+    // effect re-ran, the portal intent would already be cleared and the second
+    // pass would default to 'customer', overriding the correct navigation.
+    if (ranRef.current) return;
+    ranRef.current = true;
+
+    // Resolve the portal once, before anything can clear the intent.
+    const params = new URLSearchParams(window.location.search);
+    const portal = resolvePortalIntent(params.get('portal'), readPortalCookie());
+
     const run = async () => {
-      const portal = resolvePortalIntent(
-        searchParams.get('portal'),
-        readPortalCookie(),
-      );
       const supabase = createClient();
       const result = await handleOAuthReturn(supabase, portal);
       clearPortalIntent();
-
-      if (result === 'success') {
-        router.replace(portalPath(portal));
-        return;
-      }
 
       if (result === 'error') {
         return; // handleOAuthReturn already redirected
@@ -40,33 +42,19 @@ function CallbackInner() {
 
       router.replace(portalPath(portal));
     };
+
     void run().catch(() => {
-      const portal = resolvePortalIntent(
-        searchParams.get('portal'),
-        readPortalCookie(),
-      );
       setMsg('Sign-in failed. Redirecting…');
       window.location.replace(
         portal === 'customer' ? '/customer/login?error=auth' : `${portalPath(portal)}?error=auth`,
       );
     });
-  }, [router, searchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#111]">
       <p className="text-[#888] text-sm">{msg}</p>
     </div>
-  );
-}
-
-export default function AuthCallbackPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#111]">
-        <p className="text-[#888] text-sm">Signing you in…</p>
-      </div>
-    }>
-      <CallbackInner />
-    </Suspense>
   );
 }
