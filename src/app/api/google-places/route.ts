@@ -6,6 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { PlaceResult } from '@/types/api';
+import {
+  DEFAULT_SEARCH_RADIUS_KM,
+  resolveRestaurantSearchLocation,
+  scorePlaceMatch,
+} from '@/lib/location';
 
 const DAY_FULL: Record<string, string> = {
   Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday',
@@ -49,30 +54,18 @@ async function fetchRestaurantById(id: string): Promise<PlaceResult | null> {
   };
 }
 
-async function searchDbRestaurants(query: string): Promise<PlaceResult[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key || query.length < 2) return [];
-
-  const sb = createClient(url, key);
-  const escaped = query.replace(/[%_]/g, '');
-  const tokens = escaped.split(/\s+/).filter((t) => t.length >= 2);
-  const orParts = [
-    `name.ilike.%${escaped}%`,
-    `address.ilike.%${escaped}%`,
-    `city.ilike.%${escaped}%`,
-    ...tokens.flatMap((t) => [
-      `name.ilike.%${t}%`,
-      `city.ilike.%${t}%`,
-    ]),
-  ];
-  const { data } = await sb
-    .from('restaurants')
-    .select('id, name, address, city, phone, website, google_place_id, hours, rating')
-    .or(orParts.join(','))
-    .limit(10);
-
-  return (data ?? []).map((r) => ({
+function rowToPlaceResult(r: {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  website: string | null;
+  google_place_id: string | null;
+  hours: unknown;
+  rating: number | null;
+}): PlaceResult {
+  return {
     place_id:  r.google_place_id ?? `db_${r.id}`,
     name:      r.name,
     address:   r.address ? `${r.address}, ${r.city ?? ''}`.replace(/,\s*$/, '') : (r.city ?? ''),
@@ -83,7 +76,179 @@ async function searchDbRestaurants(query: string): Promise<PlaceResult[]> {
     rating:    r.rating ?? null,
     types:     [],
     source:    'database' as const,
-  }));
+  };
+}
+
+async function searchDbRestaurants(query: string): Promise<PlaceResult[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || query.length < 2) return [];
+
+  const sb = createClient(url, key);
+  const escaped = query.replace(/[%_]/g, '');
+  const { data } = await sb
+    .from('restaurants')
+    .select('id, name, address, city, phone, website, google_place_id, hours, rating')
+    .or(`name.ilike.%${escaped}%,address.ilike.%${escaped}%`)
+    .limit(40);
+
+  return (data ?? [])
+    .map((r) => ({
+      place: rowToPlaceResult(r),
+      score: scorePlaceMatch(query, {
+        name:    r.name,
+        address: r.address ?? undefined,
+        city:    r.city ?? undefined,
+      }),
+    }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map((x) => x.place);
+}
+
+async function fetchGooglePlaceDetails(
+  placeId: string,
+  apiKey: string,
+  fallback?: { name: string; address: string },
+): Promise<PlaceResult> {
+  const detailUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
+  detailUrl.searchParams.set('place_id', placeId);
+  detailUrl.searchParams.set(
+    'fields',
+    'place_id,name,formatted_address,formatted_phone_number,website,opening_hours,rating,types',
+  );
+  detailUrl.searchParams.set('key', apiKey);
+
+  const detailRes  = await fetch(detailUrl.toString(), { cache: 'no-store' });
+  const detailData = await detailRes.json() as {
+    status: string;
+    result?: {
+      name: string;
+      formatted_address: string;
+      formatted_phone_number?: string;
+      website?: string;
+      opening_hours?: { weekday_text: string[] };
+      rating?: number;
+      types: string[];
+    };
+  };
+
+  if (detailData.status !== 'OK' || !detailData.result) {
+    return {
+      place_id:  placeId,
+      name:      fallback?.name ?? 'Unknown',
+      address:   fallback?.address ?? '',
+      phone:     null,
+      website:   null,
+      hours:     null,
+      hours_raw: null,
+      rating:    null,
+      types:     [],
+      source:    'google' as const,
+    };
+  }
+
+  const r = detailData.result;
+  return {
+    place_id:  placeId,
+    name:      r.name,
+    address:   r.formatted_address,
+    phone:     r.formatted_phone_number ?? null,
+    website:   r.website ?? null,
+    hours:     r.opening_hours?.weekday_text?.join(' · ') ?? null,
+    hours_raw: r.opening_hours?.weekday_text ?? null,
+    rating:    r.rating ?? null,
+    types:     r.types ?? [],
+    source:    'google' as const,
+  };
+}
+
+async function googlePlacesSearch(
+  query: string,
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  apiKey: string,
+): Promise<PlaceResult[]> {
+  const radiusM = Math.min(50_000, Math.round(radiusKm * 1000));
+  const location = `${lat},${lng}`;
+
+  type Candidate = { place_id: string; name: string; address: string };
+
+  let candidates: Candidate[] = [];
+
+  // Autocomplete — closest to Google Maps typing behaviour
+  const autoUrl = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
+  autoUrl.searchParams.set('input', query);
+  autoUrl.searchParams.set('location', location);
+  autoUrl.searchParams.set('radius', String(radiusM));
+  autoUrl.searchParams.set('components', 'country:ca');
+  autoUrl.searchParams.set('key', apiKey);
+
+  try {
+    const autoRes  = await fetch(autoUrl.toString(), { cache: 'no-store' });
+    const autoData = await autoRes.json() as {
+      status: string;
+      predictions?: Array<{
+        place_id: string;
+        description: string;
+        structured_formatting: { main_text: string; secondary_text?: string };
+        types?: string[];
+      }>;
+    };
+
+    if (autoData.status === 'OK' && autoData.predictions?.length) {
+      candidates = autoData.predictions
+        .filter((p) => !p.types?.includes('locality') && !p.types?.includes('political'))
+        .slice(0, 6)
+        .map((p) => ({
+          place_id: p.place_id,
+          name:     p.structured_formatting.main_text,
+          address:  p.structured_formatting.secondary_text ?? p.description,
+        }));
+    }
+  } catch {
+    /* fall through to text search */
+  }
+
+  // Text search fallback when autocomplete returns nothing
+  if (!candidates.length) {
+    const searchUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
+    searchUrl.searchParams.set('query', query);
+    searchUrl.searchParams.set('location', location);
+    searchUrl.searchParams.set('radius', String(radiusM));
+    searchUrl.searchParams.set('type', 'restaurant');
+    searchUrl.searchParams.set('key', apiKey);
+
+    const searchRes  = await fetch(searchUrl.toString(), { cache: 'no-store' });
+    const searchData = await searchRes.json() as {
+      status: string;
+      results?: Array<{ place_id: string; name: string; formatted_address: string }>;
+    };
+
+    if (searchData.status === 'OK' && searchData.results?.length) {
+      candidates = searchData.results.slice(0, 6).map((p) => ({
+        place_id: p.place_id,
+        name:     p.name,
+        address:  p.formatted_address,
+      }));
+    }
+  }
+
+  if (!candidates.length) return [];
+
+  const detailed = await Promise.all(
+    candidates.map((c) => fetchGooglePlaceDetails(c.place_id, apiKey, c)),
+  );
+
+  return detailed
+    .map((place) => ({
+      place,
+      score: scorePlaceMatch(query, { name: place.name, address: place.address }),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.place);
 }
 
 function mergePlaceResults(...lists: PlaceResult[][]): PlaceResult[] {
@@ -246,6 +411,50 @@ export async function GET(request: NextRequest) {
   }
 
   const restaurantId = searchParams.get('restaurant_id');
+  const latParam      = searchParams.get('lat');
+  const lngParam      = searchParams.get('lng');
+  const cityParam     = searchParams.get('city');
+  const radiusParam   = searchParams.get('radius_km');
+
+  const deviceLat = latParam ? Number(latParam) : null;
+  const deviceLng = lngParam ? Number(lngParam) : null;
+  const radiusKm  = radiusParam ? Number(radiusParam) : DEFAULT_SEARCH_RADIUS_KM;
+
+  let restaurantCity: string | null = cityParam;
+  let restaurantLat: number | null = null;
+  let restaurantLng: number | null = null;
+
+  if (restaurantId) {
+    const pinnedRow = await fetchRestaurantById(restaurantId);
+    if (pinnedRow) {
+      restaurantCity = cityParam ?? pinnedRow.address.split(',').pop()?.trim() ?? null;
+    }
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (url && key) {
+      const sb = createClient(url, key);
+      const { data: restRow } = await sb
+        .from('restaurants')
+        .select('city, lat, lng')
+        .eq('id', restaurantId)
+        .maybeSingle();
+      if (restRow) {
+        restaurantCity = cityParam ?? restRow.city ?? restaurantCity;
+        restaurantLat  = restRow.lat != null ? Number(restRow.lat) : null;
+        restaurantLng  = restRow.lng != null ? Number(restRow.lng) : null;
+      }
+    }
+  }
+
+  const searchLocation = resolveRestaurantSearchLocation({
+    city:      restaurantCity,
+    lat:       restaurantLat,
+    lng:       restaurantLng,
+    deviceLat: Number.isFinite(deviceLat) ? deviceLat : null,
+    deviceLng: Number.isFinite(deviceLng) ? deviceLng : null,
+    radiusKm:  Number.isFinite(radiusKm) ? radiusKm : DEFAULT_SEARCH_RADIUS_KM,
+  });
+
   const [dbMatches, pinnedRestaurant] = await Promise.all([
     searchDbRestaurants(query),
     restaurantId ? fetchRestaurantById(restaurantId) : Promise.resolve(null),
@@ -262,59 +471,18 @@ export async function GET(request: NextRequest) {
     return mergePlaceResults([pinnedRestaurant], list);
   };
 
-  // ── Try Google Places API ─────────────────────────────────────────────────
+  // ── Try Google Places API (autocomplete + location bias) ──────────────────
   if (apiKey) {
     try {
-      const searchUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-      searchUrl.searchParams.set('query', `${query} Ontario Canada`);
-      searchUrl.searchParams.set('key', apiKey);
+      const detailed = await googlePlacesSearch(
+        query,
+        searchLocation.lat,
+        searchLocation.lng,
+        searchLocation.radiusKm,
+        apiKey,
+      );
 
-      const searchRes  = await fetch(searchUrl.toString());
-      const searchData = await searchRes.json() as {
-        results: Array<{
-          place_id: string; name: string; formatted_address: string;
-          rating?: number; types: string[];
-        }>;
-        status: string;
-      };
-
-      if (searchData.status === 'OK' && searchData.results.length > 0) {
-        const topResults = searchData.results.slice(0, 5);
-
-        const detailed: PlaceResult[] = await Promise.all(
-          topResults.map(async (place) => {
-            const detailUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-            detailUrl.searchParams.set('place_id', place.place_id);
-            detailUrl.searchParams.set('fields', 'name,formatted_address,formatted_phone_number,website,opening_hours,rating,types');
-            detailUrl.searchParams.set('key', apiKey);
-
-            const detailRes  = await fetch(detailUrl.toString());
-            const detailData = await detailRes.json() as {
-              result: {
-                name: string; formatted_address: string;
-                formatted_phone_number?: string; website?: string;
-                opening_hours?: { weekday_text: string[] };
-                rating?: number; types: string[];
-              };
-            };
-
-            const r = detailData.result;
-            return {
-              place_id:  place.place_id,
-              name:      r.name,
-              address:   r.formatted_address,
-              phone:     r.formatted_phone_number ?? null,
-              website:   r.website ?? null,
-              hours:     r.opening_hours?.weekday_text?.join(' · ') ?? null,
-              hours_raw: r.opening_hours?.weekday_text ?? null,
-              rating:    r.rating ?? null,
-              types:     r.types ?? [],
-              source:    'google' as const,
-            };
-          })
-        );
-
-        // Return both `data` and `results` keys for compatibility
+      if (detailed.length > 0) {
         const merged = pinIfRelevant(mergePlaceResults(dbMatches, detailed));
         return NextResponse.json({ data: merged, results: merged });
       }
@@ -329,13 +497,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: merged, results: merged });
   }
 
-  // ── Static Ontario fallback ───────────────────────────────────────────────
-  // Split query into tokens so "indian mississauga" matches both fields
-  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const matches = ONTARIO_RESTAURANTS.filter((r) => {
-    const haystack = [r.name, r.address, r.city, r.cuisine].join(' ').toLowerCase();
-    return tokens.some((t) => haystack.includes(t));
-  }).slice(0, 8);
+  // ── Static Ontario fallback (word-boundary scoring — no "kham" → Markham) ─
+  const matches = ONTARIO_RESTAURANTS
+    .map((r) => ({
+      r,
+      score: scorePlaceMatch(query, {
+        name:    r.name,
+        address: r.address,
+        city:    r.city,
+        cuisine: r.cuisine,
+      }),
+    }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((x) => x.r);
 
   const results: PlaceResult[] = mergePlaceResults(dbMatches, matches.map((r) => ({
     place_id:  r.place_id,

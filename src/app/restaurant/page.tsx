@@ -63,6 +63,7 @@ import type { ClaimRow } from '@/lib/restaurantAnalytics';
 import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { formatDealTitle } from '@/lib/utils';
+import { coordsForCity, nearestCityName, DEFAULT_SEARCH_RADIUS_KM } from '@/lib/location';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -802,6 +803,20 @@ function Step1Places({
   const [open,      setOpen]      = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef     = useRef<HTMLDivElement>(null);
+  const searchLocRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    const [lat, lng] = coordsForCity(wizard.city);
+    searchLocRef.current = { lat, lng };
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        searchLocRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      },
+      () => { /* keep city fallback */ },
+      { timeout: 8000, maximumAge: 300_000 },
+    );
+  }, [wizard.city]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -821,7 +836,15 @@ function Step1Places({
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res  = await fetch(`/api/google-places?query=${encodeURIComponent(query)}`);
+        const loc = searchLocRef.current ?? { lat: coordsForCity(wizard.city)[0], lng: coordsForCity(wizard.city)[1] };
+        const params = new URLSearchParams({
+          query,
+          lat:       String(loc.lat),
+          lng:       String(loc.lng),
+          radius_km: String(DEFAULT_SEARCH_RADIUS_KM),
+        });
+        if (wizard.city) params.set('city', wizard.city);
+        const res  = await fetch(`/api/google-places?${params.toString()}`);
         const json = await res.json() as { data?: PlaceSuggestion[] };
         const list = json.data ?? [];
         setResults(list);
@@ -830,7 +853,7 @@ function Step1Places({
       finally  { setSearching(false); }
     }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, selected]);
+  }, [query, selected, wizard.city]);
 
   const handleSelect = (place: PlaceSuggestion) => {
     const matched      = ONTARIO_CITIES.find((c) => place.address.includes(c));
@@ -2518,6 +2541,9 @@ function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, t
             variant="dark"
             placeholder="Search for your restaurant…"
             restaurantId={restaurant.id}
+            defaultCity={restaurant.city}
+            restaurantLat={restaurant.lat}
+            restaurantLng={restaurant.lng}
             onSelect={handlePlaceSelect}
           />
         </div>

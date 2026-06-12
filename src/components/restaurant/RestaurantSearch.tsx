@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { IconSearch, IconLoader2, IconStar } from '@tabler/icons-react';
+import { IconSearch, IconLoader2, IconStar, IconMapPin, IconChevronDown } from '@tabler/icons-react';
+import {
+  DEFAULT_SEARCH_RADIUS_KM,
+  coordsForCity,
+  nearestCityName,
+  type SearchLocation,
+} from '@/lib/location';
 
 export interface PlaceResult {
   place_id:   string;
@@ -17,11 +23,14 @@ export interface PlaceResult {
 }
 
 interface RestaurantSearchProps {
-  onSelect:     (restaurant: PlaceResult) => void;
-  placeholder?: string;
-  className?:   string;
-  variant?:     'light' | 'dark';
-  restaurantId?: string;
+  onSelect:       (restaurant: PlaceResult) => void;
+  placeholder?:   string;
+  className?:     string;
+  variant?:       'light' | 'dark';
+  restaurantId?:  string;
+  defaultCity?:   string;
+  restaurantLat?: number | null;
+  restaurantLng?: number | null;
 }
 
 export default function RestaurantSearch({
@@ -30,15 +39,73 @@ export default function RestaurantSearch({
   className   = '',
   variant     = 'light',
   restaurantId,
+  defaultCity,
+  restaurantLat,
+  restaurantLng,
 }: RestaurantSearchProps) {
-  const [query,   setQuery]   = useState('');
-  const [results, setResults] = useState<PlaceResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open,    setOpen]    = useState(false);
+  const [query,    setQuery]    = useState('');
+  const [results,  setResults]  = useState<PlaceResult[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [open,     setOpen]     = useState(false);
+  const [location, setLocation] = useState<SearchLocation | null>(null);
+  const [locating, setLocating] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const wrapRef  = useRef<HTMLDivElement>(null);
 
   const isDark = variant === 'dark';
+  const BLUE   = '#1249A9';
+
+  const initLocation = useCallback((deviceLat?: number | null, deviceLng?: number | null) => {
+    if (deviceLat != null && deviceLng != null) {
+      setLocation({
+        label:    nearestCityName(deviceLat, deviceLng),
+        lat:      deviceLat,
+        lng:      deviceLng,
+        radiusKm: DEFAULT_SEARCH_RADIUS_KM,
+        source:   'device',
+      });
+      return;
+    }
+
+    if (restaurantLat != null && restaurantLng != null) {
+      setLocation({
+        label:    defaultCity?.trim() || nearestCityName(restaurantLat, restaurantLng),
+        lat:      restaurantLat,
+        lng:      restaurantLng,
+        radiusKm: DEFAULT_SEARCH_RADIUS_KM,
+        source:   'restaurant',
+      });
+      return;
+    }
+
+    const [lat, lng] = coordsForCity(defaultCity);
+    setLocation({
+      label:    defaultCity?.trim() || 'GTA Area',
+      lat,
+      lng,
+      radiusKm: DEFAULT_SEARCH_RADIUS_KM,
+      source:   'city',
+    });
+  }, [defaultCity, restaurantLat, restaurantLng]);
+
+  useEffect(() => {
+    initLocation();
+
+    if (!navigator.geolocation) return;
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        initLocation(pos.coords.latitude, pos.coords.longitude);
+        setLocating(false);
+      },
+      () => {
+        initLocation();
+        setLocating(false);
+      },
+      { timeout: 8000, maximumAge: 300_000 },
+    );
+  }, [initLocation]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -50,12 +117,21 @@ export default function RestaurantSearch({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const search = useCallback(async (q: string) => {
+  const search = useCallback(async (q: string, loc: SearchLocation | null) => {
     if (q.length < 2) { setResults([]); setOpen(false); return; }
+    if (!loc) return;
+
     setLoading(true);
     try {
-      const params = new URLSearchParams({ q });
+      const params = new URLSearchParams({
+        q,
+        lat:        String(loc.lat),
+        lng:        String(loc.lng),
+        radius_km:  String(loc.radiusKm),
+      });
       if (restaurantId) params.set('restaurant_id', restaurantId);
+      if (defaultCity)  params.set('city', defaultCity);
+
       const res  = await fetch(`/api/google-places?${params.toString()}`);
       const data = await res.json() as { data?: PlaceResult[]; results?: PlaceResult[] };
       const list = data.data ?? data.results ?? [];
@@ -66,12 +142,12 @@ export default function RestaurantSearch({
     } finally {
       setLoading(false);
     }
-  }, [restaurantId]);
+  }, [restaurantId, defaultCity]);
 
   const handleChange = (value: string) => {
     setQuery(value);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => search(value), 300);
+    timerRef.current = setTimeout(() => search(value, location), 300);
   };
 
   const handleSelect = (place: PlaceResult) => {
@@ -80,8 +156,52 @@ export default function RestaurantSearch({
     onSelect(place);
   };
 
+  const refreshLocation = () => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const next: SearchLocation = {
+          label:    nearestCityName(pos.coords.latitude, pos.coords.longitude),
+          lat:      pos.coords.latitude,
+          lng:      pos.coords.longitude,
+          radiusKm: DEFAULT_SEARCH_RADIUS_KM,
+          source:   'device',
+        };
+        setLocation(next);
+        setLocating(false);
+        if (query.length >= 2) void search(query, next);
+      },
+      () => setLocating(false),
+      { timeout: 8000 },
+    );
+  };
+
   return (
     <div ref={wrapRef} className={`relative ${className}`}>
+      {/* Location context — like customer app header */}
+      {location && (
+        <button
+          type="button"
+          onClick={refreshLocation}
+          disabled={locating}
+          className={`flex items-center gap-1.5 mb-2 text-[12px] font-semibold transition-opacity ${
+            isDark ? 'text-[#AAA] hover:text-white' : 'text-t2 hover:text-tx'
+          }`}
+          title="Use your current location for nearby results"
+        >
+          <IconMapPin size={14} style={{ color: BLUE }} />
+          <span>{location.label}</span>
+          <span className="opacity-60">·</span>
+          <span>{location.radiusKm} km</span>
+          {locating ? (
+            <IconLoader2 size={12} className="animate-spin ml-0.5" />
+          ) : (
+            <IconChevronDown size={12} className="opacity-50 ml-0.5" />
+          )}
+        </button>
+      )}
+
       <div
         className={`relative flex items-center rounded-xl border transition-all ${
           isDark
