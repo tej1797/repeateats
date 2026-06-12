@@ -14,10 +14,20 @@ export function portalPath(portal: Portal): string {
   }
 }
 
-/** Persist portal intent in localStorage + HttpOnly-safe cookie (via API). */
+function onProdDomain(): boolean {
+  return typeof window !== 'undefined'
+    && /(^|\.)repeateats\.ca$/.test(window.location.hostname);
+}
+
+/** Persist portal intent in localStorage + cookie (direct write + API backup). */
 export async function setPortalIntent(portal: Portal): Promise<void> {
   if (typeof window === 'undefined') return;
   localStorage.setItem('rp_portal', portal);
+  // Write the cookie directly so the intent survives the OAuth redirect even
+  // when it hops between repeateats.ca and www.repeateats.ca — localStorage
+  // is origin-bound and the API fetch can fail across that hop.
+  document.cookie = `rp_portal=${portal}; path=/; max-age=600; SameSite=Lax`
+    + (onProdDomain() ? '; domain=.repeateats.ca; Secure' : '');
   try {
     await fetch('/api/auth/set-portal', {
       method: 'POST',
@@ -50,9 +60,11 @@ export function resolvePortalIntent(
 }
 
 export function clearPortalIntent(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('rp_portal');
-  }
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('rp_portal');
+  // Expire the cookie with the same attributes it was set with.
+  document.cookie = 'rp_portal=; path=/; max-age=0'
+    + (onProdDomain() ? '; domain=.repeateats.ca' : '');
 }
 
 export function oauthCallbackUrl(): string {

@@ -166,6 +166,12 @@ npx vercel --prod
 - [x] Restaurant publish error "Cannot read properties of id" — FIXED (fresh getUser + dual key parse)
 - [x] "Already claimed" 409 errors — FIXED (show "View QR Code" button if already claimed)
 - [x] Google Places test returning no results — FIXED (API returns both `data` and `results` keys)
+- [x] Google OAuth "sign-in failed" after apex→www domain change — FIXED in code
+      (Vercel 307s repeateats.ca → www.repeateats.ca; PKCE verifier cookie was host-only,
+      so the callback on www couldn't exchange the code. Supabase auth cookies + rp_portal
+      cookie now use domain=.repeateats.ca so they survive the hop.)
+      NOTE: canonical host is now www.repeateats.ca — Supabase Site URL and
+      NEXT_PUBLIC_SITE_URL should be https://www.repeateats.ca (or make apex primary in Vercel).
 - [ ] Google Places API key not set in Vercel production env (use static Ontario DB fallback for now)
 - [ ] QR codes are scannable via `react-qrcode-logo` — already implemented in QrModal
 - [ ] Stripe payments not implemented
