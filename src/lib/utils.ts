@@ -38,6 +38,21 @@ export function formatRating(rating: number): string {
   return rating.toFixed(1)
 }
 
+/** Prefer Google Places rating when the legacy rating column is unset. */
+export function getRestaurantRating(
+  restaurant?: { rating?: number | null; google_rating?: number | null } | null,
+): number {
+  if (!restaurant) return 0;
+  return restaurant.google_rating ?? restaurant.rating ?? 0;
+}
+
+export function getRestaurantReviewCount(
+  restaurant?: { review_count?: number | null; google_review_count?: number | null } | null,
+): number {
+  if (!restaurant) return 0;
+  return restaurant.google_review_count ?? restaurant.review_count ?? 0;
+}
+
 export function getPortalFromPath(path: string): string {
   if (path.startsWith('/restaurant')) return 'restaurant'
   if (path.startsWith('/influencer')) return 'influencer'

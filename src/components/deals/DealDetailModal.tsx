@@ -7,7 +7,8 @@ import type { DealWithRestaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
-import { formatCustomerDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
+import StarRating from '@/components/form/StarRating';
 
 // Unsplash fallback images per cuisine category
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -130,6 +131,7 @@ export default function DealDetailModal({
 
   const cuisine   = (deal.restaurant?.category ?? deal.restaurant?.cuisine ?? 'default').toLowerCase();
   const headerImg = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
+  const rating    = getRestaurantRating(deal.restaurant);
 
   const dealTypeChips = deal.deal_types ?? [];
   const dayChips      = (deal.available_days ?? []).filter(d => d.toLowerCase() !== 'all');
@@ -174,10 +176,14 @@ export default function DealDetailModal({
           <p className="text-[16px] font-extrabold" style={{ color: CUSTOMER_UI.accent }}>
             {deal.restaurant?.name}
           </p>
-          <p className="text-[12px] mt-0.5" style={{ color: CUSTOMER_UI.textSecondary }}>
-            {deal.restaurant?.name}
-            {deal.deal_types?.[0] ? ` · ${deal.deal_types[0].toUpperCase()}` : ''}
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-[12px]" style={{ color: CUSTOMER_UI.textSecondary }}>
+              {deal.restaurant?.cuisine && `${deal.restaurant.cuisine} · `}{deal.restaurant?.city ?? ''}
+            </p>
+            {rating > 0 && (
+              <StarRating rating={rating} size="sm" showNumber />
+            )}
+          </div>
         </div>
 
         {/* ── Header image ── */}
@@ -240,9 +246,14 @@ export default function DealDetailModal({
                 <p className="font-bold text-[15px] truncate" style={{ color: CUSTOMER_UI.textPrimary }}>
                   {deal.restaurant.name}
                 </p>
-                <p className="text-[13px] truncate" style={{ color: CUSTOMER_UI.textSecondary }}>
-                  {deal.restaurant.cuisine && `${deal.restaurant.cuisine} · `}{deal.restaurant.city ?? ''}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <p className="text-[13px] truncate" style={{ color: CUSTOMER_UI.textSecondary }}>
+                    {deal.restaurant.cuisine && `${deal.restaurant.cuisine} · `}{deal.restaurant.city ?? ''}
+                  </p>
+                  {rating > 0 && (
+                    <StarRating rating={rating} size="sm" showNumber />
+                  )}
+                </div>
               </div>
               <IconChevronRight size={18} style={{ color: CUSTOMER_UI.textMuted }} className="flex-shrink-0" />
             </button>

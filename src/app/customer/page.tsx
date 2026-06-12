@@ -15,7 +15,7 @@ import {
 import { type DealFilterId } from '@/lib/constants';
 import { getBrowseDayTabs } from '@/lib/dealVisibility';
 import { CUSTOMER_UI } from '@/lib/customerUI';
-import { formatCustomerDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle, getRestaurantRating, getRestaurantReviewCount } from '@/lib/utils';
 import { dealRunsOnOffset, firstClaimableOffset, dateForOffset } from '@/lib/dealSchedule';
 import { BROWSE_DAYS } from '@/lib/tierLimits';
 import { usePlan } from '@/hooks/usePlan';
@@ -26,7 +26,6 @@ import CuisineCircles from '@/components/customer/CuisineCircles';
 import DiscoverDealCard from '@/components/customer/DiscoverDealCard';
 import DiscoverFilterBar from '@/components/customer/DiscoverFilterBar';
 import DiscoverFiltersSheet from '@/components/customer/DiscoverFiltersSheet';
-import DayTabStrip from '@/components/customer/DayTabStrip';
 import {
   applyDealTypeFilter,
   applyRatingFilter,
@@ -148,8 +147,8 @@ function RestaurantScrollCard({ r, dealCount }: { r: Restaurant; dealCount: numb
           )}
         </div>
         <p className="text-[11px] text-t2 truncate">{r.cuisine ? `${r.cuisine} · ` : ''}{r.city}</p>
-        {r.rating > 0 && (
-          <p className="text-[11px] text-t3 mt-1">⭐ {r.rating.toFixed(1)}</p>
+        {getRestaurantRating(r) > 0 && (
+          <p className="text-[11px] text-t3 mt-1">⭐ {getRestaurantRating(r).toFixed(1)}</p>
         )}
       </div>
     </button>
@@ -263,7 +262,12 @@ function RestaurantCard({ r }: { r: Restaurant }) {
         <div className="flex-1 min-w-0">
           <h3 className="font-body font-bold text-[15px] truncate">{r.name}</h3>
           <p className="text-[12px] text-t2">{r.cuisine} · {r.city}</p>
-          {r.rating > 0 && <p className="text-[12px] text-t3">⭐ {r.rating.toFixed(1)} · {r.review_count} reviews</p>}
+          {getRestaurantRating(r) > 0 && (
+            <p className="text-[12px] text-t3">
+              ⭐ {getRestaurantRating(r).toFixed(1)}
+              {getRestaurantReviewCount(r) > 0 ? ` · ${getRestaurantReviewCount(r)} reviews` : ''}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex gap-1.5 flex-wrap">
@@ -857,7 +861,7 @@ export default function CustomerPage() {
           activeClaimTime={activeClaimTime}
           onLocationClick={() => setShowLocation(true)}
           searchSlot={(
-            <div className="relative flex-shrink-0 w-[132px]" ref={searchContainerRef}>
+            <div className="relative flex-shrink-0 w-[min(180px,38vw)]" ref={searchContainerRef}>
               <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" style={{ color: CUSTOMER_UI.textMuted }} />
               <input
                 type="text"
@@ -956,18 +960,6 @@ export default function CustomerPage() {
 
       {/* ── Main content ───────────────────────────────────────────── */}
       <main className="max-w-[1100px] mx-auto px-4 py-4 pb-8">
-
-        {tab !== 'all' && !isSearching && !plan.loading && (
-          <div className="mb-3">
-            <DayTabStrip
-              tabs={visibleTabs}
-              activeKey={tab}
-              onSelect={(key) => setTab(key as Tab)}
-              restaurantsActive={false}
-              onRestaurants={() => setTab('all')}
-            />
-          </div>
-        )}
 
         {/* Cuisine circles + filter bar */}
         {tab !== 'all' && !isSearching && (

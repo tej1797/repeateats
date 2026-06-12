@@ -3,7 +3,7 @@
 import StarRating from '@/components/StarRating';
 import ProgressBar from '@/components/ui/ProgressBar';
 import type { DealWithRestaurant } from '@/types/index';
-import { formatCustomerDealTitle, formatDiscountValue } from '@/lib/utils';
+import { formatCustomerDealTitle, formatDiscountValue, getRestaurantRating } from '@/lib/utils';
 
 // Food image map by cuisine category (Unsplash)
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -123,9 +123,9 @@ export default function DealCard({ deal, onClick, compact = false, claimed = fal
         </h3>
 
         {/* Rating */}
-        {(deal.restaurant?.rating ?? 0) > 0 && (
+        {(getRestaurantRating(deal.restaurant)) > 0 && (
           <div className="mb-2">
-            <StarRating rating={deal.restaurant!.rating} size="sm" />
+            <StarRating rating={getRestaurantRating(deal.restaurant)} size="sm" showNumber />
           </div>
         )}
 

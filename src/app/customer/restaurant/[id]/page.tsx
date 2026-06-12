@@ -18,6 +18,7 @@ import ReviewsSection from '@/components/ReviewsSection';
 import Skeleton from '@/components/ui/Skeleton';
 import MobileNav from '@/components/layout/MobileNav';
 import StarRating from '@/components/form/StarRating';
+import { getRestaurantRating, getRestaurantReviewCount } from '@/lib/utils';
 import {
   IconArrowLeft, IconMapPin, IconPhone, IconGlobe,
   IconBrandInstagram, IconChevronDown, IconChevronUp,
@@ -217,7 +218,10 @@ export default function RestaurantDetailPage() {
         category: restaurant.category,
         city:     restaurant.city,
         address:  restaurant.address,
-        rating:   restaurant.rating,
+        rating:          restaurant.rating,
+        google_rating:   restaurant.google_rating,
+        review_count:    restaurant.review_count,
+        google_review_count: restaurant.google_review_count,
       },
     }));
   }, [restaurant]);
@@ -256,6 +260,9 @@ export default function RestaurantDetailPage() {
       </div>
     );
   }
+
+  const displayRating = getRestaurantRating(restaurant);
+  const displayReviewCount = getRestaurantReviewCount(restaurant);
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -309,11 +316,11 @@ export default function RestaurantDetailPage() {
             {restaurant.name}
           </h1>
           {/* Rating */}
-          {restaurant.rating > 0 && (
+          {displayRating > 0 && (
             <div className="flex items-center gap-2">
-              <StarRating rating={restaurant.rating} size="sm" showNumber />
-              {restaurant.review_count > 0 && (
-                <span className="text-[12px] text-white/70">({restaurant.review_count} reviews)</span>
+              <StarRating rating={displayRating} size="sm" showNumber />
+              {displayReviewCount > 0 && (
+                <span className="text-[12px] text-white/70">({displayReviewCount} reviews)</span>
               )}
             </div>
           )}
@@ -477,8 +484,8 @@ export default function RestaurantDetailPage() {
                   <div className="p-3">
                     <p className="font-bold text-[13px] text-tx line-clamp-1">{r.name}</p>
                     <p className="text-[11px] text-t2 mt-0.5">{r.city}</p>
-                    {r.rating > 0 && (
-                      <p className="text-[11px] text-t3 mt-0.5">⭐ {r.rating.toFixed(1)}</p>
+                    {getRestaurantRating(r) > 0 && (
+                      <p className="text-[11px] text-t3 mt-0.5">⭐ {getRestaurantRating(r).toFixed(1)}</p>
                     )}
                   </div>
                 </button>

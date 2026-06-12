@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   // Build a query for either the real or seed deals table
   function buildQuery(table: 'deals' | 'deals_seed', join: 'restaurants' | 'restaurants_seed') {
-    const select = `*, restaurant:${join} ( id, name, cuisine, category, city, address, rating${join === 'restaurants' ? ', is_paused' : ''} )`;
+    const select = `*, restaurant:${join} ( id, name, cuisine, category, city, address, rating, review_count, google_rating, google_review_count, cover_url${join === 'restaurants' ? ', is_paused' : ''} )`;
     let q = supabase
       .from(table)
       .select(select)

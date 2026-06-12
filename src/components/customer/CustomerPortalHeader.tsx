@@ -101,10 +101,9 @@ export default function CustomerPortalHeader({
           </div>
         </div>
 
-        {/* Row 2 — Home / Claims / Profile + search */}
-        <div className="flex items-center gap-2 pb-0.5">
+        {/* Row 2 — Home / Claims / Profile + search (centered after tabs) */}
+        <div className="flex items-center gap-2 pb-0.5 flex-wrap">
           <DiscoverTopNav />
-          <div className="flex-1 min-w-0" />
           {searchSlot}
         </div>
       </div>

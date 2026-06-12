@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { IconHeart, IconStar, IconCrown, IconFlame } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
-import { formatCustomerDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80',
@@ -71,7 +71,7 @@ export default function DiscoverDealCard({
   const [imgSrc, setImgSrc] = useState(initialSrc);
 
   const headline = offerLabel(deal);
-  const rating   = deal.restaurant?.rating ?? 0;
+  const rating   = getRestaurantRating(deal.restaurant);
   const maxClaims = deal.max_claims;
   const pct = maxClaims && maxClaims > 0 ? Math.min(100, (deal.current_claims / maxClaims) * 100) : 0;
 

@@ -1,4 +1,5 @@
 import type { DealWithRestaurant } from '@/types/index';
+import { getRestaurantRating } from '@/lib/utils';
 
 export type SortBy = 'relevance' | 'distance' | 'rating' | 'trending';
 export type PriceFilter = 'all' | 'under10';
@@ -81,14 +82,14 @@ export function applyServiceMode(deals: DealWithRestaurant[], mode: ServiceMode)
 
 export function applyRatingFilter(deals: DealWithRestaurant[], minRating: number | null): DealWithRestaurant[] {
   if (!minRating) return deals;
-  return deals.filter(d => (d.restaurant?.rating ?? 0) >= minRating);
+  return deals.filter(d => getRestaurantRating(d.restaurant) >= minRating);
 }
 
 export function sortDeals(deals: DealWithRestaurant[], sortBy: SortBy): DealWithRestaurant[] {
   const copy = [...deals];
   if (sortBy === 'trending') return copy.sort((a, b) => b.current_claims - a.current_claims);
   if (sortBy === 'rating') {
-    return copy.sort((a, b) => (b.restaurant?.rating ?? 0) - (a.restaurant?.rating ?? 0));
+    return copy.sort((a, b) => getRestaurantRating(b.restaurant) - getRestaurantRating(a.restaurant));
   }
   if (sortBy === 'distance') {
     return copy.sort((a, b) => (a.restaurant?.city ?? '').localeCompare(b.restaurant?.city ?? ''));
