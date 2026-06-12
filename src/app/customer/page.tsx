@@ -15,7 +15,9 @@ import {
 import { type DealFilterId } from '@/lib/constants';
 import { getBrowseDayTabs } from '@/lib/dealVisibility';
 import { CUSTOMER_UI } from '@/lib/customerUI';
-import { formatDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle } from '@/lib/utils';
+import { dealRunsOnOffset, firstClaimableOffset, dateForOffset } from '@/lib/dealSchedule';
+import { BROWSE_DAYS } from '@/lib/tierLimits';
 import { usePlan } from '@/hooks/usePlan';
 import AmbientBackground from '@/components/customer/AmbientBackground';
 import DiscoverCompactHeader from '@/components/customer/DiscoverCompactHeader';
@@ -55,25 +57,15 @@ interface ClaimInfo { id: string; qr_code: string; status: string; expires_at: s
 // DOW index matches JS Date.getDay() — 0 = Sunday
 const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
-const todayDow    = (): string => DOW_KEYS[new Date().getDay()];
-const tomorrowDow = (): string => DOW_KEYS[(new Date().getDay() + 1) % 7];
-
 // Map 'mon' → 'Mon' to match available_days[] values stored in the DB
 const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// Returns the DOW key (e.g. 'tue') for a given tab key
-function tabToDow(key: string): string {
-  if (key === 'today')    return todayDow();
-  if (key === 'tomorrow') return tomorrowDow();
-  return key;
-}
-
-// True if the deal runs on the day corresponding to tabKey
-function dealAvailableOnTab(deal: DealWithRestaurant, tabKey: string): boolean {
-  const days = deal.available_days ?? ['all'];
-  if (!days.length || days.includes('all')) return true;
-  const dow = tabToDow(tabKey);           // e.g. 'tue'
-  return days.some(d => d.toLowerCase() === dow || d === capFirst(dow));
+// True if the deal runs on the day corresponding to tabKey (date range + DOW).
+function dealAvailableOnTab(deal: DealWithRestaurant, tabKey: string, tabs?: DayTabDef[]): boolean {
+  if (tabKey === 'all') return true;
+  const offset = tabs?.find(t => t.key === tabKey)?.offset
+    ?? (tabKey === 'today' ? 0 : tabKey === 'tomorrow' ? 1 : 0);
+  return dealRunsOnOffset(deal, offset);
 }
 
 // Returns 7-day browse tabs — everyone sees all days; claim gating is separate.
@@ -767,7 +759,7 @@ export default function CustomerPage() {
 
     // Day filter — show only deals available on the selected tab's day
     if (tab !== 'all') {
-      results = results.filter(d => dealAvailableOnTab(d, tab));
+      results = results.filter(d => dealAvailableOnTab(d, tab, visibleTabs));
     }
 
     // Offer / quick filters
@@ -786,7 +778,7 @@ export default function CustomerPage() {
       (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
       (d.description ?? '').toLowerCase().includes(q)
     );
-  }, [dealsWithLive, search, dealType, sheetOffer, tab, serviceMode, minRating, priceFilter, sortBy]);
+  }, [dealsWithLive, search, dealType, sheetOffer, tab, serviceMode, minRating, priceFilter, sortBy, visibleTabs]);
 
   const filteredRests = useMemo(() => {
     if (!search.trim()) return restaurants;
@@ -819,14 +811,55 @@ export default function CustomerPage() {
   // Preview of tomorrow's deals — shown blurred to Free users as upgrade hook
   const tomorrowPreviewDeals = useMemo(
     () => dealsWithLive
-      .filter(d => dealAvailableOnTab(d, 'tomorrow'))
+      .filter(d => dealRunsOnOffset(d, 1))
       .slice(0, 4),
     [dealsWithLive],
   );
 
+  // Deals running later this week but not today — "Coming up this week" (mobile parity).
+  const comingUpDeals = useMemo(() => {
+    if (tab !== 'today') return [];
+    let results = dealsWithLive.filter(d => {
+      if (dealRunsOnOffset(d, 0)) return false;
+      for (let off = 1; off < BROWSE_DAYS; off++) {
+        if (dealRunsOnOffset(d, off)) return true;
+      }
+      return false;
+    });
+    const activeOffer = sheetOffer !== 'all' ? sheetOffer : dealType;
+    results = applyDealTypeFilter(results, activeOffer);
+    if (priceFilter === 'under10') results = applyDealTypeFilter(results, 'under10');
+    results = applyServiceMode(results, serviceMode);
+    results = applyRatingFilter(results, minRating);
+    results = sortDeals(results, sortBy);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      results = results.filter(d =>
+        d.title.toLowerCase().includes(q) ||
+        (d.restaurant?.name ?? '').toLowerCase().includes(q) ||
+        (d.description ?? '').toLowerCase().includes(q)
+      );
+    }
+    if (dietFilter === 'veg') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results = results.filter(d => ((d as any).diet_type ?? 'veg') !== 'nonveg');
+    } else if (dietFilter === 'egg') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results = results.filter(d => ['veg', 'egg'].includes((d as any).diet_type ?? 'veg'));
+    } else if (dietFilter === 'nonveg') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results = results.filter(d => ((d as any).diet_type ?? 'nonveg') === 'nonveg');
+    }
+    return results.filter(d => {
+      const c = userClaimMap[d.id];
+      return !(c?.status === 'redeemed');
+    });
+  }, [tab, dealsWithLive, search, dealType, sheetOffer, serviceMode, minRating, priceFilter, sortBy, dietFilter, userClaimMap]);
+
   // ── Derived data for new sections ───────────────────────────
   const trendingDeals = useMemo(
     () => [...dealsWithLive]
+      .filter(d => dealRunsOnOffset(d, 0))
       .sort((a, b) => b.current_claims - a.current_claims)
       .filter(d => d.current_claims > 0)
       .slice(0, 6),
@@ -852,15 +885,21 @@ export default function CustomerPage() {
   const currentTabMeta = visibleTabs.find(t => t.key === tab);
   const tabClaimLocked = currentTabMeta?.locked ?? false;
 
-  // Date (YYYY-MM-DD) for the currently active day tab — used for scheduled claims.
+  // First day within tier claim window when this deal can be claimed.
+  const activeClaimOffset = useMemo(() => {
+    if (!activeDeal) return null;
+    return firstClaimableOffset(activeDeal, plan.tier, plan.tomorrow_unlock_active);
+  }, [activeDeal, plan.tier, plan.tomorrow_unlock_active]);
+
+  const activeClaimLocked = !!activeDeal && !!user && activeClaimOffset === null;
+
+  // Date (YYYY-MM-DD) for scheduled claims — first claimable day, or active tab day.
   const activeTabDate = useMemo(() => {
+    if (activeClaimOffset !== null) return dateForOffset(activeClaimOffset);
     if (tab === 'all') return undefined;
     const offset = visibleTabs.find(t => t.key === tab)?.offset ?? 0;
-    const d = new Date();
-    d.setDate(d.getDate() + offset);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }, [tab, visibleTabs]);
+    return dateForOffset(offset);
+  }, [tab, visibleTabs, activeClaimOffset]);
 
   const handleClaim = async (opts?: { timer_starts_at?: string; claim_for_date?: string }) => {
     if (!activeDeal) return;
@@ -916,7 +955,13 @@ export default function CustomerPage() {
 
   const loading    = tab === 'all' ? restsLoading : dealsLoading;
   const tabDeals   = tab === 'all' ? [] : visibleFilteredDeals;
-  const isEmpty    = !loading && (tab === 'all' ? filteredRests.length === 0 : tabDeals.length === 0);
+  const isEmpty    = !loading && (
+    tab === 'all'
+      ? filteredRests.length === 0
+      : tab === 'today'
+      ? tabDeals.length === 0 && comingUpDeals.length === 0
+      : tabDeals.length === 0
+  );
   const activeClaimTime = useMemo(() => {
     const times = Object.values(userClaimMap)
       .filter(c => c.status === 'claimed' && c.expires_at && new Date(c.expires_at) > new Date())
@@ -1019,7 +1064,7 @@ export default function CustomerPage() {
                       >
                         <span className="text-[18px]">{d.emoji}</span>
                         <div>
-                          <p className="text-[14px] font-semibold text-tx">{formatDealTitle(d.title)}</p>
+                          <p className="text-[14px] font-semibold text-tx">{formatCustomerDealTitle(d.title)}</p>
                           {d.discount_value && <p className="text-[12px] text-brand font-bold">{d.discount_value}</p>}
                         </div>
                       </button>
@@ -1119,7 +1164,7 @@ export default function CustomerPage() {
             {tab === 'all'
               ? 'All restaurants'
               : tab === 'today'
-              ? `Deals near you${!dealsLoading && filteredDeals.length > 0 ? ` (${filteredDeals.length})` : ''}`
+              ? `Today's deals${!dealsLoading && tabDeals.length > 0 ? ` (${tabDeals.length})` : ''}`
               : `${visibleTabs.find(t => t.key === tab)?.label ?? capFirst(tab)} deals`}
           </h2>
           {dealsError && (
@@ -1224,7 +1269,13 @@ export default function CustomerPage() {
         {isEmpty && !loading && (
           <div className="text-center py-20 text-t2">
             <p className="text-5xl mb-3">🔍</p>
-            <p className="text-[18px] font-bold mb-2">No {tab === 'all' ? 'restaurants' : 'deals'} found{tab !== 'all' && tab !== 'today' ? ` on ${visibleTabs.find(t => t.key === tab)?.label ?? tab}` : ''}</p>
+            <p className="text-[18px] font-bold mb-2">
+              {tab === 'today'
+                ? 'No deals today'
+                : tab === 'all'
+                ? 'No restaurants found'
+                : `No deals found on ${visibleTabs.find(t => t.key === tab)?.label ?? tab}`}
+            </p>
             <p className="text-[14px]">Try a different category, type, or location</p>
           </div>
         )}
@@ -1264,6 +1315,37 @@ export default function CustomerPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Coming up this week — today tab, future deals in browse window */}
+        {tab === 'today' && !dealsLoading && comingUpDeals.length > 0 && !isSearching && (
+          <section className="mt-8 mb-4">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-1 h-5 rounded-full flex-shrink-0" style={{ background: CUSTOMER_UI.gold }} />
+              <h3 className="text-[16px] font-bold">Coming up this week</h3>
+            </div>
+            <p className="text-[12px] text-t3 mb-3 ml-3">
+              Preview upcoming deals — upgrade to claim on future days.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {comingUpDeals.slice(0, 12).map((deal, i) => (
+                <div
+                  key={deal.id}
+                  className="relative"
+                  style={{ animation: 'fadeUpIn 0.3s ease both', animationDelay: `${Math.min(i, 7) * 45}ms` }}
+                >
+                  <DiscoverDealCard
+                    deal={deal}
+                    onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
+                    claimed={isActiveClaim(deal.id)}
+                    saved={favorites.has(deal.id)}
+                    onToggleSave={() => toggleFavorite(deal.id)}
+                    locked={plan.tier === 'free'}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Restaurant grid (All tab) */}
@@ -1393,6 +1475,7 @@ export default function CustomerPage() {
           existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
           isRedeemed={isRedeemed(activeDeal.id)}
           dailyLimitReached={plan.dailyHit}
+          claimLocked={activeClaimLocked}
           claimForDate={activeTabDate}
           visitWindowMinutes={plan.visit_window_minutes}
           onViewExisting={code => {
@@ -1407,7 +1490,7 @@ export default function CustomerPage() {
       {qrCode && activeDeal && activeClaimId && (
         <QRCodeModal
           claimId={activeClaimId}
-          dealTitle={activeDeal.title}
+          dealTitle={formatCustomerDealTitle(activeDeal.title)}
           restaurantName={activeDeal.restaurant?.name}
           onClose={() => { setQrCode(null); setActiveDeal(null); setActiveClaimId(null); }}
         />

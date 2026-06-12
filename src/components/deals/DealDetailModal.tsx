@@ -7,7 +7,7 @@ import type { DealWithRestaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
-import { formatDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle } from '@/lib/utils';
 
 // Unsplash fallback images per cuisine category
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -51,6 +51,8 @@ interface DealDetailModalProps {
   claimForDate?:      string;
   /** Minutes the visit window stays open once it starts (tier-based). */
   visitWindowMinutes?: number;
+  /** True when tier/day window blocks claiming (show Get RepEAT+ instead of Claim). */
+  claimLocked?:       boolean;
   onViewExisting?:    (code: string) => void;
   onShare?:           () => void;
 }
@@ -75,6 +77,7 @@ export default function DealDetailModal({
   dailyLimitReached  = false,
   claimForDate,
   visitWindowMinutes = 45,
+  claimLocked        = false,
   onViewExisting,
   onShare,
 }: DealDetailModalProps) {
@@ -211,7 +214,7 @@ export default function DealDetailModal({
           {/* Big title */}
           <div>
             <h1 className="font-display text-[34px] font-extrabold leading-[1.05]" style={{ color: CUSTOMER_UI.textPrimary }}>
-              {formatDealTitle(deal.title)}
+              {formatCustomerDealTitle(deal.title)}
             </h1>
             {deal.description && (
               <p className="text-[15px] mt-1" style={{ color: CUSTOMER_UI.textSecondary }}>
@@ -429,6 +432,15 @@ export default function DealDetailModal({
             <div className="w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>
               <IconCircleCheck size={18} /> Redeemed — deal used
             </div>
+          ) : claimLocked && user ? (
+            <button
+              type="button"
+              onClick={() => router.push('/repeat-plus')}
+              className="w-full py-3.5 rounded-2xl transition-opacity text-[16px] font-bold text-white hover:opacity-90"
+              style={{ background: CUSTOMER_UI.gold, color: '#1a1100' }}
+            >
+              Get RepEAT+
+            </button>
           ) : alreadyClaimed && existingQrCode ? (
             <button
               onClick={() => onViewExisting?.(existingQrCode)}

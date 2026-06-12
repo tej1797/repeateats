@@ -17,7 +17,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { VanishingQR } from '@/components/deals/VanishingQR';
 import MobileNav from '@/components/layout/MobileNav';
 import { CUSTOMER_UI } from '@/lib/customerUI';
-import { formatDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle } from '@/lib/utils';
 
 interface ClaimRow {
   id:              string;
@@ -78,7 +78,7 @@ function QrModal({ claim, onClose }: { claim: ClaimRow; onClose: () => void }) {
         style={{ background: CUSTOMER_UI.bgElevated, color: CUSTOMER_UI.textPrimary, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
       >
         <h3 className="font-display text-[17px] font-bold leading-tight">
-          {claim.deal?.emoji} {formatDealTitle(claim.deal?.title)}
+          {claim.deal?.emoji} {formatCustomerDealTitle(claim.deal?.title)}
         </h3>
         <p className="text-[12px] mb-4" style={{ color: CUSTOMER_UI.textSecondary }}>{claim.deal?.restaurant?.name}</p>
         <VanishingQR claimId={claim.id} />
@@ -212,7 +212,7 @@ export default function CustomerClaimsPage() {
               {active.map(c => (
                 <div key={c.id} className="rounded-2xl px-4 py-3.5 flex items-center gap-3" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.claimBlue}55` }}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[14px] truncate">{c.deal?.restaurant?.name} · {formatDealTitle(c.deal?.title)}</p>
+                    <p className="font-bold text-[14px] truncate">{c.deal?.restaurant?.name} · {formatCustomerDealTitle(c.deal?.title)}</p>
                     <p className="text-[12px] mt-0.5 flex items-center gap-1.5" style={{ color: CUSTOMER_UI.claimBlue }}>
                       <IconClock size={12} /> <Countdown expiresAt={c.expires_at} /> left
                     </p>
@@ -250,7 +250,7 @@ export default function CustomerClaimsPage() {
               {waiting.map(c => (
                 <div key={c.id} className="rounded-2xl px-4 py-3.5 flex items-center gap-3" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[14px] truncate">{c.deal?.restaurant?.name} · {formatDealTitle(c.deal?.title)}</p>
+                    <p className="font-bold text-[14px] truncate">{c.deal?.restaurant?.name} · {formatCustomerDealTitle(c.deal?.title)}</p>
                     <p className="text-[12px] mt-0.5 flex items-center gap-1.5">
                       <IconClock size={12} style={{ color: CUSTOMER_UI.claimBlue }} />
                       <span style={{ color: CUSTOMER_UI.claimBlue, fontWeight: 700 }}>{formatTime(c.timer_starts_at)}</span>
@@ -302,7 +302,7 @@ export default function CustomerClaimsPage() {
                     <IconClock size={16} style={{ color: CUSTOMER_UI.claimBlue }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[14px] truncate">{c.deal?.restaurant?.name} · {formatDealTitle(c.deal?.title)}</p>
+                    <p className="font-semibold text-[14px] truncate">{c.deal?.restaurant?.name} · {formatCustomerDealTitle(c.deal?.title)}</p>
                     <p className="text-[12px] mt-0.5">
                       <span style={{ color: c.status === 'redeemed' ? '#4ade80' : c.status === 'reverted' ? CUSTOMER_UI.textMuted : CUSTOMER_UI.textSecondary, fontWeight: 600 }}>
                         {c.status === 'redeemed' ? 'Redeemed' : c.status === 'reverted' ? 'Cancelled' : c.status === 'expired' ? 'Expired' : 'Waiting'}

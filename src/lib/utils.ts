@@ -9,18 +9,29 @@ export function formatDiscountValue(value: string | null | undefined): string {
   return value.replace(/^(\d+(?:\.\d+)?)\$$/, '$$$1');
 }
 
+function titleCaseWords(text: string): string {
+  return text
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 /** Title-case deal names for display (e.g. "ice gola" → "Ice Gola", preserves trailing *). */
 export function formatDealTitle(title: string | null | undefined): string {
   if (!title) return '';
   const stars = title.match(/\*+$/)?.[0] ?? '';
   const base = stars ? title.slice(0, -stars.length).trimEnd() : title.trim();
   if (!base) return stars;
-  const formatted = base
-    .toLowerCase()
-    .split(/\s+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-  return formatted + stars;
+  return titleCaseWords(base) + stars;
+}
+
+/** Customer-facing title — strips restaurant duplicate marker (*) so diners see "Ice Gola" not "Ice Gola*". */
+export function formatCustomerDealTitle(title: string | null | undefined): string {
+  if (!title) return '';
+  const base = title.replace(/\*+$/, '').trimEnd();
+  if (!base) return '';
+  return titleCaseWords(base);
 }
 
 export function formatRating(rating: number): string {

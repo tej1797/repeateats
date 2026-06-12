@@ -29,18 +29,6 @@ function applyClientFilters(
   return r;
 }
 
-// Strip schedule fields for free-tier users — prevents client inspection of
-// available_days, valid_from, valid_until which are Starter/Pro-only info.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripScheduleFields(rows: any[]): any[] {
-  return rows.map(d => ({
-    ...d,
-    available_days: ['all'], // always show as all-day to avoid guessing
-    valid_from:     null,
-    valid_until:    null,
-  }));
-}
-
 // ─── GET ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const supabase = createClient();
@@ -69,29 +57,12 @@ export async function GET(request: NextRequest) {
     return q;
   }
 
-  // Optionally resolve caller's plan tier — used to gate schedule fields.
-  // No auth = treat as free (public browse). Auth failures fall back to free.
-  let callerTier: 'free' | 'starter' | 'pro' = 'free';
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('repeat_plus_tier')
-        .eq('id', user.id)
-        .maybeSingle();
-      const raw = userRow?.repeat_plus_tier as string | null | undefined;
-      if (raw === 'starter' || raw === 'pro' || raw === 'yearly') callerTier = raw === 'yearly' ? 'pro' : raw;
-    }
-  } catch { /* no-op — public browse remains free */ }
-
   if (!USE_SEED_DATA) {
     // Production: real deals only
     const { data, error } = await buildQuery('deals', 'restaurants');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let results = applyClientFilters((data ?? []) as any[], { category, city });
-    if (callerTier === 'free') results = stripScheduleFields(results);
+    const results = applyClientFilters((data ?? []) as any[], { category, city });
     return NextResponse.json({ data: results });
   }
 
@@ -104,8 +75,7 @@ export async function GET(request: NextRequest) {
   if (realErr) return NextResponse.json({ error: realErr.message }, { status: 500 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let merged = applyClientFilters([...(real ?? []), ...(seed ?? [])] as any[], { category, city });
-  if (callerTier === 'free') merged = stripScheduleFields(merged);
+  const merged = applyClientFilters([...(real ?? []), ...(seed ?? [])] as any[], { category, city });
   return NextResponse.json({ data: merged });
 }
 

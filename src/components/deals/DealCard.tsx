@@ -3,7 +3,7 @@
 import StarRating from '@/components/StarRating';
 import ProgressBar from '@/components/ui/ProgressBar';
 import type { DealWithRestaurant } from '@/types/index';
-import { formatDealTitle, formatDiscountValue } from '@/lib/utils';
+import { formatCustomerDealTitle, formatDiscountValue } from '@/lib/utils';
 
 // Food image map by cuisine category (Unsplash)
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -42,7 +42,7 @@ export default function DealCard({ deal, onClick, compact = false, claimed = fal
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
-      aria-label={`${formatDealTitle(deal.title)} at ${deal.restaurant?.name}`}
+      aria-label={`${formatCustomerDealTitle(deal.title)} at ${deal.restaurant?.name}`}
     >
       {/* Food photo header */}
       <div className={`relative ${compact ? 'h-[110px]' : 'h-[140px]'} overflow-hidden flex-shrink-0`}>
@@ -119,7 +119,7 @@ export default function DealCard({ deal, onClick, compact = false, claimed = fal
       {/* Card body */}
       <div className="p-3.5 flex flex-col flex-1">
         <h3 className="font-body font-bold text-[14px] leading-snug mb-1.5 line-clamp-2 flex-1">
-          {formatDealTitle(deal.title)}
+          {formatCustomerDealTitle(deal.title)}
         </h3>
 
         {/* Rating */}

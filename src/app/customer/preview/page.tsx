@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import { USE_SEED_DATA } from '@/lib/seedData';
 import type { DealWithRestaurant } from '@/types/index';
-import { formatDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle } from '@/lib/utils';
 
 // ─── Server-side data fetch ───────────────────────────────────────────────────
 async function getPreviewDeals(): Promise<{ featured: DealWithRestaurant[]; total: number }> {
@@ -117,7 +117,7 @@ function PreviewDealCard({ deal }: { deal: DealWithRestaurant }) {
           {deal.restaurant?.name ?? 'Restaurant'}
         </p>
         <h3 className="font-body font-bold text-[14px] leading-snug mb-2 line-clamp-2 flex-1">
-          {formatDealTitle(deal.title)}
+          {formatCustomerDealTitle(deal.title)}
         </h3>
 
         {deal.discount_value && (

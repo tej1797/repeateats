@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { IconHeart, IconStar, IconCrown, IconFlame } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
-import { formatDealTitle } from '@/lib/utils';
+import { formatCustomerDealTitle } from '@/lib/utils';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80',
@@ -141,7 +141,7 @@ export default function DiscoverDealCard({
           {headline}
         </p>
         <p className="text-[13px] font-semibold leading-snug line-clamp-1 mb-1.5" style={{ color: CUSTOMER_UI.textSecondary }}>
-          {formatDealTitle(deal.title)}
+          {formatCustomerDealTitle(deal.title)}
         </p>
 
         {/* Restaurant · city · rating */}
