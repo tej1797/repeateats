@@ -41,8 +41,15 @@ export async function GET(request: NextRequest) {
   const restaurant_id = searchParams.get('restaurant_id');
 
   // Build a query for either the real or seed deals table
-  function buildQuery(table: 'deals' | 'deals_seed', join: 'restaurants' | 'restaurants_seed') {
-    const select = `*, restaurant:${join} ( id, name, cuisine, category, city, address, rating, review_count, google_rating, google_review_count, cover_url${join === 'restaurants' ? ', is_paused' : ''} )`;
+  function buildQuery(
+    table: 'deals' | 'deals_seed',
+    join: 'restaurants' | 'restaurants_seed',
+    extended = true,
+  ) {
+    const restaurantFields = extended
+      ? `id, name, cuisine, category, city, address, rating, review_count, google_rating, google_review_count, cover_url${join === 'restaurants' ? ', is_paused' : ''}`
+      : `id, name, cuisine, category, city, address, rating, review_count, cover_url${join === 'restaurants' ? ', is_paused' : ''}`;
+    const select = `*, restaurant:${join} ( ${restaurantFields} )`;
     let q = supabase
       .from(table)
       .select(select)
@@ -57,9 +64,16 @@ export async function GET(request: NextRequest) {
     return q;
   }
 
+  async function runDealsQuery(table: 'deals' | 'deals_seed', join: 'restaurants' | 'restaurants_seed') {
+    const extended = await buildQuery(table, join, true);
+    if (!extended.error) return extended;
+    if (!extended.error.message.includes('google_rating')) return extended;
+    return buildQuery(table, join, false);
+  }
+
   if (!USE_SEED_DATA) {
     // Production: real deals only
-    const { data, error } = await buildQuery('deals', 'restaurants');
+    const { data, error } = await runDealsQuery('deals', 'restaurants');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = applyClientFilters((data ?? []) as any[], { category, city });
@@ -68,8 +82,8 @@ export async function GET(request: NextRequest) {
 
   // Development: union real + seed deals so the app looks populated
   const [{ data: real, error: realErr }, { data: seed }] = await Promise.all([
-    buildQuery('deals', 'restaurants'),
-    buildQuery('deals_seed', 'restaurants_seed'),
+    runDealsQuery('deals', 'restaurants'),
+    runDealsQuery('deals_seed', 'restaurants_seed'),
   ]);
 
   if (realErr) return NextResponse.json({ error: realErr.message }, { status: 500 });

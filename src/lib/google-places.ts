@@ -89,6 +89,9 @@ export async function syncRestaurantReviews(
       google_reviews:      details.reviews       ?? null,
       google_photos:       details.photos        ?? null,
       last_synced_at:      new Date().toISOString(),
+      // Mirror into legacy columns so deal cards work even without google_* in every query
+      ...(details.rating != null ? { rating: details.rating } : {}),
+      ...(details.user_ratings_total != null ? { review_count: details.user_ratings_total } : {}),
     })
     .eq('id', restaurantId);
 }
