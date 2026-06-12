@@ -71,19 +71,15 @@ export async function handleOAuthReturn(
 
   if (!code) return 'none';
 
-  // @supabase/ssr may auto-exchange the code on client init — wait for that first.
-  const autoSession = await waitForSession(supabase, 3_000);
-  if (autoSession) {
-    window.history.replaceState({}, '', pathname);
-    return 'success';
-  }
-
-  // Manual exchange fallback
+  // Always exchange the fresh code. A pre-existing session must NOT short-circuit
+  // this — otherwise signing in with a different account silently keeps the old
+  // session. If @supabase/ssr auto-exchanged the code on client init, the manual
+  // call fails ("code already used") but a session exists, which is still success.
   const { error: authError } = await supabase.auth.exchangeCodeForSession(code);
   if (authError) {
-    console.error('[oauth] exchangeCodeForSession:', authError.message);
     const hasSession = await waitForSession(supabase, 5_000);
     if (!hasSession) {
+      console.error('[oauth] exchangeCodeForSession:', authError.message);
       window.history.replaceState({}, '', pathname);
       window.location.replace(authErrorPath(portal));
       return 'error';
