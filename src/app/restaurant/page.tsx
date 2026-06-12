@@ -2417,6 +2417,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       {(showCreateDeal || editingDeal) && (
         <CreateDealModal
           restaurantId={restaurant.id}
+          restaurantName={restaurant.name}
+          restaurantCity={restaurant.city}
           existingDeal={editingDeal ?? undefined}
           onCreated={(deal) => {
             if (editingDeal) {

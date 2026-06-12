@@ -20,6 +20,7 @@ import {
   type PriceTag,
   type RestaurantDiscountType,
 } from '@/lib/restaurantDealForm';
+import DealLivePreview from '@/components/restaurant/DealLivePreview';
 
 const BLUE = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -39,10 +40,12 @@ interface ExistingDeal {
 }
 
 interface Props {
-  restaurantId:  string;
-  existingDeal?: ExistingDeal;
-  onCreated:     (deal: Record<string, unknown>) => void;
-  onClose:       () => void;
+  restaurantId:    string;
+  restaurantName?: string;
+  restaurantCity?: string;
+  existingDeal?:   ExistingDeal;
+  onCreated:       (deal: Record<string, unknown>) => void;
+  onClose:         () => void;
 }
 
 function initialDiet(existing?: ExistingDeal): 'veg' | 'nonveg' {
@@ -50,7 +53,14 @@ function initialDiet(existing?: ExistingDeal): 'veg' | 'nonveg' {
   return 'veg';
 }
 
-export default function CreateDealModal({ restaurantId, existingDeal, onCreated, onClose }: Props) {
+export default function CreateDealModal({
+  restaurantId,
+  restaurantName = 'Your Restaurant',
+  restaurantCity,
+  existingDeal,
+  onCreated,
+  onClose,
+}: Props) {
   const supabase = createClient();
   const isEdit   = !!existingDeal;
 
@@ -485,6 +495,19 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                 />
               </button>
             </div>
+
+            <DealLivePreview
+              title={title}
+              discountType={discountType}
+              discountValue={discountValue.trim() || defaultDiscountValue(discountType)}
+              scopeDetail={isLbDiscount(discountType) ? lbItem : undefined}
+              dealTypes={Array.from(selectedTypes)}
+              dietType={dietType}
+              priceTag={priceTag}
+              isComing={isComing}
+              restaurantName={restaurantName}
+              restaurantCity={restaurantCity}
+            />
 
             {error && (
               <p className="text-[13px] text-red-600 flex items-center gap-1.5">

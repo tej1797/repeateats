@@ -5,6 +5,7 @@ import { IconHeart, IconStar, IconCrown, IconFlame } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
+import { getDealOfferHeadline } from '@/lib/dealOfferLabel';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80',
@@ -24,27 +25,12 @@ const CATEGORY_IMAGES: Record<string, string> = {
 
 // Headline offer label derived from discount type (mobile parity).
 function offerLabel(deal: DealWithRestaurant): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dt = ((deal as any).discount_type as string | null) ?? '';
-  const val = deal.discount_value ?? '';
-  const t = deal.title.toLowerCase();
-  if (dt === 'bogo_half') return 'Buy 1 Get 50% Off';
-  if (dt === 'bogo_lb') {
-    const item = deal.scope_detail?.trim();
-    return item ? `Buy 1 lb ${item}` : 'Buy by lb';
-  }
-  if (dt === 'bogo' || (t.includes('buy') && t.includes('get'))) return 'Buy 1 Get 1';
-  if (dt === 'free_item' || dt === 'free') return 'Free Item';
-  if (dt === 'percentage') {
-    const num = String(val).replace(/[^0-9.]/g, '');
-    return num ? `${num}% Off` : '% Off';
-  }
-  if (dt === 'fixed' || dt === 'set_price') {
-    const num = String(val).replace(/[^0-9.]/g, '');
-    return num ? `$${num} Off` : (val || 'Deal');
-  }
-  if (t.includes('happy hour')) return 'Happy Hour';
-  return val || 'Deal';
+  return getDealOfferHeadline({
+    discount_type: (deal as { discount_type?: string | null }).discount_type,
+    discount_value: deal.discount_value,
+    title: deal.title,
+    scope_detail: deal.scope_detail,
+  });
 }
 
 interface DiscoverDealCardProps {
