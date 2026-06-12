@@ -55,7 +55,7 @@ export function clearPortalIntent(): void {
   }
 }
 
-export function oauthCallbackUrl(_portal: Portal): string {
+export function oauthCallbackUrl(): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   // Must match Supabase Redirect URLs allow list exactly (no query params).
   // Portal intent is stored in localStorage + rp_portal cookie before OAuth starts.
@@ -74,7 +74,7 @@ export async function startGoogleOAuth(
   await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: oauthCallbackUrl(portal),
+      redirectTo: oauthCallbackUrl(),
     },
   });
 }
