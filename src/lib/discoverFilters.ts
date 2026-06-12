@@ -15,8 +15,8 @@ export const QUICK_DEAL_FILTERS = [
   { id: 'all',        label: 'All' },
   { id: 'bogo',       label: 'BOGO',       icon: '🔥' },
   { id: 'percentage', label: '% Off' },
-  { id: 'under10',    label: 'Under CA$10' },
   { id: 'under6',     label: 'Under CA$6' },
+  { id: 'under10',    label: 'Under CA$10' },
 ] as const;
 
 export type QuickDealFilterId = typeof QUICK_DEAL_FILTERS[number]['id'];

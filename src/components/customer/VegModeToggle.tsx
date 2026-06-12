@@ -18,9 +18,9 @@ export default function VegModeToggle({ vegMode, onChange }: VegModeToggleProps)
     >
       <span
         className="uppercase tracking-wide leading-none text-center"
-        style={{ fontSize: 6.5, fontWeight: 700, color: accent, maxWidth: 28 }}
+        style={{ fontSize: 6.5, fontWeight: 700, color: accent, maxWidth: 34 }}
       >
-        Veg Mode
+        {vegMode ? 'Veg Mode' : 'Non-Veg Mode'}
       </span>
       <span
         className="relative flex-shrink-0"

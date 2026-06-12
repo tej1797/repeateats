@@ -25,6 +25,7 @@ import CuisineCircles from '@/components/customer/CuisineCircles';
 import DiscoverDealCard from '@/components/customer/DiscoverDealCard';
 import DiscoverFilterBar from '@/components/customer/DiscoverFilterBar';
 import DiscoverFiltersSheet from '@/components/customer/DiscoverFiltersSheet';
+import DayTabStrip from '@/components/customer/DayTabStrip';
 import {
   applyDealTypeFilter,
   applyRatingFilter,
@@ -808,14 +809,6 @@ export default function CustomerPage() {
       .reduce((sum, [, c]) => sum + c, 0);
   }, [dealCountsByDay, plan.tier]);
 
-  // Preview of tomorrow's deals — shown blurred to Free users as upgrade hook
-  const tomorrowPreviewDeals = useMemo(
-    () => dealsWithLive
-      .filter(d => dealRunsOnOffset(d, 1))
-      .slice(0, 4),
-    [dealsWithLive],
-  );
-
   // Deals running later this week but not today — "Coming up this week" (mobile parity).
   const comingUpDeals = useMemo(() => {
     if (tab !== 'today') return [];
@@ -1013,31 +1006,44 @@ export default function CustomerPage() {
             />
           )}
 
-          {/* Search */}
-          <div className="relative" ref={searchContainerRef}>
-            <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10" style={{ color: CUSTOMER_UI.textMuted }} />
-            <input
-              type="text"
-              value={search}
-              onChange={e => { setSearch(e.target.value); setSearchFocused(true); }}
-              onFocus={() => setSearchFocused(true)}
-              placeholder="Search restaurants, deals, cuisines…"
-              className="w-full h-9 pl-9 pr-9 rounded-xl text-[13px] outline-none transition-all placeholder:opacity-60"
-              style={{
-                background: CUSTOMER_UI.glassBg,
-                border: `1px solid ${CUSTOMER_UI.glassBorder}`,
-                color: CUSTOMER_UI.textPrimary,
-              }}
-            />
-            {search && (
-              <button onClick={() => { setSearch(''); setSearchFocused(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10 transition-colors">
-                <IconX size={16} />
-              </button>
-            )}
+          {/* Day tabs + compact search */}
+          <div className="flex items-center gap-2 pb-1">
+            <div className="flex-1 min-w-0">
+              {!plan.loading && (
+                <DayTabStrip
+                  tabs={visibleTabs}
+                  activeKey={tab === 'all' ? 'today' : tab}
+                  onSelect={(key) => setTab(key as Tab)}
+                  restaurantsActive={tab === 'all'}
+                  onRestaurants={() => setTab('all')}
+                />
+              )}
+            </div>
 
-            {/* Search suggestions dropdown */}
-            {hasSearchDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 rounded-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto scrollbar-none glass-panel shadow-2xl">
+            <div className="relative flex-shrink-0 w-[132px]" ref={searchContainerRef}>
+              <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" style={{ color: CUSTOMER_UI.textMuted }} />
+              <input
+                type="text"
+                value={search}
+                onChange={e => { setSearch(e.target.value); setSearchFocused(true); }}
+                onFocus={() => setSearchFocused(true)}
+                placeholder="Search…"
+                className="w-full h-8 pl-8 pr-7 rounded-lg text-[12px] outline-none transition-all placeholder:opacity-60"
+                style={{
+                  background: CUSTOMER_UI.glassBg,
+                  border: `1px solid ${CUSTOMER_UI.glassBorder}`,
+                  color: CUSTOMER_UI.textPrimary,
+                }}
+              />
+              {search && (
+                <button onClick={() => { setSearch(''); setSearchFocused(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-t3 hover:text-tx z-10 transition-colors">
+                  <IconX size={14} />
+                </button>
+              )}
+
+              {/* Search suggestions dropdown */}
+              {hasSearchDropdown && (
+                <div className="absolute top-full right-0 mt-1.5 w-[min(320px,calc(100vw-2rem))] rounded-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto scrollbar-none glass-panel shadow-2xl">
                 {searchResults.restaurants.length > 0 && (
                   <>
                     <p className="px-4 py-2 text-[11px] font-bold text-t3 uppercase tracking-wide bg-surface2">🍽️ Restaurants</p>
@@ -1087,20 +1093,19 @@ export default function CustomerPage() {
                 )}
               </div>
             )}
-          </div>
+            </div>
 
-          <div className="flex items-center justify-end gap-2 pb-1">
             <button
               type="button"
               onClick={() => setShowLocation(true)}
-              className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full"
+              className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full"
               style={{ background: CUSTOMER_UI.accentSoft, color: CUSTOMER_UI.accent }}
             >
-              <IconMapPin size={12} />
-              Change location
+              <IconMapPin size={11} />
+              <span className="hidden sm:inline">Location</span>
             </button>
             {user ? (
-              <button type="button" onClick={() => setShowDrawer(true)} className="w-8 h-8 rounded-full overflow-hidden border" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
+              <button type="button" onClick={() => setShowDrawer(true)} className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden border" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
                 {user.user_metadata?.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.user_metadata.avatar_url as string} alt="" className="w-full h-full object-cover" />
@@ -1111,7 +1116,7 @@ export default function CustomerPage() {
                 )}
               </button>
             ) : (
-              <button type="button" onClick={() => setShowSignIn(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+              <button type="button" onClick={() => setShowSignIn(true)} className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
                 <IconUser size={14} style={{ color: CUSTOMER_UI.accent }} />
               </button>
             )}
@@ -1355,40 +1360,7 @@ export default function CustomerPage() {
           </div>
         )}
 
-        {/* (3) Blurred tomorrow preview — Free users on Today tab */}
-        {tab === 'today' && plan.tier === 'free' && !isSearching && !dealsLoading && tomorrowPreviewDeals.length > 0 && (
-          <section className="mt-8 mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <h3 className="text-[16px] font-bold">🔮 Tomorrow&apos;s Deals</h3>
-              <span className="text-[11px] font-semibold text-t3">Starter &amp; Pro only</span>
-            </div>
-            <div className="relative">
-              {/* Blurred deal cards — pointer-events off so they can't be clicked */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 select-none pointer-events-none" style={{ filter: 'blur(4px)', opacity: 0.55 }}>
-                {tomorrowPreviewDeals.map(deal => (
-                  <DiscoverDealCard key={deal.id} deal={deal} onClick={() => {}} locked />
-                ))}
-              </div>
-              {/* Upgrade overlay */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="bg-surface border border-[var(--bd)] rounded-brand shadow-brand2 p-5 mx-4 text-center max-w-xs w-full">
-                  <div className="text-2xl mb-2">🔒</div>
-                  <p className="font-display font-bold text-[15px] mb-1">Unlock tomorrow&apos;s deals</p>
-                  <p className="text-[13px] text-t2 mb-4">Upgrade to Starter from $2.99/mo for early access</p>
-                  <Link
-                    href="/repeat-plus"
-                    className="inline-flex items-center justify-center h-10 px-5 rounded-brands text-[14px] font-bold transition-all hover:opacity-90"
-                    style={{ background: CUSTOMER_UI.gold, color: '#1a1100' }}
-                  >
-                    Upgrade to Starter →
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Starter locked-future-days teaser — shows below Tomorrow deals */}
+        {/* Starter locked-future-days teaser */}
         {tab === 'tomorrow' && plan.tier === 'starter' && !isSearching && !dealsLoading && futureDayCount > 0 && (
           <div className="my-6 rounded-brands border border-[var(--bd)] bg-surface2 px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
             <div>

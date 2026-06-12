@@ -52,8 +52,8 @@ export default function DiscoverCompactHeader({
         </div>
 
         {/* 2×2 grid — right column 170px */}
-        <div className="ml-auto flex-shrink-0" style={{ width: 170 }}>
-          <div className="grid" style={{ gridTemplateColumns: '90px 72px', gap: '4px 8px' }}>
+        <div className="ml-auto flex-shrink-0" style={{ width: 178 }}>
+          <div className="grid" style={{ gridTemplateColumns: '90px 80px', gap: '4px 8px' }}>
             {/* Redeem bar — orange numbers, REDEEMED label */}
             <div
               style={{
@@ -85,9 +85,9 @@ export default function DiscoverCompactHeader({
             <div
               style={{
                 ...cellBase,
-                width: 72,
+                width: 80,
                 border: `1px solid ${CUSTOMER_UI.glassBorder}`,
-                padding: '0 4px',
+                padding: '0 3px',
               }}
             >
               <VegModeToggle vegMode={vegMode} onChange={onVegModeChange} />
@@ -122,7 +122,7 @@ export default function DiscoverCompactHeader({
               href="/customer/points"
               style={{
                 ...cellBase,
-                width: 72,
+                width: 80,
                 gap: 3,
                 textDecoration: 'none',
                 border: `1px solid ${CUSTOMER_UI.accent}`,
