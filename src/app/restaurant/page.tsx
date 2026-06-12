@@ -1640,7 +1640,7 @@ function firstAllowedTab(managerMode: boolean, perms: ManagerPerms): DashTab {
   return found?.id ?? 'scanner';
 }
 
-type DealFilter = 'all' | 'active' | 'sold_out' | 'expired';
+type DealFilter = 'all' | 'active' | 'paused' | 'sold_out' | 'expired';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -1655,16 +1655,22 @@ function isDealSoldOut(deal: Deal): boolean {
   return deal.max_claims !== null && deal.max_claims > 0 && deal.current_claims >= deal.max_claims;
 }
 
-/** Single bucket per deal for filter tabs (expired > sold out > active > other). */
-function dealFilterBucket(deal: Deal): 'active' | 'sold_out' | 'expired' | 'other' {
+/** Single bucket per deal for filter tabs (expired > sold out > paused > active > other). */
+function dealFilterBucket(deal: Deal): 'active' | 'paused' | 'sold_out' | 'expired' | 'other' {
   if (isDealExpired(deal)) return 'expired';
   if (isDealSoldOut(deal)) return 'sold_out';
+  if (!deal.is_active && !deal.is_coming) return 'paused';
   if (deal.is_active && !deal.is_coming) return 'active';
   return 'other';
 }
 
-function classifyDeal(deal: Deal): 'active' | 'sold_out' | 'expired' | 'other' {
+function classifyDeal(deal: Deal): 'active' | 'paused' | 'sold_out' | 'expired' | 'other' {
   return dealFilterBucket(deal);
+}
+
+function duplicateDealTitle(title: string): string {
+  const base = title.replace(/\*+$/, '').trimEnd();
+  return `${base}*`;
 }
 
 function formatDealDate(iso: string | null): string {
@@ -1715,10 +1721,16 @@ function dealStatusMeta(deal: Deal): { label: string; color: string } {
   const bucket = dealFilterBucket(deal);
   if (bucket === 'expired') return { label: 'Expired', color: '#FF7A30' };
   if (bucket === 'sold_out') return { label: 'Sold out', color: '#22C55E' };
+  if (bucket === 'paused') return { label: 'Paused', color: '#888' };
   if (bucket === 'active') return { label: 'Active', color: '#1249A9' };
   if (deal.is_coming) return { label: 'Coming soon', color: '#A855F7' };
-  if (!deal.is_active) return { label: 'Paused', color: '#888' };
   return { label: 'Active', color: '#1249A9' };
+}
+
+function dealFilterEmptyLabel(filter: DealFilter): string {
+  if (filter === 'all') return '';
+  if (filter === 'sold_out') return 'sold out';
+  return filter;
 }
 
 // SHA-256 hex digest for PIN hashing (browser-native)
@@ -1857,8 +1869,9 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     const meta = deal as Deal & { diet_type?: string };
     const { valid_from, valid_until } = nextDuplicateDates(deal);
     const duration = dealDurationDays(deal);
+    const newTitle = duplicateDealTitle(deal.title);
     const ok = confirm(
-      `Duplicate "${deal.title}" for the next ${duration} day${duration !== 1 ? 's' : ''}?\n\n` +
+      `Duplicate "${deal.title}" as "${newTitle}" for the next ${duration} day${duration !== 1 ? 's' : ''}?\n\n` +
       `New dates: ${formatDealDate(valid_from)} → ${formatDealDate(valid_until)}\n` +
       `The original deal stays unchanged.`,
     );
@@ -1868,7 +1881,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       .from('deals')
       .insert({
         restaurant_id:  deal.restaurant_id,
-        title:          deal.title,
+        title:          newTitle,
         description:    deal.description,
         discount_type:  deal.discount_type,
         discount_value: deal.discount_value,
@@ -2132,6 +2145,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               const filterCounts = {
                 all:      deals.length,
                 active:   deals.filter((d) => dealFilterBucket(d) === 'active').length,
+                paused:   deals.filter((d) => dealFilterBucket(d) === 'paused').length,
                 sold_out: deals.filter((d) => dealFilterBucket(d) === 'sold_out').length,
                 expired:  deals.filter((d) => dealFilterBucket(d) === 'expired').length,
               };
@@ -2145,6 +2159,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                     {([
                       ['all',      `All ${filterCounts.all}`],
                       ['active',   `Active ${filterCounts.active}`],
+                      ['paused',   `Pause ${filterCounts.paused}`],
                       ['sold_out', `Sold out ${filterCounts.sold_out}`],
                       ['expired',  `Expired ${filterCounts.expired}`],
                     ] as const).map(([id, label]) => {
@@ -2167,7 +2182,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
                   {filteredDeals.length === 0 ? (
                     <p className="text-[13px] text-t2 py-4">
-                      No {dealFilter === 'all' ? '' : dealFilter === 'sold_out' ? 'sold out' : dealFilter} deals yet.
+                      No {dealFilterEmptyLabel(dealFilter)} deals yet.
                     </p>
                   ) : (
                     <div className="space-y-2.5">
