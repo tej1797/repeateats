@@ -55,6 +55,8 @@ import {
   IconClock,
   IconChevronRight,
   IconSettings,
+  IconCopy,
+  IconMinus,
 } from '@tabler/icons-react';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
@@ -1638,6 +1640,48 @@ function firstAllowedTab(managerMode: boolean, perms: ManagerPerms): DashTab {
   return found?.id ?? 'scanner';
 }
 
+type DealGroup = 'active' | 'paused' | 'expired' | 'coming';
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isDealExpired(deal: Deal): boolean {
+  if (!deal.valid_until) return false;
+  return deal.valid_until < todayISO();
+}
+
+function classifyDeal(deal: Deal): DealGroup {
+  if (deal.is_coming) return 'coming';
+  if (isDealExpired(deal)) return 'expired';
+  if (deal.is_active) return 'active';
+  return 'paused';
+}
+
+function formatDealDate(iso: string | null): string {
+  if (!iso) return 'Not set';
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString('en-CA', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function shiftDateISO(iso: string | null, days: number): string {
+  const base = iso ? new Date(`${iso}T12:00:00`) : new Date();
+  base.setDate(base.getDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+const DEAL_GROUP_META: Record<DealGroup, { label: string; emoji: string }> = {
+  active:  { label: 'Active deals',    emoji: '🟢' },
+  paused:  { label: 'Paused deals',    emoji: '⏸' },
+  expired: { label: 'Expired deals',   emoji: '⌛' },
+  coming:  { label: 'Coming soon',     emoji: '🔜' },
+};
+
 // SHA-256 hex digest for PIN hashing (browser-native)
 async function sha256hex(input: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
@@ -1752,7 +1796,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   }, [restaurant.id, supabase]);
 
   // Prefer RPC values; fall back to locally derived counts.
-  const activeDeals = deals.filter((d) => d.is_active && !d.is_coming);
+  const activeDeals = deals.filter((d) => classifyDeal(d) === 'active');
   const openCollabs = collabs.filter((c) => c.status === 'open' || c.status === 'negotiating');
   const redeemedCount = dashStats?.redeemed_claims ?? 0;
   const awaitingCount = dashStats?.awaiting_scan ?? deals.reduce((s, d) => s + d.current_claims, 0);
@@ -1767,6 +1811,52 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     if (!confirm(`Delete "${deal.title}"? This cannot be undone.`)) return;
     await supabase.from('deals').delete().eq('id', deal.id);
     setDeals((prev) => prev.filter((d) => d.id !== deal.id));
+  };
+
+  const duplicateDeal = async (deal: Deal) => {
+    const meta = deal as Deal & { diet_type?: string };
+    const { data, error } = await supabase
+      .from('deals')
+      .insert({
+        restaurant_id:  deal.restaurant_id,
+        title:          `${deal.title} (copy)`,
+        description:    deal.description,
+        discount_type:  deal.discount_type,
+        discount_value: deal.discount_value,
+        deal_types:     deal.deal_types,
+        available_days: deal.available_days,
+        scope:          deal.scope,
+        scope_detail:   deal.scope_detail,
+        emoji:          deal.emoji,
+        photo_url:      deal.photo_url,
+        valid_from:     deal.valid_from ?? todayISO(),
+        valid_until:    deal.valid_until,
+        max_claims:     deal.max_claims,
+        current_claims: 0,
+        is_coming:      false,
+        is_active:      true,
+        diet_type:      meta.diet_type ?? 'nonveg',
+      })
+      .select()
+      .single();
+    if (!error && data) {
+      setDeals((prev) => [data as Deal, ...prev]);
+    }
+  };
+
+  const shiftDealDate = async (
+    deal: Deal,
+    field: 'valid_from' | 'valid_until',
+    days: number,
+  ) => {
+    const next = shiftDateISO(deal[field], days);
+    const { error } = await supabase
+      .from('deals')
+      .update({ [field]: next })
+      .eq('id', deal.id);
+    if (!error) {
+      setDeals((prev) => prev.map((d) => (d.id === deal.id ? { ...d, [field]: next } : d)));
+    }
   };
 
   const BLUE = '#1249A9';
@@ -1963,46 +2053,6 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               <span className="text-[13px] font-semibold text-white">Settings</span>
             </button>
 
-            {/* Active deals preview */}
-            {!loading && activeDeals.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-display text-[15px] font-bold text-white">Active deals</h2>
-                  <button type="button" onClick={() => setTabPersist('deals')} className="text-[12px] font-semibold text-brand">
-                    View all →
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {activeDeals.slice(0, 3).map((deal) => (
-                    <div
-                      key={deal.id}
-                      className="rounded-xl p-3 flex items-center gap-3"
-                      style={{ background: '#141414', border: '1px solid #222' }}
-                    >
-                      <span className="text-xl shrink-0">{deal.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-[13px] text-white truncate">{deal.title}</div>
-                        <div className="text-[11px] text-[#888]">
-                          {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
-                          {deal.max_claims ? ` / ${deal.max_claims} max` : ''}
-                        </div>
-                        {deal.max_claims !== null && deal.max_claims > 0 && (
-                          <div className="mt-1.5 h-1 bg-[#222] rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%`,
-                                background: '#FF7A30',
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
         )}
 
@@ -2030,58 +2080,92 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               </div>
             ) : (
               <>
-                {(['active', 'paused', 'coming'] as const).map((group) => {
-                  const grouped = deals.filter((d) =>
-                    group === 'coming' ? d.is_coming :
-                    group === 'active' ? d.is_active && !d.is_coming :
-                    !d.is_active && !d.is_coming
-                  );
+                {(['active', 'paused', 'coming', 'expired'] as const).map((group) => {
+                  const grouped = deals.filter((d) => classifyDeal(d) === group);
                   if (grouped.length === 0) return null;
+                  const meta = DEAL_GROUP_META[group];
                   return (
                     <div key={group}>
                       <h3 className="text-[12px] font-bold text-t2 uppercase tracking-wider mb-2">
-                        {group === 'active' ? '🟢 Active' : group === 'coming' ? '🔜 Coming soon' : '⏸ Paused'}
+                        {meta.emoji} {meta.label}
                         <span className="ml-1 font-normal">({grouped.length})</span>
                       </h3>
                       <div className="space-y-2">
                         {grouped.map((deal) => (
-                          <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4 flex items-center gap-3">
-                            <span className="text-2xl shrink-0">{deal.emoji}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
-                              <div className="text-[12px] text-t2">
-                                {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
-                                {deal.max_claims ? ` / ${deal.max_claims} max` : ' · No limit'}
-                                {deal.discount_value ? ` · ${deal.discount_value}` : ''}
-                              </div>
-                              {deal.max_claims !== null && deal.max_claims > 0 && (
-                                <div className="mt-1.5 h-1.5 bg-surface2 rounded-full overflow-hidden">
-                                  <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }} />
+                          <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4">
+                            <div className="flex items-start gap-3">
+                              <span className="text-2xl shrink-0">{deal.emoji}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
+                                <div className="text-[12px] text-t2 mt-0.5">
+                                  {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
+                                  {deal.max_claims ? ` / ${deal.max_claims} max` : ' · No limit'}
+                                  {deal.discount_value ? ` · ${deal.discount_value}` : ''}
                                 </div>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {/* Edit */}
-                              <button
-                                onClick={() => setEditingDeal(deal)}
-                                title="Edit deal"
-                                className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]">
-                                <IconPencil size={14} />
-                              </button>
-                              {/* Pause / Resume */}
-                              <button
-                                onClick={() => toggleActive(deal)}
-                                title={deal.is_active ? 'Pause deal' : 'Resume deal'}
-                                className={`w-8 h-8 rounded-brands flex items-center justify-center transition-colors border ${deal.is_active ? 'border-[var(--bd)] text-t2 hover:text-amber-600 hover:border-amber-300' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}>
-                                {deal.is_active ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
-                              </button>
-                              {/* Delete */}
-                              <button
-                                onClick={() => deleteDeal(deal)}
-                                title="Delete deal"
-                                className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors border border-[var(--bd)]">
-                                <IconTrash size={14} />
-                              </button>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-t2">
+                                  <span>Start: <span className="text-tx font-medium">{formatDealDate(deal.valid_from)}</span></span>
+                                  <span>End: <span className="text-tx font-medium">{formatDealDate(deal.valid_until)}</span></span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3 mt-2">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-semibold text-t3 uppercase">Start</span>
+                                    <button type="button" onClick={() => void shiftDealDate(deal, 'valid_from', -1)} title="Start −1 day" className="w-7 h-7 rounded-lg border border-[var(--bd)] flex items-center justify-center text-t2 hover:text-brand hover:border-brand/40 transition-colors">
+                                      <IconMinus size={12} />
+                                    </button>
+                                    <button type="button" onClick={() => void shiftDealDate(deal, 'valid_from', 1)} title="Start +1 day" className="w-7 h-7 rounded-lg border border-[var(--bd)] flex items-center justify-center text-t2 hover:text-brand hover:border-brand/40 transition-colors">
+                                      <IconPlus size={12} />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-semibold text-t3 uppercase">End</span>
+                                    <button type="button" onClick={() => void shiftDealDate(deal, 'valid_until', -1)} title="End −1 day" className="w-7 h-7 rounded-lg border border-[var(--bd)] flex items-center justify-center text-t2 hover:text-brand hover:border-brand/40 transition-colors">
+                                      <IconMinus size={12} />
+                                    </button>
+                                    <button type="button" onClick={() => void shiftDealDate(deal, 'valid_until', 1)} title="End +1 day" className="w-7 h-7 rounded-lg border border-[var(--bd)] flex items-center justify-center text-t2 hover:text-brand hover:border-brand/40 transition-colors">
+                                      <IconPlus size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                                {deal.max_claims !== null && deal.max_claims > 0 && (
+                                  <div className="mt-2 h-1.5 bg-surface2 rounded-full overflow-hidden">
+                                    <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => void duplicateDeal(deal)}
+                                  title="Duplicate deal"
+                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
+                                >
+                                  <IconCopy size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDeal(deal)}
+                                  title="Edit deal"
+                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
+                                >
+                                  <IconPencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleActive(deal)}
+                                  title={deal.is_active ? 'Pause deal' : 'Resume deal'}
+                                  className={`w-8 h-8 rounded-brands flex items-center justify-center transition-colors border ${deal.is_active ? 'border-[var(--bd)] text-t2 hover:text-amber-600 hover:border-amber-300' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}
+                                >
+                                  {deal.is_active ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteDeal(deal)}
+                                  title="Delete deal"
+                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors border border-[var(--bd)]"
+                                >
+                                  <IconTrash size={14} />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
