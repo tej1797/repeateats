@@ -118,7 +118,9 @@ export interface DealRow {
   restaurant_id:   string
   title:           string
   description:     string | null
-  discount_type:   'percentage' | 'fixed' | 'free_item' | 'bogo' | 'set_price' | 'free_delivery' | null
+  discount_type:   'percentage' | 'fixed' | 'free_item' | 'bogo' | 'bogo_half' | 'bogo_lb' | 'set_price' | 'free_delivery' | null
+  diet_type:       'veg' | 'nonveg' | 'egg' | null
+  price_tag:       'under6' | 'under12' | null
   discount_value:  string | null
   deal_types:      string[]
   available_days:  string[]

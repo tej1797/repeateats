@@ -28,6 +28,11 @@ function offerLabel(deal: DealWithRestaurant): string {
   const dt = ((deal as any).discount_type as string | null) ?? '';
   const val = deal.discount_value ?? '';
   const t = deal.title.toLowerCase();
+  if (dt === 'bogo_half') return 'Buy 1 Get 50% Off';
+  if (dt === 'bogo_lb') {
+    const item = deal.scope_detail?.trim();
+    return item ? `Buy 1 lb ${item}` : 'Buy by lb';
+  }
   if (dt === 'bogo' || (t.includes('buy') && t.includes('get'))) return 'Buy 1 Get 1';
   if (dt === 'free_item' || dt === 'free') return 'Free Item';
   if (dt === 'percentage') {
