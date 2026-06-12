@@ -10,6 +10,16 @@ import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Restaurant, Deal, Collab } from '@/types';
 import CreateDealModal from '@/components/restaurant/CreateDealModal';
+import {
+  DISCOUNT_TYPE_OPTIONS,
+  PRICE_TAG_OPTIONS,
+  defaultDiscountValue,
+  discountValuePlaceholder,
+  isLbDiscount,
+  toDbDiscountType,
+  type PriceTag,
+  type RestaurantDiscountType,
+} from '@/lib/restaurantDealForm';
 import ScannerPanel from '@/components/restaurant/ScannerPanel';
 import RestaurantSearch, { type PlaceResult } from '@/components/restaurant/RestaurantSearch';
 import {
@@ -86,11 +96,14 @@ const ONTARIO_CITIES = [
   'Waterloo', 'Kitchener', 'Cambridge', 'Guelph', 'London', 'Ottawa',
 ];
 
-// Eight ready-to-use deal templates shown in Step 4 Templates mode
+// Ready-to-use deal templates shown in Step 4 Templates mode
 const DEAL_TEMPLATES = [
   { emoji: '🍽️', title: '20% Off Full Menu',   discount_type: 'percentage', discount_value: '20%',          description: 'Get 20% off everything on our menu.',              scope: 'menu',     deal_types: ['dine-in', 'pickup'] },
   { emoji: '🥗', title: 'Free Appetizer',        discount_type: 'free_item',  discount_value: 'Free appetizer', description: 'Free starter with any main course order.',         scope: 'single',   deal_types: ['dine-in'] },
-  { emoji: '🍺', title: 'BOGO Drinks',           discount_type: 'bogo',       discount_value: 'BOGO',           description: 'Buy one drink, get one free.',                     scope: 'category', deal_types: ['dine-in'] },
+  { emoji: '🍺', title: 'BOGO Drinks',           discount_type: 'bogo',       discount_value: 'Buy 1 Get 1 Free', description: 'Buy one drink, get one free.',                   scope: 'category', deal_types: ['dine-in'] },
+  { emoji: '🥡', title: 'Buy 1 Get 50% Off',     discount_type: 'bogo_half',  discount_value: '50% off 2nd item', description: 'Second item half price — great for takeout specials.', scope: 'single', deal_types: ['pickup'] },
+  { emoji: '🐟', title: 'Fish Pakora lb Deal',   discount_type: 'bogo_lb',    discount_value: '50% off 2nd lb', description: 'Buy 1 lb Fish Pakora, get the 2nd lb 50% off.',    scope: 'single',   scope_detail: 'Fish Pakora', deal_types: ['pickup'] },
+  { emoji: '💵', title: '$12 Daily Special',     discount_type: 'set_price',  discount_value: '$12',            description: 'Full meal special for $12.',                       scope: 'single',   deal_types: ['pickup'], price_tag: 'under12' as PriceTag },
   { emoji: '⏰', title: 'Early Bird Special',    discount_type: 'percentage', discount_value: '15%',            description: '15% off when you dine before 6 PM.',               scope: 'menu',     deal_types: ['dine-in'] },
   { emoji: '👨‍👩‍👧', title: 'Family Feast Deal',   discount_type: 'set_price',  discount_value: '$49.99',         description: 'Family meal for 4 — mains, sides & drinks.',       scope: 'bundle',   deal_types: ['dine-in', 'pickup'] },
   { emoji: '🎉', title: 'Weekend Brunch Promo',  discount_type: 'percentage', discount_value: '25%',            description: '25% off all brunch items Sat & Sun.',              scope: 'menu',     deal_types: ['dine-in'] },
@@ -110,12 +123,15 @@ interface DealDraft {
   discount_type: string;
   discount_value: string;
   scope: string;
+  scope_detail: string;
   deal_types: string[];
   available_days: string[];
   valid_from: string;
   valid_until: string;
   max_claims: string;   // kept as string so empty means "unlimited"
   is_coming: boolean;
+  diet_type: 'veg' | 'nonveg';
+  price_tag: PriceTag;
 }
 
 // All data collected across the 5 wizard steps
@@ -435,10 +451,24 @@ export default function RestaurantPage() {
       // Create any deals added during onboarding
       for (const draft of wizard.deals) {
         await supabase.from('deals').insert({
-          ...draft,
           restaurant_id:  newRest.id,
-          current_claims: 0,
+          emoji:          draft.emoji,
+          title:          draft.title,
+          description:    draft.description || null,
+          discount_type:  toDbDiscountType(draft.discount_type as RestaurantDiscountType),
+          discount_value: draft.discount_value || null,
+          deal_types:     draft.deal_types,
+          available_days: draft.available_days,
+          scope:          draft.scope,
+          scope_detail:   draft.scope_detail || null,
+          valid_from:     draft.valid_from || null,
+          valid_until:    draft.valid_until || null,
           max_claims:     draft.max_claims ? Number(draft.max_claims) : null,
+          is_coming:      draft.is_coming,
+          is_active:      !draft.is_coming,
+          diet_type:      draft.diet_type || 'veg',
+          price_tag:      draft.price_tag || null,
+          current_claims: 0,
         });
       }
 
@@ -1182,9 +1212,9 @@ function Step4Deals({
         ...wizard.deals,
         {
           emoji: '🍽️', title: '', description: '', discount_type: 'percentage',
-          discount_value: '', scope: 'menu', deal_types: ['dine-in'],
+          discount_value: '', scope: 'menu', scope_detail: '', deal_types: ['dine-in'],
           available_days: ['all'], valid_from: todayStr(), valid_until: nextMonthStr(),
-          max_claims: '', is_coming: false,
+          max_claims: '', is_coming: false, diet_type: 'veg', price_tag: null,
           ...draft,
         },
       ],
@@ -1358,15 +1388,18 @@ function DealEditor({
               <label className="block text-[12px] font-semibold text-t2 mb-1">Discount type</label>
               <select
                 value={deal.discount_type}
-                onChange={(e) => onChange({ discount_type: e.target.value })}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  onChange({
+                    discount_type: next,
+                    discount_value: defaultDiscountValue(next) || deal.discount_value,
+                  });
+                }}
                 className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
               >
-                <option value="percentage">Percentage off</option>
-                <option value="fixed">Fixed amount off</option>
-                <option value="free_item">Free item</option>
-                <option value="bogo">BOGO</option>
-                <option value="set_price">Set price</option>
-                <option value="free_delivery">Free delivery</option>
+                {DISCOUNT_TYPE_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -1374,10 +1407,59 @@ function DealEditor({
               <input
                 type="text" value={deal.discount_value}
                 onChange={(e) => onChange({ discount_value: e.target.value })}
-                placeholder="20% or $5"
+                placeholder={discountValuePlaceholder(deal.discount_type)}
                 className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
               />
             </div>
+          </div>
+          {isLbDiscount(deal.discount_type) && (
+            <div>
+              <label className="block text-[12px] font-semibold text-t2 mb-1">Item (lb deal)</label>
+              <input
+                type="text"
+                value={deal.scope_detail}
+                onChange={(e) => onChange({ scope_detail: e.target.value })}
+                placeholder="e.g. Fish Pakora"
+                className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-[12px] font-semibold text-t2 mb-1">Price tag (optional)</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {PRICE_TAG_OPTIONS.map(({ id, label }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => onChange({ price_tag: id })}
+                  className="h-8 px-3 rounded-brands border text-[12px] font-semibold transition-all"
+                  style={deal.price_tag === id
+                    ? { borderColor: 'var(--brand)', background: 'rgba(232,93,4,0.08)', color: 'var(--brand)' }
+                    : { borderColor: 'var(--bd2)', color: 'var(--t2)' }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-[12px] font-semibold text-t2 mb-1">Diet type</label>
+            <div className="flex gap-2">
+              {([
+                { id: 'veg' as const,    label: '🟢 Veg' },
+                { id: 'nonveg' as const, label: '🔴 Non-Veg' },
+              ]).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onChange({ diet_type: id })}
+                  className={`flex-1 h-8 rounded-brands border text-[12px] font-semibold ${deal.diet_type === id ? 'border-brand text-brand bg-brand/5' : 'border-[var(--bd2)] text-t2'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-t3 mt-1">*eggs are considered as non-veg</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -1889,7 +1971,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   };
 
   const duplicateDeal = async (deal: Deal) => {
-    const meta = deal as Deal & { diet_type?: string };
+    const meta = deal as Deal & { diet_type?: string; price_tag?: PriceTag };
     const { valid_from, valid_until } = nextDuplicateDates(deal);
     const duration = dealDurationDays(deal);
     const newTitle = duplicateDealTitle(deal.title);
@@ -1920,7 +2002,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         current_claims: 0,
         is_coming:      false,
         is_active:      true,
-        diet_type:      meta.diet_type ?? 'nonveg',
+        diet_type:      meta.diet_type ?? 'veg',
+        price_tag:      meta.price_tag ?? null,
       })
       .select()
       .single();

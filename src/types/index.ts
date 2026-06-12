@@ -75,7 +75,8 @@ export interface RestaurantWithDeals extends Restaurant {
 
 // ─── Deal ─────────────────────────────────────────────────────
 export type DealType = 'dine-in' | 'pickup' | 'delivery' | 'catering' | 'earlybird' | 'events';
-export type DiscountType = 'percentage' | 'fixed' | 'free_item' | 'bogo' | 'set_price' | 'free_delivery';
+export type DiscountType = 'percentage' | 'fixed' | 'free_item' | 'bogo' | 'bogo_half' | 'bogo_lb' | 'set_price' | 'free_delivery';
+export type DealPriceTag = 'under6' | 'under12';
 export type DealScope = 'single' | 'category' | 'menu' | 'bundle';
 
 export interface Deal {
@@ -97,6 +98,8 @@ export interface Deal {
   current_claims: number;
   is_coming: boolean;
   is_active: boolean;
+  diet_type?: 'veg' | 'nonveg' | 'egg';
+  price_tag?: DealPriceTag | null;
   created_at: string;
 }
 

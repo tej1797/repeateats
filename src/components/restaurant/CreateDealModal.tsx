@@ -6,13 +6,26 @@
 import { useState } from 'react';
 import { IconX, IconLoader2, IconCheck } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import {
+  DISCOUNT_TYPE_OPTIONS,
+  PRICE_TAG_OPTIONS,
+  defaultDiscountValue,
+  discountValuePlaceholder,
+  discountValueRequired,
+  formatBogoHalfTitle,
+  formatLbDealTitle,
+  isLbDiscount,
+  normalizeDiscountType,
+  toDbDiscountType,
+  type PriceTag,
+  type RestaurantDiscountType,
+} from '@/lib/restaurantDealForm';
 
 const BLUE = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const DEAL_TYPES = ['dine-in', 'pickup'] as const;
 type DayKey = typeof DAYS[number];
 type DealTypeKey = typeof DEAL_TYPES[number];
-type DiscountTypeKey = 'percentage' | 'dollar' | 'free_item' | 'bogo' | 'other';
 
 interface ExistingDeal {
   id: string; emoji: string | null; title: string; description: string | null;
@@ -20,6 +33,9 @@ interface ExistingDeal {
   deal_types: string[]; available_days: string[];
   max_claims: number | null; valid_from: string | null; valid_until: string | null;
   is_coming: boolean;
+  diet_type?: string | null;
+  price_tag?: PriceTag;
+  scope_detail?: string | null;
 }
 
 interface Props {
@@ -29,15 +45,29 @@ interface Props {
   onClose:       () => void;
 }
 
+function initialDiet(existing?: ExistingDeal): 'veg' | 'nonveg' {
+  if (existing?.diet_type === 'nonveg') return 'nonveg';
+  return 'veg';
+}
+
 export default function CreateDealModal({ restaurantId, existingDeal, onCreated, onClose }: Props) {
   const supabase = createClient();
   const isEdit   = !!existingDeal;
 
+  const initialDiscount = normalizeDiscountType(existingDeal?.discount_type ?? 'percentage');
+
   const [emoji,          setEmoji]          = useState(existingDeal?.emoji ?? '🍽️');
   const [title,          setTitle]          = useState(existingDeal?.title ?? '');
   const [description,    setDescription]    = useState(existingDeal?.description ?? '');
-  const [discountType,   setDiscountType]   = useState<DiscountTypeKey>(((existingDeal?.discount_type ?? 'percentage') as DiscountTypeKey));
-  const [discountValue,  setDiscountValue]  = useState(existingDeal?.discount_value ?? '');
+  const [discountType,   setDiscountType]   = useState<RestaurantDiscountType>(initialDiscount);
+  const [discountValue,  setDiscountValue]  = useState(
+    existingDeal?.discount_value ?? defaultDiscountValue(initialDiscount),
+  );
+  const [lbItem,         setLbItem]         = useState(
+    isLbDiscount(initialDiscount) ? (existingDeal?.scope_detail ?? '') : '',
+  );
+  const [lbQty,          setLbQty]          = useState('1');
+  const [priceTag,       setPriceTag]       = useState<PriceTag>(existingDeal?.price_tag ?? null);
   const [selectedTypes,  setSelectedTypes]  = useState<Set<DealTypeKey>>(new Set<DealTypeKey>(
     ((existingDeal?.deal_types ?? ['dine-in']) as string[]).filter((t): t is DealTypeKey => t === 'dine-in' || t === 'pickup'),
   ));
@@ -47,12 +77,23 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
   const [maxClaims,      setMaxClaims]      = useState(existingDeal?.max_claims?.toString() ?? '');
   const [validFrom,      setValidFrom]      = useState(existingDeal?.valid_from ?? '');
   const [validUntil,     setValidUntil]     = useState(existingDeal?.valid_until ?? '');
-  const [isComing,  setIsComing]  = useState(existingDeal?.is_coming ?? false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [dietType,  setDietType]  = useState<'veg'|'nonveg'>((existingDeal as any)?.diet_type === 'veg' ? 'veg' : 'nonveg');
-  const [submitting, setSubmitting] = useState(false);
-  const [error,      setError]      = useState('');
-  const [done,       setDone]       = useState(false);
+  const [isComing,       setIsComing]       = useState(existingDeal?.is_coming ?? false);
+  const [dietType,       setDietType]       = useState<'veg' | 'nonveg'>(initialDiet(existingDeal));
+  const [submitting,     setSubmitting]     = useState(false);
+  const [error,          setError]          = useState('');
+  const [done,           setDone]           = useState(false);
+
+  const handleDiscountTypeChange = (next: RestaurantDiscountType) => {
+    setDiscountType(next);
+    const preset = defaultDiscountValue(next);
+    if (preset) setDiscountValue(preset);
+    if (next === 'bogo_half' && !title.trim()) {
+      setTitle(formatBogoHalfTitle(lbItem));
+    }
+    if (next === 'bogo_lb' && !title.trim() && lbItem.trim()) {
+      setTitle(formatLbDealTitle(lbItem, lbQty));
+    }
+  };
 
   const toggleType = (t: DealTypeKey) => {
     setSelectedTypes(prev => {
@@ -73,11 +114,23 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { setError('Title is required'); return; }
-    if (!discountValue.trim()) { setError('Discount value is required'); return; }
+
+    const resolvedValue = discountValue.trim() || defaultDiscountValue(discountType);
+    if (discountValueRequired(discountType) && !resolvedValue) {
+      setError('Discount value is required');
+      return;
+    }
+    if (isLbDiscount(discountType) && !lbItem.trim()) {
+      setError('Enter the item name for your lb deal (e.g. Fish Pakora)');
+      return;
+    }
     if (selectedTypes.size === 0) { setError('Select at least one deal type'); return; }
+    if (!allDays && selectedDays.size === 0) { setError('Select at least one day'); return; }
 
     setError('');
     setSubmitting(true);
+
+    const scopeDetail = isLbDiscount(discountType) ? lbItem.trim() : null;
 
     const payload = {
       restaurant_id:  restaurantId,
@@ -85,8 +138,8 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
       diet_type:      dietType,
       title:          title.trim(),
       description:    description.trim() || null,
-      discount_type:  discountType,
-      discount_value: discountValue.trim(),
+      discount_type:  toDbDiscountType(discountType),
+      discount_value: resolvedValue || null,
       deal_types:     Array.from(selectedTypes),
       available_days: allDays ? ['all'] : Array.from(selectedDays),
       max_claims:     unlimited ? null : (parseInt(maxClaims) || null),
@@ -94,7 +147,9 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
       is_coming:      isComing,
       valid_from:     validFrom || null,
       valid_until:    validUntil || null,
-      scope:          'menu',
+      scope:          isLbDiscount(discountType) ? 'single' : 'menu',
+      scope_detail:   scopeDetail,
+      price_tag:      priceTag,
     };
 
     let data: Record<string, unknown> | null = null;
@@ -165,7 +220,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. 20% off full menu"
+                  placeholder="e.g. Buy 1 Get 50% Off — Chole Bhature"
                   className="flex-1 h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[var(--brand)] transition-colors"
                 />
               </div>
@@ -187,22 +242,88 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               <div className="flex gap-2">
                 <select
                   value={discountType}
-                  onChange={(e) => setDiscountType(e.target.value as DiscountTypeKey)}
-                  className="h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)] transition-colors"
+                  onChange={(e) => handleDiscountTypeChange(e.target.value as RestaurantDiscountType)}
+                  className="h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)] transition-colors max-w-[52%]"
                 >
-                  <option value="percentage">Percentage</option>
-                  <option value="dollar">Dollar off</option>
-                  <option value="free_item">Free item</option>
-                  <option value="bogo">BOGO</option>
-                  <option value="other">Other</option>
+                  {DISCOUNT_TYPE_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
                 <input
                   value={discountValue}
                   onChange={(e) => setDiscountValue(e.target.value)}
-                  placeholder={discountType === 'percentage' ? '20%' : discountType === 'dollar' ? '$5 off' : 'Describe the deal'}
+                  placeholder={discountValuePlaceholder(discountType)}
                   className="flex-1 h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)] transition-colors"
                 />
               </div>
+              {discountType === 'bogo_half' && (
+                <p className="text-[11px] text-t3 mt-1.5">
+                  Second item is 50% off — great for takeout specials like Chole Bhature.
+                </p>
+              )}
+            </div>
+
+            {isLbDiscount(discountType) && (
+              <div className="rounded-brands border-2 border-[var(--bd2)] p-3 space-y-3 bg-surface2/50">
+                <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Lb deal details</p>
+                <div className="grid grid-cols-[72px_1fr] gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-t2 mb-1">Qty (lb)</label>
+                    <input
+                      type="text"
+                      value={lbQty}
+                      onChange={(e) => {
+                        setLbQty(e.target.value);
+                        if (lbItem.trim()) setTitle(formatLbDealTitle(lbItem, e.target.value));
+                      }}
+                      placeholder="1"
+                      className="w-full h-10 px-2 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-t2 mb-1">Item name</label>
+                    <input
+                      type="text"
+                      value={lbItem}
+                      onChange={(e) => {
+                        setLbItem(e.target.value);
+                        if (!title.trim() || title === formatLbDealTitle(lbItem, lbQty)) {
+                          setTitle(formatLbDealTitle(e.target.value, lbQty));
+                        }
+                      }}
+                      placeholder="e.g. Fish Pakora"
+                      className="w-full h-10 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)]"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-t3">
+                  Example: Buy 1 lb Fish Pakora, get the 2nd lb 50% off (Wednesdays).
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">
+                Price tag <span className="normal-case font-normal text-t3">(optional)</span>
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {PRICE_TAG_OPTIONS.map(({ id, label }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setPriceTag(id)}
+                    className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
+                    style={priceTag === id
+                      ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
+                      : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-t3 mt-1.5">
+                Tag $6 or $12 specials so customers can find them under &quot;Under CA$6&quot; / &quot;Under CA$10&quot;.
+              </p>
             </div>
 
             <div>
@@ -344,6 +465,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
                   </button>
                 ))}
               </div>
+              <p className="text-[11px] text-t3 mt-1.5">*eggs are considered as non-veg</p>
             </div>
 
             <div className="flex items-center justify-between py-2 border-t border-[var(--bd)]">
@@ -376,7 +498,7 @@ export default function CreateDealModal({ restaurantId, existingDeal, onCreated,
               className="w-full h-12 font-bold text-[15px] text-white rounded-brands transition-all disabled:opacity-60 flex items-center justify-center gap-2"
               style={{ background: BLUE }}
             >
-              {submitting ? <><IconLoader2 size={18} className="animate-spin" /> Creating…</> : 'Create Deal'}
+              {submitting ? <><IconLoader2 size={18} className="animate-spin" /> Creating…</> : (isEdit ? 'Save Deal' : 'Create Deal')}
             </button>
           </form>
         )}

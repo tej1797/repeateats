@@ -35,7 +35,8 @@ export function applyDealTypeFilter(deals: DealWithRestaurant[], dealType: strin
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dt = (d as any).discount_type as string | null;
       const t = d.title.toLowerCase();
-      return dt === 'bogo' || (t.includes('buy') && t.includes('get'));
+      return dt === 'bogo' || dt === 'bogo_half' || dt === 'bogo_lb'
+        || (t.includes('buy') && t.includes('get'));
     });
   }
   if (dealType === 'percentage') {
@@ -46,7 +47,12 @@ export function applyDealTypeFilter(deals: DealWithRestaurant[], dealType: strin
     const cap = dealType === 'under6' ? 600 : 1000;
     return deals.filter(d => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dt = (d as any).discount_type as string | null;
+      const row = d as any;
+      const tag = row.price_tag as string | null;
+      if (tag === 'under6') return true;
+      if (dealType === 'under10' && tag === 'under12') return true;
+
+      const dt = row.discount_type as string | null;
       const cents = parsePriceCents(d.discount_value);
       if (cents !== null) return cents <= cap;
       return dt === 'set_price' || dt === 'fixed';
