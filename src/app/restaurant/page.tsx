@@ -1640,7 +1640,7 @@ function firstAllowedTab(managerMode: boolean, perms: ManagerPerms): DashTab {
   return found?.id ?? 'scanner';
 }
 
-type DealGroup = 'active' | 'paused' | 'expired' | 'coming';
+type DealFilter = 'all' | 'active' | 'redeemed' | 'expired';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -1651,11 +1651,20 @@ function isDealExpired(deal: Deal): boolean {
   return deal.valid_until < todayISO();
 }
 
-function classifyDeal(deal: Deal): DealGroup {
-  if (deal.is_coming) return 'coming';
+function isDealSoldOut(deal: Deal): boolean {
+  return deal.max_claims !== null && deal.max_claims > 0 && deal.current_claims >= deal.max_claims;
+}
+
+/** Single bucket per deal for filter tabs (expired > sold out > active > other). */
+function dealFilterBucket(deal: Deal): 'active' | 'redeemed' | 'expired' | 'other' {
   if (isDealExpired(deal)) return 'expired';
-  if (deal.is_active) return 'active';
-  return 'paused';
+  if (isDealSoldOut(deal)) return 'redeemed';
+  if (deal.is_active && !deal.is_coming) return 'active';
+  return 'other';
+}
+
+function classifyDeal(deal: Deal): 'active' | 'redeemed' | 'expired' | 'other' {
+  return dealFilterBucket(deal);
 }
 
 function formatDealDate(iso: string | null): string {
@@ -1669,18 +1678,48 @@ function formatDealDate(iso: string | null): string {
   }
 }
 
+function formatDealDateShort(iso: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString('en-CA', {
+      month: 'short', day: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function shiftDateISO(iso: string | null, days: number): string {
   const base = iso ? new Date(`${iso}T12:00:00`) : new Date();
   base.setDate(base.getDate() + days);
   return base.toISOString().slice(0, 10);
 }
 
-const DEAL_GROUP_META: Record<DealGroup, { label: string; emoji: string }> = {
-  active:  { label: 'Active deals',    emoji: '🟢' },
-  paused:  { label: 'Paused deals',    emoji: '⏸' },
-  expired: { label: 'Expired deals',   emoji: '⌛' },
-  coming:  { label: 'Coming soon',     emoji: '🔜' },
-};
+/** Inclusive span between start and end (e.g. Jun 1 → Jun 10 = 9 day offset). */
+function dealDurationDays(deal: Deal): number {
+  if (!deal.valid_from || !deal.valid_until) return 7;
+  const from = new Date(`${deal.valid_from}T12:00:00`);
+  const until = new Date(`${deal.valid_until}T12:00:00`);
+  return Math.max(0, Math.round((until.getTime() - from.getTime()) / 86_400_000));
+}
+
+/** Next run: same title/details, today as start, same day-span as original. */
+function nextDuplicateDates(deal: Deal): { valid_from: string; valid_until: string } {
+  const duration = dealDurationDays(deal);
+  const valid_from = todayISO();
+  const valid_until = shiftDateISO(valid_from, duration);
+  return { valid_from, valid_until };
+}
+
+function dealStatusMeta(deal: Deal): { label: string; color: string } {
+  const bucket = dealFilterBucket(deal);
+  if (bucket === 'expired') return { label: 'Expired', color: '#FF7A30' };
+  if (bucket === 'redeemed') return { label: 'Redeemed', color: '#22C55E' };
+  if (bucket === 'active') return { label: 'Active', color: '#1249A9' };
+  if (deal.is_coming) return { label: 'Coming soon', color: '#A855F7' };
+  if (!deal.is_active) return { label: 'Paused', color: '#888' };
+  return { label: 'Active', color: '#1249A9' };
+}
 
 // SHA-256 hex digest for PIN hashing (browser-native)
 async function sha256hex(input: string): Promise<string> {
@@ -1716,6 +1755,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
+  const [dealFilter,      setDealFilter]      = useState<DealFilter>('all');
 
   // Manager mode — driven by DB flag + localStorage lock
   const [managerMode,  setManagerMode]  = useState(false);
@@ -1815,11 +1855,20 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
   const duplicateDeal = async (deal: Deal) => {
     const meta = deal as Deal & { diet_type?: string };
+    const { valid_from, valid_until } = nextDuplicateDates(deal);
+    const duration = dealDurationDays(deal);
+    const ok = confirm(
+      `Duplicate "${deal.title}" for the next ${duration} day${duration !== 1 ? 's' : ''}?\n\n` +
+      `New dates: ${formatDealDate(valid_from)} → ${formatDealDate(valid_until)}\n` +
+      `The original deal stays unchanged.`,
+    );
+    if (!ok) return;
+
     const { data, error } = await supabase
       .from('deals')
       .insert({
         restaurant_id:  deal.restaurant_id,
-        title:          `${deal.title} (copy)`,
+        title:          deal.title,
         description:    deal.description,
         discount_type:  deal.discount_type,
         discount_value: deal.discount_value,
@@ -1829,8 +1878,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         scope_detail:   deal.scope_detail,
         emoji:          deal.emoji,
         photo_url:      deal.photo_url,
-        valid_from:     deal.valid_from ?? todayISO(),
-        valid_until:    deal.valid_until,
+        valid_from,
+        valid_until,
         max_claims:     deal.max_claims,
         current_claims: 0,
         is_coming:      false,
@@ -1841,6 +1890,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
       .single();
     if (!error && data) {
       setDeals((prev) => [data as Deal, ...prev]);
+      setDealFilter('active');
     }
   };
 
@@ -2078,26 +2128,62 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                   <IconPlus size={15} /> Create your first deal
                 </button>
               </div>
-            ) : (
-              <>
-                {(['active', 'paused', 'coming', 'expired'] as const).map((group) => {
-                  const grouped = deals.filter((d) => classifyDeal(d) === group);
-                  if (grouped.length === 0) return null;
-                  const meta = DEAL_GROUP_META[group];
-                  return (
-                    <div key={group}>
-                      <h3 className="text-[12px] font-bold text-t2 uppercase tracking-wider mb-2">
-                        {meta.emoji} {meta.label}
-                        <span className="ml-1 font-normal">({grouped.length})</span>
-                      </h3>
-                      <div className="space-y-2">
-                        {grouped.map((deal) => (
-                          <div key={deal.id} className="bg-surface rounded-brands shadow-brand p-4">
+            ) : (() => {
+              const filterCounts = {
+                all:      deals.length,
+                active:   deals.filter((d) => dealFilterBucket(d) === 'active').length,
+                redeemed: deals.filter((d) => dealFilterBucket(d) === 'redeemed').length,
+                expired:  deals.filter((d) => dealFilterBucket(d) === 'expired').length,
+              };
+              const filteredDeals = dealFilter === 'all'
+                ? deals
+                : deals.filter((d) => dealFilterBucket(d) === dealFilter);
+
+              return (
+                <>
+                  <div className="flex gap-2 overflow-x-auto scrollbar-none p-1 rounded-xl" style={{ background: '#141414' }}>
+                    {([
+                      ['all',      `All ${filterCounts.all}`],
+                      ['active',   `Active ${filterCounts.active}`],
+                      ['redeemed', `Redeemed ${filterCounts.redeemed}`],
+                      ['expired',  `Expired ${filterCounts.expired}`],
+                    ] as const).map(([id, label]) => {
+                      const active = dealFilter === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setDealFilter(id)}
+                          className="flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                          style={active
+                            ? { background: 'rgba(18,73,169,0.25)', color: BLUE }
+                            : { color: '#888' }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {filteredDeals.length === 0 ? (
+                    <p className="text-[13px] text-t2 py-4">No {dealFilter === 'all' ? '' : dealFilter} deals yet.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {filteredDeals.map((deal) => {
+                        const status = dealStatusMeta(deal);
+                        return (
+                          <div key={deal.id} className="rounded-2xl px-4 py-3" style={{ background: '#141414', border: '1px solid #222' }}>
                             <div className="flex items-start gap-3">
-                              <span className="text-2xl shrink-0">{deal.emoji}</span>
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl" style={{ background: 'rgba(18,73,169,0.12)' }}>
+                                {deal.emoji}
+                              </div>
                               <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-sm text-tx truncate">{deal.title}</div>
-                                <div className="text-[12px] text-t2 mt-0.5">
+                                <p className="font-semibold text-[14px] text-tx truncate">{deal.title}</p>
+                                <p className="text-[12px] mt-0.5">
+                                  <span style={{ color: status.color, fontWeight: 600 }}>{status.label}</span>
+                                  <span className="text-t2"> · ends {formatDealDateShort(deal.valid_until)}</span>
+                                </p>
+                                <div className="text-[12px] text-t2 mt-1">
                                   {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
                                   {deal.max_claims ? ` / ${deal.max_claims} max` : ' · No limit'}
                                   {deal.discount_value ? ` · ${deal.discount_value}` : ''}
@@ -2136,7 +2222,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                 <button
                                   type="button"
                                   onClick={() => void duplicateDeal(deal)}
-                                  title="Duplicate deal"
+                                  title="Duplicate for next period (same duration from today)"
                                   className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
                                 >
                                   <IconCopy size={14} />
@@ -2168,13 +2254,13 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </>
-            )}
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
