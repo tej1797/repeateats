@@ -318,6 +318,7 @@ export async function GET(request: NextRequest) {
     restaurantId ? fetchRestaurantById(restaurantId) : Promise.resolve(null),
   ]);
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  let googleDiag: Awaited<ReturnType<typeof googlePlacesSearch>>['diag'] | null = null;
 
   const pinIfRelevant = (list: PlaceResult[]): PlaceResult[] => {
     if (!pinnedRestaurant) return list;
@@ -345,6 +346,7 @@ export async function GET(request: NextRequest) {
         apiKey,
         searchLocation.label,
       );
+      googleDiag = diag;
 
       const detailed = places
         .map((place) => ({
@@ -370,7 +372,7 @@ export async function GET(request: NextRequest) {
 
   if (dbMatches.length > 0) {
     const merged = pinIfRelevant(dbMatches);
-    return jsonWithDiag({ data: merged, results: merged });
+    return jsonWithDiag({ data: merged, results: merged }, googleDiag);
   }
 
   // ── Static Ontario fallback (word-boundary scoring — no "kham" → Markham) ─
@@ -403,5 +405,5 @@ export async function GET(request: NextRequest) {
   })));
 
   const merged = pinIfRelevant(results);
-  return jsonWithDiag({ data: merged, results: merged });
+  return jsonWithDiag({ data: merged, results: merged }, googleDiag);
 }
