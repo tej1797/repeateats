@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Restaurant, Deal, Collab } from '@/types';
 import CreateDealModal from '@/components/restaurant/CreateDealModal';
+import DuplicateDealModal from '@/components/restaurant/DuplicateDealModal';
 import ScannerPanel from '@/components/restaurant/ScannerPanel';
 import RestaurantSearch, { type PlaceResult } from '@/components/restaurant/RestaurantSearch';
 import {
@@ -1692,10 +1693,6 @@ function classifyDeal(deal: Deal): 'active' | 'paused' | 'sold_out' | 'expired' 
   return dealFilterBucket(deal);
 }
 
-function duplicateDealTitle(title: string): string {
-  return `${formatDealTitle(title.replace(/\*+$/, '').trimEnd())}*`;
-}
-
 function formatDealDate(iso: string | null): string {
   if (!iso) return 'Not set';
   try {
@@ -1722,22 +1719,6 @@ function shiftDateISO(iso: string | null, days: number): string {
   const base = iso ? new Date(`${iso}T12:00:00`) : new Date();
   base.setDate(base.getDate() + days);
   return base.toISOString().slice(0, 10);
-}
-
-/** Inclusive span between start and end (e.g. Jun 1 → Jun 10 = 9 day offset). */
-function dealDurationDays(deal: Deal): number {
-  if (!deal.valid_from || !deal.valid_until) return 7;
-  const from = new Date(`${deal.valid_from}T12:00:00`);
-  const until = new Date(`${deal.valid_until}T12:00:00`);
-  return Math.max(0, Math.round((until.getTime() - from.getTime()) / 86_400_000));
-}
-
-/** Next run: same title/details, today as start, same day-span as original. */
-function nextDuplicateDates(deal: Deal): { valid_from: string; valid_until: string } {
-  const duration = dealDurationDays(deal);
-  const valid_from = todayISO();
-  const valid_until = shiftDateISO(valid_from, duration);
-  return { valid_from, valid_until };
 }
 
 function dealStatusMeta(deal: Deal): { label: string; color: string } {
@@ -1790,6 +1771,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
+  const [duplicatingDeal, setDuplicatingDeal] = useState<Deal | null>(null);
   const [dealFilter,      setDealFilter]      = useState<DealFilter>('all');
 
   // Manager mode — driven by DB flag + localStorage lock
@@ -1886,48 +1868,6 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     if (!confirm(`Delete "${deal.title}"? This cannot be undone.`)) return;
     await supabase.from('deals').delete().eq('id', deal.id);
     setDeals((prev) => prev.filter((d) => d.id !== deal.id));
-  };
-
-  const duplicateDeal = async (deal: Deal) => {
-    const meta = deal as Deal & { diet_type?: string };
-    const { valid_from, valid_until } = nextDuplicateDates(deal);
-    const duration = dealDurationDays(deal);
-    const newTitle = duplicateDealTitle(deal.title);
-    const ok = confirm(
-      `Duplicate "${deal.title}" as "${newTitle}" for the next ${duration} day${duration !== 1 ? 's' : ''}?\n\n` +
-      `New dates: ${formatDealDate(valid_from)} → ${formatDealDate(valid_until)}\n` +
-      `The original deal stays unchanged.`,
-    );
-    if (!ok) return;
-
-    const { data, error } = await supabase
-      .from('deals')
-      .insert({
-        restaurant_id:  deal.restaurant_id,
-        title:          newTitle,
-        description:    deal.description,
-        discount_type:  deal.discount_type,
-        discount_value: deal.discount_value,
-        deal_types:     deal.deal_types,
-        available_days: deal.available_days,
-        scope:          deal.scope,
-        scope_detail:   deal.scope_detail,
-        emoji:          deal.emoji,
-        photo_url:      deal.photo_url,
-        valid_from,
-        valid_until,
-        max_claims:     deal.max_claims,
-        current_claims: 0,
-        is_coming:      false,
-        is_active:      true,
-        diet_type:      meta.diet_type ?? 'nonveg',
-      })
-      .select()
-      .single();
-    if (!error && data) {
-      setDeals((prev) => [data as Deal, ...prev]);
-      setDealFilter('active');
-    }
   };
 
   const shiftDealDate = async (
@@ -2257,40 +2197,43 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                   </div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => void duplicateDeal(deal)}
-                                  title="Duplicate deal for next period (same duration from today)"
-                                  className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-brands text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
-                                >
-                                  <span className="text-[11px] font-semibold whitespace-nowrap">Duplicate</span>
-                                  <IconRepeat size={14} stroke={1.75} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingDeal(deal)}
-                                  title="Edit deal"
-                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
-                                >
-                                  <IconPencil size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleActive(deal)}
-                                  title={deal.is_active ? 'Pause deal' : 'Resume deal'}
-                                  className={`w-8 h-8 rounded-brands flex items-center justify-center transition-colors border ${deal.is_active ? 'border-[var(--bd)] text-t2 hover:text-amber-600 hover:border-amber-300' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}
-                                >
-                                  {deal.is_active ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteDeal(deal)}
-                                  title="Delete deal"
-                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors border border-[var(--bd)]"
-                                >
-                                  <IconTrash size={14} />
-                                </button>
+                              <div className="flex flex-col gap-1.5 shrink-0">
+                                <div className="flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDuplicatingDeal(deal)}
+                                    title="Duplicate deal"
+                                    className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
+                                  >
+                                    <IconRepeat size={14} stroke={1.75} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingDeal(deal)}
+                                    title="Edit deal"
+                                    className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
+                                  >
+                                    <IconPencil size={14} />
+                                  </button>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleActive(deal)}
+                                    title={deal.is_active ? 'Pause deal' : 'Resume deal'}
+                                    className={`w-8 h-8 rounded-brands flex items-center justify-center transition-colors border ${deal.is_active ? 'border-[var(--bd)] text-t2 hover:text-amber-600 hover:border-amber-300' : 'border-brand/40 text-brand hover:bg-brand hover:text-white'}`}
+                                  >
+                                    {deal.is_active ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteDeal(deal)}
+                                    title="Delete deal"
+                                    className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors border border-[var(--bd)]"
+                                  >
+                                    <IconTrash size={14} />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2345,6 +2288,18 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
             }
           }}
           onClose={() => { setShowCreateDeal(false); setEditingDeal(null); }}
+        />
+      )}
+
+      {duplicatingDeal && (
+        <DuplicateDealModal
+          deal={duplicatingDeal}
+          onCreated={(deal) => {
+            setDeals((prev) => [deal, ...prev]);
+            setDealFilter('active');
+            setDuplicatingDeal(null);
+          }}
+          onClose={() => setDuplicatingDeal(null)}
         />
       )}
 
