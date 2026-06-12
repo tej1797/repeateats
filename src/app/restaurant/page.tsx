@@ -63,7 +63,7 @@ import type { ClaimRow } from '@/lib/restaurantAnalytics';
 import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { formatDealTitle } from '@/lib/utils';
-import { coordsForCity, nearestCityName, DEFAULT_SEARCH_RADIUS_KM } from '@/lib/location';
+import { coordsForCity, DEFAULT_SEARCH_RADIUS_KM } from '@/lib/location';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
