@@ -55,7 +55,7 @@ import {
   IconClock,
   IconChevronRight,
   IconSettings,
-  IconCopy,
+  IconRepeat,
   IconMinus,
 } from '@tabler/icons-react';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
@@ -2224,10 +2224,11 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                 <button
                                   type="button"
                                   onClick={() => void duplicateDeal(deal)}
-                                  title="Duplicate for next period (same duration from today)"
-                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
+                                  title="Duplicate deal for next period (same duration from today)"
+                                  className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-brands text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
                                 >
-                                  <IconCopy size={14} />
+                                  <span className="text-[11px] font-semibold whitespace-nowrap">Duplicate</span>
+                                  <IconRepeat size={14} stroke={1.75} />
                                 </button>
                                 <button
                                   type="button"
