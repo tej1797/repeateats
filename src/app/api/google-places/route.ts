@@ -11,6 +11,7 @@ import {
   resolveRestaurantSearchLocation,
   scorePlaceMatch,
 } from '@/lib/location';
+import { googlePlacesSearch } from '@/lib/placesSearchServer';
 
 const DAY_FULL: Record<string, string> = {
   Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday',
@@ -104,150 +105,6 @@ async function searchDbRestaurants(query: string): Promise<PlaceResult[]> {
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 10)
-    .map((x) => x.place);
-}
-
-async function fetchGooglePlaceDetails(
-  placeId: string,
-  apiKey: string,
-  fallback?: { name: string; address: string },
-): Promise<PlaceResult> {
-  const detailUrl = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-  detailUrl.searchParams.set('place_id', placeId);
-  detailUrl.searchParams.set(
-    'fields',
-    'place_id,name,formatted_address,formatted_phone_number,website,opening_hours,rating,types',
-  );
-  detailUrl.searchParams.set('key', apiKey);
-
-  const detailRes  = await fetch(detailUrl.toString(), { cache: 'no-store' });
-  const detailData = await detailRes.json() as {
-    status: string;
-    result?: {
-      name: string;
-      formatted_address: string;
-      formatted_phone_number?: string;
-      website?: string;
-      opening_hours?: { weekday_text: string[] };
-      rating?: number;
-      types: string[];
-    };
-  };
-
-  if (detailData.status !== 'OK' || !detailData.result) {
-    return {
-      place_id:  placeId,
-      name:      fallback?.name ?? 'Unknown',
-      address:   fallback?.address ?? '',
-      phone:     null,
-      website:   null,
-      hours:     null,
-      hours_raw: null,
-      rating:    null,
-      types:     [],
-      source:    'google' as const,
-    };
-  }
-
-  const r = detailData.result;
-  return {
-    place_id:  placeId,
-    name:      r.name,
-    address:   r.formatted_address,
-    phone:     r.formatted_phone_number ?? null,
-    website:   r.website ?? null,
-    hours:     r.opening_hours?.weekday_text?.join(' · ') ?? null,
-    hours_raw: r.opening_hours?.weekday_text ?? null,
-    rating:    r.rating ?? null,
-    types:     r.types ?? [],
-    source:    'google' as const,
-  };
-}
-
-async function googlePlacesSearch(
-  query: string,
-  lat: number,
-  lng: number,
-  radiusKm: number,
-  apiKey: string,
-): Promise<PlaceResult[]> {
-  const radiusM = Math.min(50_000, Math.round(radiusKm * 1000));
-  const location = `${lat},${lng}`;
-
-  type Candidate = { place_id: string; name: string; address: string };
-
-  let candidates: Candidate[] = [];
-
-  // Autocomplete — closest to Google Maps typing behaviour
-  const autoUrl = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
-  autoUrl.searchParams.set('input', query);
-  autoUrl.searchParams.set('location', location);
-  autoUrl.searchParams.set('radius', String(radiusM));
-  autoUrl.searchParams.set('components', 'country:ca');
-  autoUrl.searchParams.set('key', apiKey);
-
-  try {
-    const autoRes  = await fetch(autoUrl.toString(), { cache: 'no-store' });
-    const autoData = await autoRes.json() as {
-      status: string;
-      predictions?: Array<{
-        place_id: string;
-        description: string;
-        structured_formatting: { main_text: string; secondary_text?: string };
-        types?: string[];
-      }>;
-    };
-
-    if (autoData.status === 'OK' && autoData.predictions?.length) {
-      candidates = autoData.predictions
-        .filter((p) => !p.types?.includes('locality') && !p.types?.includes('political'))
-        .slice(0, 6)
-        .map((p) => ({
-          place_id: p.place_id,
-          name:     p.structured_formatting.main_text,
-          address:  p.structured_formatting.secondary_text ?? p.description,
-        }));
-    }
-  } catch {
-    /* fall through to text search */
-  }
-
-  // Text search fallback when autocomplete returns nothing
-  if (!candidates.length) {
-    const searchUrl = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-    searchUrl.searchParams.set('query', query);
-    searchUrl.searchParams.set('location', location);
-    searchUrl.searchParams.set('radius', String(radiusM));
-    searchUrl.searchParams.set('type', 'restaurant');
-    searchUrl.searchParams.set('key', apiKey);
-
-    const searchRes  = await fetch(searchUrl.toString(), { cache: 'no-store' });
-    const searchData = await searchRes.json() as {
-      status: string;
-      results?: Array<{ place_id: string; name: string; formatted_address: string }>;
-    };
-
-    if (searchData.status === 'OK' && searchData.results?.length) {
-      candidates = searchData.results.slice(0, 6).map((p) => ({
-        place_id: p.place_id,
-        name:     p.name,
-        address:  p.formatted_address,
-      }));
-    }
-  }
-
-  if (!candidates.length) return [];
-
-  const detailed = await Promise.all(
-    candidates.map((c) => fetchGooglePlaceDetails(c.place_id, apiKey, c)),
-  );
-
-  return detailed
-    .map((place) => ({
-      place,
-      score: scorePlaceMatch(query, { name: place.name, address: place.address }),
-    }))
-    .sort((a, b) => b.score - a.score)
     .map((x) => x.place);
 }
 
@@ -405,6 +262,7 @@ export async function GET(request: NextRequest) {
   // ── Text search mode: ?query= or ?q= ─────────────────────────────────────
   // Support both param names for compatibility with existing UI calls
   const query = searchParams.get('query') ?? searchParams.get('q') ?? '';
+  const includeDiag = searchParams.get('diag') === '1';
 
   if (!query || query.length < 2) {
     return NextResponse.json({ data: [] });
@@ -471,20 +329,38 @@ export async function GET(request: NextRequest) {
     return mergePlaceResults([pinnedRestaurant], list);
   };
 
+  const jsonWithDiag = (payload: Record<string, unknown>, diag?: { errors: string[] } | null) => {
+    if (includeDiag && diag) payload._diag = diag;
+    return NextResponse.json(payload);
+  };
+
   // ── Try Google Places API (autocomplete + location bias) ──────────────────
   if (apiKey) {
     try {
-      const detailed = await googlePlacesSearch(
+      const { places, diag } = await googlePlacesSearch(
         query,
         searchLocation.lat,
         searchLocation.lng,
         searchLocation.radiusKm,
         apiKey,
+        searchLocation.label,
       );
+
+      const detailed = places
+        .map((place) => ({
+          place,
+          score: scorePlaceMatch(query, { name: place.name, address: place.address }),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.place);
 
       if (detailed.length > 0) {
         const merged = pinIfRelevant(mergePlaceResults(dbMatches, detailed));
-        return NextResponse.json({ data: merged, results: merged });
+        return jsonWithDiag({ data: merged, results: merged }, diag);
+      }
+
+      if (includeDiag && diag.errors.length > 0) {
+        console.error('[google-places]', query, JSON.stringify(diag));
       }
     } catch (err) {
       console.error('[google-places/google-api]', err);
@@ -494,7 +370,7 @@ export async function GET(request: NextRequest) {
 
   if (dbMatches.length > 0) {
     const merged = pinIfRelevant(dbMatches);
-    return NextResponse.json({ data: merged, results: merged });
+    return jsonWithDiag({ data: merged, results: merged });
   }
 
   // ── Static Ontario fallback (word-boundary scoring — no "kham" → Markham) ─
@@ -527,5 +403,5 @@ export async function GET(request: NextRequest) {
   })));
 
   const merged = pinIfRelevant(results);
-  return NextResponse.json({ data: merged, results: merged });
+  return jsonWithDiag({ data: merged, results: merged });
 }

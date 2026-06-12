@@ -70,9 +70,13 @@ The `/api/google-places` route auto-fills restaurant info during onboarding.
 2. Create a project (or select existing)
 3. Enable these APIs:
    - **Places API**
+   - **Places API (New)**
    - **Maps JavaScript API** (for future map view)
 4. Create an API key: **APIs & Services → Credentials → Create Credentials → API Key**
-5. Restrict the key to your domain in production
+5. **Application restrictions:** set to **None** (or IP addresses if you prefer).
+   Do **not** use HTTP referrer restrictions — `/api/google-places` runs on Vercel's
+   servers, and referrer-restricted keys return `REQUEST_DENIED` for server-side calls.
+   Restrict by **API** instead (Places API, Places API (New), Geocoding API).
 6. Add to `.env.local`:
    ```
    GOOGLE_PLACES_API_KEY=AIza...your_key_here
