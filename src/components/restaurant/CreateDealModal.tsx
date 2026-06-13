@@ -12,8 +12,6 @@ import {
   defaultDiscountValue,
   discountValuePlaceholder,
   discountValueRequired,
-  formatBogoHalfTitle,
-  formatLbDealTitle,
   isLbDiscount,
   normalizeDiscountType,
   toDbDiscountType,
@@ -40,12 +38,13 @@ interface ExistingDeal {
 }
 
 interface Props {
-  restaurantId:    string;
-  restaurantName?: string;
-  restaurantCity?: string;
-  existingDeal?:   ExistingDeal;
-  onCreated:       (deal: Record<string, unknown>) => void;
-  onClose:         () => void;
+  restaurantId:       string;
+  restaurantName?:    string;
+  restaurantCity?:    string;
+  restaurantCoverUrl?: string | null;
+  existingDeal?:      ExistingDeal;
+  onCreated:          (deal: Record<string, unknown>) => void;
+  onClose:            () => void;
 }
 
 function initialDiet(existing?: ExistingDeal): 'veg' | 'nonveg' {
@@ -57,6 +56,7 @@ export default function CreateDealModal({
   restaurantId,
   restaurantName = 'Your Restaurant',
   restaurantCity,
+  restaurantCoverUrl,
   existingDeal,
   onCreated,
   onClose,
@@ -66,7 +66,7 @@ export default function CreateDealModal({
 
   const initialDiscount = normalizeDiscountType(existingDeal?.discount_type ?? 'percentage');
 
-  const [emoji,          setEmoji]          = useState(existingDeal?.emoji ?? '🍽️');
+  const emoji = existingDeal?.emoji ?? '🍽️';
   const [title,          setTitle]          = useState(existingDeal?.title ?? '');
   const [description,    setDescription]    = useState(existingDeal?.description ?? '');
   const [discountType,   setDiscountType]   = useState<RestaurantDiscountType>(initialDiscount);
@@ -97,12 +97,6 @@ export default function CreateDealModal({
     setDiscountType(next);
     const preset = defaultDiscountValue(next);
     if (preset) setDiscountValue(preset);
-    if (next === 'bogo_half' && !title.trim()) {
-      setTitle(formatBogoHalfTitle(lbItem));
-    }
-    if (next === 'bogo_lb' && !title.trim() && lbItem.trim()) {
-      setTitle(formatLbDealTitle(lbItem, lbQty));
-    }
   };
 
   const toggleType = (t: DealTypeKey) => {
@@ -123,7 +117,7 @@ export default function CreateDealModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) { setError('Title is required'); return; }
+    if (!title.trim()) { setError('Dish name is required'); return; }
 
     const resolvedValue = discountValue.trim() || defaultDiscountValue(discountType);
     if (discountValueRequired(discountType) && !resolvedValue) {
@@ -218,22 +212,28 @@ export default function CreateDealModal({
         ) : (
           <form onSubmit={handleSubmit} className="px-5 py-5 space-y-5">
             <div>
-              <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Deal title</label>
+              <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Dish name</label>
               <div className="flex gap-2">
-                <input
-                  value={emoji}
-                  onChange={(e) => setEmoji(e.target.value)}
-                  maxLength={4}
-                  className="w-14 h-11 text-center text-[22px] border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx outline-none focus:border-[var(--brand)] transition-colors"
-                  placeholder="🍽️"
-                />
+                <div className="w-14 h-11 rounded-brands border-2 border-[var(--bd2)] overflow-hidden flex-shrink-0 bg-surface2">
+                  {restaurantCoverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={restaurantCoverUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[22px]">{emoji}</div>
+                  )}
+                </div>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Buy 1 Get 50% Off — Chole Bhature"
+                  placeholder="e.g. Chole Bhature"
                   className="flex-1 h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[var(--brand)] transition-colors"
                 />
               </div>
+              <p className="text-[11px] text-t3 mt-1">Deal type (e.g. Buy 1 Get 50% Off) shows on the card from the discount section.</p>
             </div>
 
             <div>
@@ -241,9 +241,9 @@ export default function CreateDealModal({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={2}
+                rows={1}
                 placeholder="Any conditions or extra details..."
-                className="w-full px-3 py-2.5 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)] transition-colors resize-none"
+                className="w-full px-3 py-2 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)] transition-colors resize-none min-h-[44px]"
               />
             </div>
 
@@ -284,7 +284,6 @@ export default function CreateDealModal({
                       value={lbQty}
                       onChange={(e) => {
                         setLbQty(e.target.value);
-                        if (lbItem.trim()) setTitle(formatLbDealTitle(lbItem, e.target.value));
                       }}
                       placeholder="1"
                       className="w-full h-10 px-2 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)]"
@@ -295,12 +294,7 @@ export default function CreateDealModal({
                     <input
                       type="text"
                       value={lbItem}
-                      onChange={(e) => {
-                        setLbItem(e.target.value);
-                        if (!title.trim() || title === formatLbDealTitle(lbItem, lbQty)) {
-                          setTitle(formatLbDealTitle(e.target.value, lbQty));
-                        }
-                      }}
+                      onChange={(e) => setLbItem(e.target.value)}
                       placeholder="e.g. Fish Pakora"
                       className="w-full h-10 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)]"
                     />
@@ -336,67 +330,70 @@ export default function CreateDealModal({
               </p>
             </div>
 
-            <div>
-              <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Deal type</label>
-              <div className="flex gap-2 flex-wrap">
-                {DEAL_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => toggleType(t)}
-                    className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold capitalize transition-all"
-                    style={selectedTypes.has(t)
-                      ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
-                      : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Available days</label>
-              <div className="flex gap-2 flex-wrap mb-2">
-                <button
-                  type="button"
-                  onClick={() => setAllDays(true)}
-                  className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
-                  style={allDays
-                    ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
-                    : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
-                >
-                  Every day
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAllDays(false)}
-                  className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold transition-all"
-                  style={!allDays
-                    ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
-                    : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
-                >
-                  Select days
-                </button>
-              </div>
-              {!allDays && (
-                <div className="flex gap-1.5 flex-wrap">
-                  {DAYS.map((d) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Deal type</label>
+                <div className="flex gap-2 flex-wrap">
+                  {DEAL_TYPES.map((t) => (
                     <button
-                      key={d}
+                      key={t}
                       type="button"
-                      onClick={() => toggleDay(d)}
-                      className="w-11 h-9 rounded-brands border-2 text-[13px] font-semibold transition-all"
-                      style={selectedDays.has(d)
+                      onClick={() => toggleType(t)}
+                      className="h-9 px-4 rounded-brands border-2 text-[13px] font-semibold capitalize transition-all"
+                      style={selectedTypes.has(t)
                         ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
                         : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
                     >
-                      {d}
+                      {t}
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Available days</label>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setAllDays(true)}
+                    className="h-9 px-3 rounded-brands border-2 text-[12px] font-semibold transition-all"
+                    style={allDays
+                      ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
+                      : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
+                  >
+                    Every day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllDays(false)}
+                    className="h-9 px-3 rounded-brands border-2 text-[12px] font-semibold transition-all"
+                    style={!allDays
+                      ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
+                      : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
+                  >
+                    Select days
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {!allDays && (
+              <div className="flex gap-1.5 flex-wrap -mt-2">
+                {DAYS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => toggleDay(d)}
+                    className="w-11 h-9 rounded-brands border-2 text-[13px] font-semibold transition-all"
+                    style={selectedDays.has(d)
+                      ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
+                      : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div>
               <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">Claim limit</label>
