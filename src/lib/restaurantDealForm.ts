@@ -26,9 +26,8 @@ export const DISCOUNT_TYPE_OPTIONS: { value: RestaurantDiscountType; label: stri
   { value: 'set_price',   label: 'Set price (e.g. $12 special)' },
   { value: 'free_item',   label: 'Free item' },
   { value: 'bogo',        label: 'BOGO (Buy 1 Get 1 Free)' },
-  { value: 'bogo_half',   label: 'Buy 1 Get 50% Off' },
+  { value: 'bogo_half',   label: 'Buy 1 Get 1 50% Off' },
   { value: 'bogo_lb',     label: 'Buy by weight (lb)' },
-  { value: 'free_delivery', label: 'Free delivery' },
   { value: 'other',       label: 'Other' },
 ];
 
@@ -83,6 +82,6 @@ export function formatLbDealTitle(item: string, lbQty = '1'): string {
 
 export function formatBogoHalfTitle(item?: string): string {
   const trimmed = item?.trim();
-  if (!trimmed) return 'Buy 1 Get 50% Off';
-  return `Buy 1 ${trimmed} — Get 50% Off 2nd`;
+  if (!trimmed) return 'Buy 1 Get 1 50% Off';
+  return `Buy 1 ${trimmed} — Get 1 50% Off 2nd`;
 }
