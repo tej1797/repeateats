@@ -233,7 +233,7 @@ export default function CreateDealModal({
                   className="flex-1 h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[var(--brand)] transition-colors"
                 />
               </div>
-              <p className="text-[11px] text-t3 mt-1">Deal type (e.g. Buy 1 Get 50% Off) shows on the card from the discount section.</p>
+              <p className="text-[11px] text-t3 mt-1">Deal type (e.g. Buy 1 Get 1 50% Off) shows on the card from the discount section.</p>
             </div>
 
             <div>

@@ -13,7 +13,7 @@ export function getDealOfferHeadline(deal: DealOfferInput): string {
   const val = deal.discount_value ?? '';
   const t = (deal.title ?? '').toLowerCase();
 
-  if (dt === 'bogo_half') return 'Buy 1 Get 50% Off';
+  if (dt === 'bogo_half') return 'Buy 1 Get 1 50% Off';
   if (dt === 'bogo_lb') {
     const item = deal.scope_detail?.trim();
     return item ? `Buy 1 lb ${item}` : 'Buy by lb';
@@ -40,7 +40,7 @@ export function getDealOfferBadge(deal: DealOfferInput): string {
   const val = deal.discount_value ?? '';
   const t = (deal.title ?? '').toLowerCase();
 
-  if (dt === 'bogo_half') return 'BUY 1 GET 50% OFF';
+  if (dt === 'bogo_half') return 'BUY 1 GET 1 50% OFF';
   if (dt === 'bogo_lb') return 'BUY BY LB';
   if (dt === 'bogo' || (t.includes('buy') && t.includes('get') && !t.includes('50%'))) return 'BUY 1 GET 1';
   if (dt === 'free_item' || dt === 'free') return 'FREE ITEM';
