@@ -70,6 +70,7 @@ import {
 } from '@tabler/icons-react';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
+import { fetchRestaurantDashboardStats } from '@/lib/fetchRestaurantDashboardStats';
 import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { formatDealTitle } from '@/lib/utils';
@@ -1908,6 +1909,20 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   } | null>(null);
   const [claimRows, setClaimRows] = useState<ClaimRow[]>([]);
 
+  const reloadDashboardStats = useCallback(async () => {
+    try {
+      const stats = await fetchRestaurantDashboardStats(supabase, restaurant.id);
+      setDashStats({
+        active_deals:    stats.active_deals,
+        redeemed_claims: stats.redeemed_claims,
+        awaiting_scan:   stats.awaiting_scan,
+      });
+      setClaimRows(stats.claims);
+    } catch (err) {
+      console.error('dashboard stats load failed:', err);
+    }
+  }, [supabase, restaurant.id]);
+
   const setTabPersist = useCallback((next: DashTab) => {
     setTab(next);
     try {
@@ -1931,26 +1946,25 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
   useEffect(() => {
     async function load() {
-      const [dr, cr, sr] = await Promise.all([
+      const [dr, cr] = await Promise.all([
         supabase.from('deals').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
         supabase.from('collabs').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
-        supabase.rpc('get_restaurant_dashboard_stats', { p_restaurant_id: restaurant.id }),
       ]);
       setDeals((dr.data ?? []) as Deal[]);
       setCollabs((cr.data ?? []) as Collab[]);
-      if (sr.data && !sr.error) {
-        const s = sr.data as Record<string, unknown>;
-        setDashStats({
-          active_deals:    (s.active_deals as number)    ?? 0,
-          redeemed_claims: (s.redeemed_claims as number) ?? 0,
-          awaiting_scan:   (s.awaiting_scan as number)   ?? 0,
-        });
-        setClaimRows((s.claims as ClaimRow[]) ?? []);
-      }
+      await reloadDashboardStats();
       setLoading(false);
     }
     void load();
-  }, [restaurant.id, supabase]);
+  }, [restaurant.id, supabase, reloadDashboardStats]);
+
+  useEffect(() => {
+    if (tab === 'analytics') void reloadDashboardStats();
+  }, [tab, reloadDashboardStats]);
+
+  useEffect(() => {
+    if (!managerMode) void reloadDashboardStats();
+  }, [managerMode, reloadDashboardStats]);
 
   // Prefer RPC values; fall back to locally derived counts.
   const activeDeals = deals.filter((d) => classifyDeal(d) === 'active');
@@ -2461,6 +2475,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               localStorage.removeItem('repeateats.manager_locked');
               supabase.from('restaurants').update({ manager_mode_enabled: false }).eq('id', restaurant.id);
               setManagerMode(false);
+              setTabPersist('dashboard');
+              void reloadDashboardStats();
             }}
           />
         </div>
