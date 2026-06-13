@@ -11,22 +11,67 @@ const BLUE   = '#1249A9';
 const GREEN  = '#22C55E';
 const ORANGE = '#FF7A30';
 
+interface DealLimitRow {
+  id: string;
+  max_claims: number | null;
+}
+
 interface Props {
   restaurantName: string;
   claims: ClaimRow[];
   activeDealCount: number;
+  deals?: DealLimitRow[];
   loading?: boolean;
+}
+
+function StatBarRow({
+  label,
+  count,
+  max,
+  color,
+}: {
+  label: string;
+  count: number;
+  max: number | null;
+  color: string;
+}) {
+  const denom = max && max > 0 ? max : Math.max(count, 1);
+  const pct = Math.min(100, Math.round((count / denom) * 100));
+  const endLabel = max && max > 0 ? `${count}/${max}` : `${count}`;
+
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-[11px] font-bold flex-shrink-0 w-[72px]" style={{ color }}>
+        {label}
+      </span>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden min-w-0" style={{ background: '#222' }}>
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, background: color, minWidth: count > 0 ? 4 : 0 }}
+        />
+      </div>
+      <span className="text-[11px] font-bold flex-shrink-0 tabular-nums" style={{ color: '#888' }}>
+        {endLabel}
+      </span>
+    </div>
+  );
 }
 
 export default function RestaurantAnalytics({
   restaurantName,
   claims,
   activeDealCount,
+  deals = [],
   loading = false,
 }: Props) {
+  const dealLimits = useMemo(
+    () => new Map(deals.map((d) => [d.id, { max_claims: d.max_claims }])),
+    [deals],
+  );
+
   const { summary, daily, topDeals } = useMemo(
-    () => computeRestaurantAnalytics(claims, activeDealCount, 14),
-    [claims, activeDealCount],
+    () => computeRestaurantAnalytics(claims, activeDealCount, 14, dealLimits),
+    [claims, activeDealCount, dealLimits],
   );
 
   const maxBar = Math.max(1, ...daily.map((d) => d.claimed + d.redeemed));
@@ -50,7 +95,6 @@ export default function RestaurantAnalytics({
         </p>
       </div>
 
-      {/* Summary cards 2×2 */}
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: 'ACTIVE DEALS', value: summary.activeDeals, sub: 'live now', accent: BLUE },
@@ -71,7 +115,6 @@ export default function RestaurantAnalytics({
         ))}
       </div>
 
-      {/* 14-day chart */}
       <div className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-[14px] text-white">Claims · last 14 days</h3>
@@ -107,7 +150,6 @@ export default function RestaurantAnalytics({
         </div>
       </div>
 
-      {/* Top deals */}
       <div className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-[14px] text-white">Top deals</h3>
@@ -119,46 +161,35 @@ export default function RestaurantAnalytics({
         {topDeals.length === 0 ? (
           <p className="text-[13px] text-[#666]">No claim data yet.</p>
         ) : (
-          <div className="space-y-3">
-            {topDeals.map((deal, i) => {
-              const maxClaims = topDeals[0]?.claims ?? 1;
-              const claimedPct = Math.round((deal.claims / maxClaims) * 100);
-              const redeemedPct = Math.round((deal.redeemed / maxClaims) * 100);
-              return (
-                <div key={deal.id} className="flex items-center gap-3">
-                  <span
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
-                    style={{ background: '#222', color: '#888' }}
-                  >
-                    {i + 1}
-                  </span>
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0" style={{ background: '#1A1A1A' }}>
-                    {deal.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-white truncate">{formatDealTitle(deal.title)}</p>
-                    <div className="mt-1.5 space-y-1">
-                      <div className="h-1 rounded-full overflow-hidden" style={{ background: '#222' }}>
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${claimedPct}%`, background: ORANGE, minWidth: deal.claims > 0 ? 4 : 0 }}
-                        />
-                      </div>
-                      <div className="h-1 rounded-full overflow-hidden" style={{ background: '#222' }}>
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${redeemedPct}%`, background: GREEN, minWidth: deal.redeemed > 0 ? 4 : 0 }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-[12px] font-bold" style={{ color: ORANGE }}>{deal.claims} claims</p>
-                    <p className="text-[11px] font-semibold" style={{ color: GREEN }}>{deal.redeemed} redeemed</p>
-                  </div>
+          <div className="space-y-4">
+            {topDeals.map((deal, i) => (
+              <div key={deal.id} className="flex items-start gap-3">
+                <span
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-1"
+                  style={{ background: '#222', color: '#888' }}
+                >
+                  {i + 1}
+                </span>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 mt-0.5" style={{ background: '#1A1A1A' }}>
+                  {deal.emoji}
                 </div>
-              );
-            })}
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <p className="text-[13px] font-semibold text-white truncate">{formatDealTitle(deal.title)}</p>
+                  <StatBarRow
+                    label={`${deal.claims} claim${deal.claims !== 1 ? 's' : ''}`}
+                    count={deal.claims}
+                    max={deal.maxClaims}
+                    color={ORANGE}
+                  />
+                  <StatBarRow
+                    label={`${deal.redeemed} redeemed`}
+                    count={deal.redeemed}
+                    max={deal.maxClaims}
+                    color={GREEN}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

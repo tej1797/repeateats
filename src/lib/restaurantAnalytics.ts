@@ -24,6 +24,7 @@ export interface TopDealStats {
   emoji: string;
   claims: number;
   redeemed: number;
+  maxClaims: number | null;
 }
 
 export interface AnalyticsSummary {
@@ -49,6 +50,7 @@ export function computeRestaurantAnalytics(
   claims: ClaimRow[],
   activeDealCount: number,
   days = 14,
+  dealLimits: Map<string, { max_claims: number | null }> = new Map(),
 ): { summary: AnalyticsSummary; daily: DayClaimStats[]; topDeals: TopDealStats[] } {
   const now = new Date();
   const since7 = new Date(now.getTime() - 7 * 86_400_000);
@@ -94,12 +96,14 @@ export function computeRestaurantAnalytics(
   const dealMap = new Map<string, TopDealStats>();
   for (const c of countable) {
     const id = c.deal_id;
+    const limits = dealLimits.get(id);
     const existing = dealMap.get(id) ?? {
       id,
       title: c.deals?.title ?? 'Unknown deal',
       emoji: c.deals?.emoji ?? '🍽️',
       claims: 0,
       redeemed: 0,
+      maxClaims: limits?.max_claims ?? null,
     };
     existing.claims += 1;
     if (c.status === 'redeemed') existing.redeemed += 1;

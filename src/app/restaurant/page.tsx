@@ -2297,8 +2297,18 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                         return (
                           <div key={deal.id} className="rounded-2xl px-4 py-3" style={{ background: '#141414', border: '1px solid #222' }}>
                             <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl" style={{ background: 'rgba(18,73,169,0.12)' }}>
-                                {deal.emoji}
+                              <div className="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden" style={{ background: 'rgba(18,73,169,0.12)' }}>
+                                {restaurant.cover_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={restaurant.cover_url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xl">{deal.emoji}</div>
+                                )}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-[14px] text-tx truncate">{formatDealTitle(deal.title)}</p>
@@ -2306,9 +2316,20 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                   <span style={{ color: status.color, fontWeight: 600 }}>{status.label}</span>
                                   <span className="text-t2"> · ends {formatDealDateShort(deal.valid_until)}</span>
                                 </p>
-                                <div className="text-[12px] text-t2 mt-1">
-                                  {deal.current_claims} claim{deal.current_claims !== 1 ? 's' : ''}
-                                  {deal.max_claims ? ` / ${deal.max_claims} max` : ' · No limit'}
+                                <div className="mt-2 flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 bg-surface2 rounded-full overflow-hidden">
+                                    {deal.max_claims !== null && deal.max_claims > 0 && (
+                                      <div
+                                        className="h-full bg-brand rounded-full transition-all"
+                                        style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }}
+                                      />
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-semibold text-t2 tabular-nums shrink-0">
+                                    {deal.max_claims !== null && deal.max_claims > 0
+                                      ? `${deal.current_claims}/${deal.max_claims}`
+                                      : `${deal.current_claims} · No limit`}
+                                  </span>
                                 </div>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-t2">
                                   <span>Start: <span className="text-tx font-medium">{formatDealDate(deal.valid_from)}</span></span>
@@ -2334,11 +2355,6 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                     </button>
                                   </div>
                                 </div>
-                                {deal.max_claims !== null && deal.max_claims > 0 && (
-                                  <div className="mt-2 h-1.5 bg-surface2 rounded-full overflow-hidden">
-                                    <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${Math.min(100, (deal.current_claims / deal.max_claims) * 100)}%` }} />
-                                  </div>
-                                )}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <button
@@ -2354,9 +2370,10 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                   type="button"
                                   onClick={() => setEditingDeal(deal)}
                                   title="Edit deal"
-                                  className="w-8 h-8 rounded-brands flex items-center justify-center text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
+                                  className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-brands text-t2 hover:text-brand hover:bg-brandlt transition-colors border border-[var(--bd)]"
                                 >
-                                  <IconPencil size={14} />
+                                  <span className="text-[11px] font-semibold whitespace-nowrap">Edit</span>
+                                  <IconPencil size={14} stroke={1.75} />
                                 </button>
                                 <button
                                   type="button"
@@ -2393,6 +2410,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
             restaurantName={restaurant.name}
             claims={claimRows}
             activeDealCount={activeDealCount}
+            deals={deals.map((d) => ({ id: d.id, max_claims: d.max_claims }))}
             loading={loading}
           />
         )}
@@ -2419,6 +2437,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
           restaurantId={restaurant.id}
           restaurantName={restaurant.name}
           restaurantCity={restaurant.city}
+          restaurantCoverUrl={restaurant.cover_url}
           existingDeal={editingDeal ?? undefined}
           onCreated={(deal) => {
             if (editingDeal) {
