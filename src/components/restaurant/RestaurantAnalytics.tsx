@@ -24,16 +24,14 @@ interface Props {
   loading?: boolean;
 }
 
-function StatBarRow({
+function RedemptionBarRow({
   label,
   count,
   max,
-  color,
 }: {
   label: string;
   count: number;
   max: number | null;
-  color: string;
 }) {
   const denom = max && max > 0 ? max : Math.max(count, 1);
   const pct = Math.min(100, Math.round((count / denom) * 100));
@@ -41,13 +39,13 @@ function StatBarRow({
 
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className="text-[11px] font-bold flex-shrink-0 w-[72px]" style={{ color }}>
+      <span className="text-[11px] font-bold flex-shrink-0 w-[80px]" style={{ color: GREEN }}>
         {label}
       </span>
       <div className="flex-1 h-1.5 rounded-full overflow-hidden min-w-0" style={{ background: '#222' }}>
         <div
           className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: color, minWidth: count > 0 ? 4 : 0 }}
+          style={{ width: `${pct}%`, background: GREEN, minWidth: count > 0 ? 4 : 0 }}
         />
       </div>
       <span className="text-[11px] font-bold flex-shrink-0 tabular-nums" style={{ color: '#888' }}>
@@ -152,14 +150,13 @@ export default function RestaurantAnalytics({
 
       <div className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-[14px] text-white">Top deals</h3>
+          <h3 className="font-bold text-[14px] text-white">Top deals by redemptions</h3>
           <div className="flex items-center gap-3 text-[11px] text-[#888]">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: ORANGE }} /> Claimed</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: GREEN }} /> Redeemed</span>
           </div>
         </div>
         {topDeals.length === 0 ? (
-          <p className="text-[13px] text-[#666]">No claim data yet.</p>
+          <p className="text-[13px] text-[#666]">No redemptions yet.</p>
         ) : (
           <div className="space-y-4">
             {topDeals.map((deal, i) => (
@@ -173,19 +170,12 @@ export default function RestaurantAnalytics({
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 mt-0.5" style={{ background: '#1A1A1A' }}>
                   {deal.emoji}
                 </div>
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <p className="text-[13px] font-semibold text-white truncate">{formatDealTitle(deal.title)}</p>
-                  <StatBarRow
-                    label={`${deal.claims} claim${deal.claims !== 1 ? 's' : ''}`}
-                    count={deal.claims}
-                    max={deal.maxClaims}
-                    color={ORANGE}
-                  />
-                  <StatBarRow
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-white truncate mb-1.5">{formatDealTitle(deal.title)}</p>
+                  <RedemptionBarRow
                     label={`${deal.redeemed} redeemed`}
                     count={deal.redeemed}
                     max={deal.maxClaims}
-                    color={GREEN}
                   />
                 </div>
               </div>
