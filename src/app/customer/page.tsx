@@ -36,7 +36,7 @@ import {
   type SortBy,
 } from '@/lib/discoverFilters';
 import { createClient } from '@/lib/supabase/client';
-import { startGoogleOAuth } from '@/lib/portalAuth';
+import { startGoogleOAuth, signOutFromPortal } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { useDeals } from '@/hooks/useDeals';
 import { useCustomerLocation } from '@/hooks/useCustomerLocation';
@@ -240,7 +240,7 @@ function ProfileDrawer({ user, onClose, onSignOut }: { user: User; onClose: () =
 
         {/* Sign out */}
         <div className="px-3 py-4 border-t border-[var(--bd)]">
-          <button onClick={onSignOut} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-brands text-[14px] font-semibold text-t2 hover:text-red-600 hover:bg-red-50 transition-colors">
+          <button type="button" onClick={onSignOut} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-brands text-[14px] font-semibold text-t2 hover:text-red-600 hover:bg-red-50 transition-colors">
             <IconLogout size={16} /> Sign out
           </button>
         </div>
@@ -1341,7 +1341,7 @@ export default function CustomerPage() {
         <ProfileDrawer
           user={user}
           onClose={() => setShowDrawer(false)}
-          onSignOut={async () => { setShowDrawer(false); await supabase.auth.signOut(); }}
+          onSignOut={async () => { setShowDrawer(false); await signOutFromPortal(supabase, 'customer'); }}
         />
       )}
 

@@ -11,6 +11,7 @@ import {
   IconX, IconLogout, IconCheck, IconAlertTriangle,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import { signOutFromPortal } from '@/lib/portalAuth';
 import StarRating from '@/components/StarRating';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -249,8 +250,7 @@ export default function ProfilePage() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/customer/login');
+    await signOutFromPortal(supabase, 'customer');
   };
 
   if (loading) {
@@ -626,8 +626,7 @@ export default function ProfilePage() {
                       onClick={async () => {
                         setDeletingAcct(true);
                         // Supabase doesn't allow self-deletion via anon key; sign out instead
-                        await supabase.auth.signOut();
-                        router.replace('/');
+                        await signOutFromPortal(supabase, 'customer');
                       }}
                     >
                       {deletingAcct ? 'Deleting…' : 'Delete account'}

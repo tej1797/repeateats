@@ -112,7 +112,7 @@ export function computeRestaurantAnalytics(
 
   const topDeals = Array.from(dealMap.values())
     .filter((d) => d.redeemed > 0)
-    .sort((a, b) => b.redeemed - a.redeemed || a.title.localeCompare(b.title))
+    .sort((a, b) => b.redeemed - a.redeemed || b.claims - a.claims || a.title.localeCompare(b.title))
     .slice(0, 5);
 
   return {

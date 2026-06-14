@@ -127,7 +127,8 @@ export default function PortalHeader({ portal, user, onSignOut, children }: Port
 
                   <div className="border-t border-[var(--bd)] mt-1 pt-1">
                     <button
-                      onClick={() => { setOpen(false); onSignOut?.(); }}
+                      type="button"
+                      onClick={() => { setOpen(false); void onSignOut?.(); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-[13px] text-red-500 hover:bg-red-50 transition-colors"
                     >
                       <IconLogout size={14} /> Sign out

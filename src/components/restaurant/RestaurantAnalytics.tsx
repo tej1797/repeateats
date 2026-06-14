@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   computeRestaurantAnalytics,
   type ClaimRow,
@@ -18,45 +18,76 @@ interface DealLimitRow {
 
 interface Props {
   restaurantName: string;
+  restaurantCoverUrl?: string | null;
   claims: ClaimRow[];
   activeDealCount: number;
   deals?: DealLimitRow[];
   loading?: boolean;
 }
 
-function RedemptionBarRow({
+function StatBarRow({
   label,
   count,
   max,
+  color,
 }: {
   label: string;
   count: number;
-  max: number | null;
+  max: number;
+  color: string;
 }) {
-  const denom = max && max > 0 ? max : Math.max(count, 1);
-  const pct = Math.min(100, Math.round((count / denom) * 100));
-  const endLabel = max && max > 0 ? `${count}/${max}` : `${count}`;
+  const pct = max > 0 ? Math.min(100, Math.round((count / max) * 100)) : 0;
 
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className="text-[11px] font-bold flex-shrink-0 w-[80px]" style={{ color: GREEN }}>
+      <span className="text-[11px] font-bold flex-shrink-0 w-[72px] truncate" style={{ color }}>
         {label}
       </span>
       <div className="flex-1 h-1.5 rounded-full overflow-hidden min-w-0" style={{ background: '#222' }}>
         <div
           className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: GREEN, minWidth: count > 0 ? 4 : 0 }}
+          style={{ width: `${pct}%`, background: color, minWidth: count > 0 ? 4 : 0 }}
         />
       </div>
-      <span className="text-[11px] font-bold flex-shrink-0 tabular-nums" style={{ color: '#888' }}>
-        {endLabel}
+      <span className="text-[11px] font-bold flex-shrink-0 tabular-nums w-6 text-right" style={{ color: '#888' }}>
+        {count}
       </span>
+    </div>
+  );
+}
+
+function DealThumb({
+  coverUrl,
+  emoji,
+  name,
+}: {
+  coverUrl?: string | null;
+  emoji: string;
+  name: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showImage = coverUrl && !failed;
+
+  return (
+    <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 mt-0.5 overflow-hidden" style={{ background: '#1A1A1A' }}>
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={coverUrl}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span>{emoji || '🍽️'}</span>
+      )}
     </div>
   );
 }
 
 export default function RestaurantAnalytics({
   restaurantName,
+  restaurantCoverUrl,
   claims,
   activeDealCount,
   deals = [],
@@ -152,6 +183,7 @@ export default function RestaurantAnalytics({
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-[14px] text-white">Top deals by redemptions</h3>
           <div className="flex items-center gap-3 text-[11px] text-[#888]">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: ORANGE }} /> Claimed</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: GREEN }} /> Redeemed</span>
           </div>
         </div>
@@ -159,27 +191,29 @@ export default function RestaurantAnalytics({
           <p className="text-[13px] text-[#666]">No redemptions yet.</p>
         ) : (
           <div className="space-y-4">
-            {topDeals.map((deal, i) => (
-              <div key={deal.id} className="flex items-start gap-3">
-                <span
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-1"
-                  style={{ background: '#222', color: '#888' }}
-                >
-                  {i + 1}
-                </span>
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 mt-0.5" style={{ background: '#1A1A1A' }}>
-                  {deal.emoji}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-white truncate mb-1.5">{formatDealTitle(deal.title)}</p>
-                  <RedemptionBarRow
-                    label={`${deal.redeemed} redeemed`}
-                    count={deal.redeemed}
-                    max={deal.maxClaims}
+            {topDeals.map((deal, i) => {
+              const barMax = Math.max(deal.claims, deal.redeemed, 1);
+              return (
+                <div key={deal.id} className="flex items-start gap-3">
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-1"
+                    style={{ background: '#222', color: '#888' }}
+                  >
+                    {i + 1}
+                  </span>
+                  <DealThumb
+                    coverUrl={restaurantCoverUrl}
+                    emoji={deal.emoji}
+                    name={restaurantName}
                   />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className="text-[13px] font-semibold text-white truncate">{formatDealTitle(deal.title)}</p>
+                    <StatBarRow label="Claimed" count={deal.claims} max={barMax} color={ORANGE} />
+                    <StatBarRow label="Redeemed" count={deal.redeemed} max={barMax} color={GREEN} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
