@@ -8,6 +8,8 @@ import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating, formatRedeemedAt } from '@/lib/utils';
+import { initialRestaurantImageSrc, nextRestaurantImageFallback } from '@/lib/restaurantImage';
+import RestaurantHutAvatar from '@/components/customer/RestaurantHutAvatar';
 import StarRating from '@/components/form/StarRating';
 
 // Unsplash fallback images per cuisine category
@@ -132,8 +134,15 @@ export default function DealDetailModal({
   const progressPct = deal.max_claims ? Math.min(100, (deal.current_claims / deal.max_claims) * 100) : 0;
 
   const cuisine   = (deal.restaurant?.category ?? deal.restaurant?.cuisine ?? 'default').toLowerCase();
-  const headerImg = CATEGORY_IMAGES[cuisine] ?? CATEGORY_IMAGES.default;
   const rating    = getRestaurantRating(deal.restaurant);
+
+  const [headerImg, setHeaderImg] = useState(() =>
+    initialRestaurantImageSrc(deal.restaurant, CATEGORY_IMAGES),
+  );
+
+  useEffect(() => {
+    setHeaderImg(initialRestaurantImageSrc(deal.restaurant, CATEGORY_IMAGES));
+  }, [deal.id, deal.restaurant?.cover_url, deal.restaurant?.name, deal.restaurant?.city, cuisine]);
 
   const dealTypeChips = deal.deal_types ?? [];
   const dayChips      = (deal.available_days ?? []).filter(d => d.toLowerCase() !== 'all');
@@ -191,7 +200,15 @@ export default function DealDetailModal({
         {/* ── Header image ── */}
         <div className="relative h-[190px] flex-shrink-0 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={headerImg} alt={deal.restaurant?.name ?? ''} className="w-full h-full object-cover" />
+          <img
+            src={headerImg}
+            alt={deal.restaurant?.name ?? ''}
+            className="w-full h-full object-cover"
+            onError={() => {
+              const next = nextRestaurantImageFallback(deal.restaurant, headerImg, CATEGORY_IMAGES);
+              if (next && next !== headerImg) setHeaderImg(next);
+            }}
+          />
           <div
             className="absolute inset-0"
             style={{ background: `linear-gradient(to top, ${CUSTOMER_UI.bg} 4%, transparent 55%)` }}
@@ -238,12 +255,7 @@ export default function DealDetailModal({
               className="flex items-center gap-3 w-full rounded-2xl px-3.5 py-3 text-left"
               style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
             >
-              <div
-                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 text-[20px]"
-                style={{ background: CUSTOMER_UI.accent }}
-              >
-                {deal.emoji ?? '🏪'}
-              </div>
+              <RestaurantHutAvatar size={44} />
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-[15px] truncate" style={{ color: CUSTOMER_UI.textPrimary }}>
                   {deal.restaurant.name}
