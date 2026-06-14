@@ -74,6 +74,12 @@ import { fetchRestaurantDashboardStats } from '@/lib/fetchRestaurantDashboardSta
 import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { formatDealTitle } from '@/lib/utils';
+import {
+  dealMatchesScheduleFilter,
+  formatDealScheduleDays,
+  type DealScheduleFilter,
+  WEEKDAY_LABELS,
+} from '@/lib/dealSchedule';
 import { coordsForCity, DEFAULT_SEARCH_RADIUS_KM } from '@/lib/location';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1874,6 +1880,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
   const [dealFilter,      setDealFilter]      = useState<DealFilter>('all');
+  const [scheduleFilter,  setScheduleFilter]  = useState<DealScheduleFilter>('all');
+  const [showDayPicker,   setShowDayPicker]   = useState(false);
 
   // Manager mode — driven by DB flag + localStorage lock
   const [managerMode,  setManagerMode]  = useState(false);
@@ -2269,9 +2277,15 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                 sold_out: deals.filter((d) => dealFilterBucket(d) === 'sold_out').length,
                 expired:  deals.filter((d) => dealFilterBucket(d) === 'expired').length,
               };
-              const filteredDeals = dealFilter === 'all'
-                ? deals
-                : deals.filter((d) => dealFilterBucket(d) === dealFilter);
+              const scheduleCounts = {
+                today:    deals.filter((d) => dealMatchesScheduleFilter(d, 'today')).length,
+                tomorrow: deals.filter((d) => dealMatchesScheduleFilter(d, 'tomorrow')).length,
+              };
+              const filteredDeals = deals.filter((d) => {
+                if (dealFilter !== 'all' && dealFilterBucket(d) !== dealFilter) return false;
+                if (scheduleFilter !== 'all' && !dealMatchesScheduleFilter(d, scheduleFilter)) return false;
+                return true;
+              });
 
               return (
                 <>
@@ -2298,11 +2312,81 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                         </button>
                       );
                     })}
+                    <span className="w-px h-6 bg-[#333] self-center flex-shrink-0 mx-0.5" />
+                    {([
+                      ['today',    `Today ${scheduleCounts.today}`],
+                      ['tomorrow', `Tomorrow ${scheduleCounts.tomorrow}`],
+                    ] as const).map(([id, label]) => {
+                      const active = scheduleFilter === id && !showDayPicker;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => {
+                            setScheduleFilter(id);
+                            setShowDayPicker(false);
+                          }}
+                          className="flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                          style={active
+                            ? { background: 'rgba(18,73,169,0.25)', color: BLUE }
+                            : { color: '#888' }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDayPicker((v) => !v);
+                        if (showDayPicker) setScheduleFilter('all');
+                      }}
+                      className="flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                      style={(showDayPicker || WEEKDAY_LABELS.includes(scheduleFilter as typeof WEEKDAY_LABELS[number]))
+                        ? { background: 'rgba(18,73,169,0.25)', color: BLUE }
+                        : { color: '#888' }}
+                    >
+                      Days
+                    </button>
                   </div>
+
+                  {(showDayPicker || WEEKDAY_LABELS.includes(scheduleFilter as typeof WEEKDAY_LABELS[number])) && (
+                    <div className="flex gap-1.5 overflow-x-auto scrollbar-none px-1 pb-1">
+                      {WEEKDAY_LABELS.map((day) => {
+                        const count = deals.filter((d) => dealMatchesScheduleFilter(d, day)).length;
+                        const active = scheduleFilter === day;
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              setScheduleFilter(day);
+                              setShowDayPicker(true);
+                            }}
+                            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                            style={active
+                              ? { background: 'rgba(18,73,169,0.2)', color: BLUE, border: `1px solid ${BLUE}` }
+                              : { color: '#888', border: '1px solid #333' }}
+                          >
+                            {day} {count}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => { setScheduleFilter('all'); setShowDayPicker(false); }}
+                        className="flex-shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#666] border border-[#333]"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
 
                   {filteredDeals.length === 0 ? (
                     <p className="text-[13px] text-t2 py-4">
-                      No {dealFilterEmptyLabel(dealFilter)} deals yet.
+                      No deals match
+                      {dealFilter !== 'all' ? ` (${dealFilterEmptyLabel(dealFilter)})` : ''}
+                      {scheduleFilter !== 'all' ? ` for ${scheduleFilter === 'today' ? 'today' : scheduleFilter === 'tomorrow' ? 'tomorrow' : scheduleFilter}` : ''}.
                     </p>
                   ) : (
                     <div className="space-y-2.5">
@@ -2329,6 +2413,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                                 <p className="text-[12px] mt-0.5">
                                   <span style={{ color: status.color, fontWeight: 600 }}>{status.label}</span>
                                   <span className="text-t2"> · ends {formatDealDateShort(deal.valid_until)}</span>
+                                  <span className="text-t2"> · {formatDealScheduleDays(deal)}</span>
                                 </p>
                                 <div className="mt-2 flex items-center gap-2">
                                   <div className="flex-1 h-1.5 bg-surface2 rounded-full overflow-hidden">
