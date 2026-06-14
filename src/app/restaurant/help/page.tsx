@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  IconArrowLeft, IconTicket, IconDeviceLaptop, IconCreditCard,
+  IconArrowLeft, IconDeviceLaptop, IconCreditCard,
   IconHelp, IconSend, IconChevronRight, IconCircleCheck,
   IconClock, IconAlertCircle, IconX, IconUser, IconBuildingStore,
   IconChevronDown, IconBrandWhatsapp, IconMessage, IconFileAlert,
@@ -153,7 +153,7 @@ function TicketDetailModal({ ticket, onClose }: { ticket: SupportTicket; onClose
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {messages.length === 0 && (
-            <p className="text-center text-[13px] text-gray-400 py-4">No replies yet. We'll respond within 24 hours.</p>
+            <p className="text-center text-[13px] text-gray-400 py-4">No replies yet. We&apos;ll respond within 24 hours.</p>
           )}
           {messages.map(m => (
             <div key={m.id} className={`flex ${m.is_admin ? 'justify-start' : 'justify-end'}`}>
@@ -270,7 +270,7 @@ function NewTicketModal({
               <IconCircleCheck size={32} style={{ color: BRAND }} />
             </div>
             <p className="font-bold text-[18px] text-gray-900">Ticket submitted!</p>
-            <p className="text-[14px] text-gray-500">We'll get back to you within 24 hours at <strong>{email}</strong>.</p>
+            <p className="text-[14px] text-gray-500">We&apos;ll get back to you within 24 hours at <strong>{email}</strong>.</p>
           </div>
         ) : (
           <div className="p-4 space-y-4">
@@ -441,7 +441,7 @@ export default function RestaurantHelpPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="font-bold text-[20px] leading-tight">Restaurant<br/>Support Centre</p>
-              <p className="text-[13px] mt-1.5 opacity-90">We're here to help you succeed.</p>
+              <p className="text-[13px] mt-1.5 opacity-90">We&apos;re here to help you succeed.</p>
             </div>
             <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
               <IconMessage size={24} color="#fff" />

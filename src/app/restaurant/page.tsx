@@ -3200,7 +3200,7 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
       {/* ── Help & Support ─────────────────────────────────────── */}
       <div className="bg-surface rounded-brand shadow-brand p-5">
         <h3 className="font-semibold text-base mb-3">Help & Support</h3>
-        <p className="text-[13px] text-t2 mb-3">Got a question or issue? Raise a ticket and we'll get back to you within 24 hours.</p>
+        <p className="text-[13px] text-t2 mb-3">Got a question or issue? Raise a ticket and we&apos;ll get back to you within 24 hours.</p>
         <a href="/restaurant/help"
           className="inline-flex items-center gap-2 h-9 px-4 rounded-brands text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
           style={{ background: '#1249A9' }}>
