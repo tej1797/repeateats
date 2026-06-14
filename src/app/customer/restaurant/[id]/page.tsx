@@ -223,6 +223,7 @@ export default function RestaurantDetailPage() {
         google_rating:   restaurant.google_rating,
         review_count:    restaurant.review_count,
         google_review_count: restaurant.google_review_count,
+        cover_url:       restaurant.cover_url,
       },
     }));
   }, [restaurant]);
