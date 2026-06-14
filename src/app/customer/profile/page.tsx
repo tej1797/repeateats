@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import {
   IconCrown, IconCamera, IconStar, IconHeart, IconChevronRight,
   IconUser, IconDeviceMobile, IconMapPin, IconMail,
-  IconArrowsLeftRight, IconLogout, IconCheck, IconSparkles,
+  IconArrowsLeftRight, IconLogout, IconCheck, IconSparkles, IconHelp,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import { signOutFromPortal } from '@/lib/portalAuth';
@@ -312,6 +312,11 @@ export default function CustomerProfilePage() {
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide mb-2 px-1" style={{ color: CUSTOMER_UI.textMuted }}>Other</p>
           <div className="rounded-2xl" style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+            <Link href="/customer/help" className="flex items-center gap-3 px-4 py-3.5 border-b" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
+              <IconHelp size={18} style={{ color: CUSTOMER_UI.textSecondary }} />
+              <span className="flex-1 text-[14px] font-semibold">Help & Support</span>
+              <IconChevronRight size={16} style={{ color: CUSTOMER_UI.textMuted }} />
+            </Link>
             <Link href="/" className="flex items-center gap-3 px-4 py-3.5 border-b" style={{ borderColor: CUSTOMER_UI.glassBorder }}>
               <IconArrowsLeftRight size={18} style={{ color: CUSTOMER_UI.textSecondary }} />
               <span className="flex-1 text-[14px] font-semibold">Switch portal</span>

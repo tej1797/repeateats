@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   IconTag, IconTicket, IconUser,
   IconLayoutDashboard, IconStar, IconChartBar, IconSettings,
-  IconUsers, IconMessage, IconCoin,
+  IconUsers, IconMessage, IconCoin, IconHelp,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
@@ -23,12 +23,14 @@ const NAV_ITEMS: Record<Portal, NavItem[]> = {
     { href: '/customer/claims',    icon: <IconTicket size={22} />, label: 'Claims' },
     { href: '/customer/points',    icon: <IconStar size={22} />,   label: 'Rewards' },
     { href: '/customer/profile',   icon: <IconUser size={22} />,   label: 'Profile' },
+    { href: '/customer/help',      icon: <IconHelp size={22} />,   label: 'Help' },
   ],
   restaurant: [
-    { href: '/restaurant',        icon: <IconLayoutDashboard size={22} />, label: 'Dashboard' },
-    { href: '/restaurant?tab=deals', icon: <IconTag size={22} />,          label: 'Deals' },
-    { href: '/restaurant?tab=analytics', icon: <IconChartBar size={22} />, label: 'Analytics' },
-    { href: '/restaurant?tab=settings',  icon: <IconSettings size={22} />, label: 'Settings' },
+    { href: '/restaurant',               icon: <IconLayoutDashboard size={22} />, label: 'Dashboard' },
+    { href: '/restaurant?tab=deals',     icon: <IconTag size={22} />,             label: 'Deals' },
+    { href: '/restaurant?tab=analytics', icon: <IconChartBar size={22} />,        label: 'Analytics' },
+    { href: '/restaurant?tab=settings',  icon: <IconSettings size={22} />,        label: 'Settings' },
+    { href: '/restaurant/help',          icon: <IconHelp size={22} />,            label: 'Help' },
   ],
   influencer: [
     { href: '/influencer',        icon: <IconUsers size={22} />,           label: 'Collabs' },
