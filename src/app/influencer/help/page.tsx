@@ -6,16 +6,18 @@ import Link from 'next/link';
 import {
   IconArrowLeft, IconDeviceLaptop, IconCreditCard,
   IconHelp, IconSend, IconChevronRight, IconCircleCheck,
-  IconClock, IconAlertCircle, IconX, IconUser, IconBuildingStore,
-  IconChevronDown, IconBrandWhatsapp, IconMessage, IconFileAlert,
+  IconClock, IconAlertCircle, IconX, IconUser,
+  IconChevronDown, IconBrandWhatsapp, IconMessage,
+  IconBrandInstagram, IconAt, IconHeartHandshake,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import MobileNav from '@/components/layout/MobileNav';
 
-// ── Dark theme tokens ─────────────────────────────────────────────────────────
-const BRAND      = '#1249A9';
-const BRAND_SOFT = 'rgba(18,73,169,0.18)';
+// ── Dark theme tokens (purple/influencer) ─────────────────────────────────────
+const BRAND      = '#7E22CE';
+const BRAND_MID  = '#A855F7';
+const BRAND_SOFT = 'rgba(126,34,206,0.18)';
 const BG         = '#0D0D0D';
 const BG_CARD    = '#1A1A1A';
 const BG_INPUT   = '#222222';
@@ -24,7 +26,7 @@ const TEXT       = '#F5F5F5';
 const TEXT_MUTED = '#888888';
 
 const WHATSAPP_NUMBER = '14161234567';
-const WHATSAPP_MSG    = encodeURIComponent('Hi RepEAT Support! I need help with my restaurant account.');
+const WHATSAPP_MSG    = encodeURIComponent('Hi RepEAT Support! I need help with my creator account.');
 
 interface SupportTicket {
   id: string; category: string; subject: string; description: string;
@@ -34,20 +36,24 @@ interface SupportTicket {
 interface SupportMessage {
   id: string; content: string; is_admin: boolean; created_at: string;
 }
-interface RestaurantInfo { id: string; name: string; }
+interface CreatorInfo {
+  display_name: string | null;
+  instagram_handle: string | null;
+  tiktok_handle: string | null;
+}
 
 const CATEGORIES = [
-  { id: 'claim',     icon: IconFileAlert,    label: 'Claim Dispute',   desc: "Customer claimed a deal they didn’t redeem or misused it" },
-  { id: 'technical', icon: IconDeviceLaptop, label: 'Technical Issue', desc: 'Portal bugs, dashboard errors, or login problems' },
-  { id: 'payment',   icon: IconCreditCard,   label: 'Payment',         desc: 'Subscription, billing, or payment questions' },
-  { id: 'general',   icon: IconHelp,         label: 'General Enquiry', desc: 'Deal setup, account settings, or other questions' },
+  { id: 'claim',     icon: IconHeartHandshake, label: 'Collab Dispute',  desc: 'Issues with a brand partnership, payment, or deliverables' },
+  { id: 'payment',   icon: IconCreditCard,     label: 'Payment',         desc: 'Creator earnings, e-transfer, or payout questions' },
+  { id: 'technical', icon: IconDeviceLaptop,   label: 'Technical Issue', desc: 'Portal bugs, profile errors, or login problems' },
+  { id: 'general',   icon: IconHelp,           label: 'General Enquiry', desc: 'Account settings, profile, or anything else' },
 ] as const;
 
 type CategoryId = typeof CATEGORIES[number]['id'];
 
 const STATUS_CONFIG = {
   open:        { label: 'Open',        color: '#F59E0B', bg: 'rgba(245,158,11,0.15)'  },
-  in_progress: { label: 'In Progress', color: '#60A5FA', bg: 'rgba(96,165,250,0.15)'  },
+  in_progress: { label: 'In Progress', color: BRAND_MID, bg: 'rgba(168,85,247,0.15)' },
   resolved:    { label: 'Resolved',    color: '#4ADE80', bg: 'rgba(74,222,128,0.15)'  },
 };
 
@@ -142,7 +148,7 @@ function TicketDetailModal({ ticket, onClose }: { ticket: SupportTicket; onClose
                 style={m.is_admin
                   ? { background: BG_INPUT, color: TEXT, borderRadius: '16px 16px 16px 4px' }
                   : { background: BRAND, color: '#fff', borderRadius: '16px 16px 4px 16px' }}>
-                {m.is_admin && <p className="text-[10px] font-bold mb-1" style={{ color: '#60A5FA' }}>RepEAT Support</p>}
+                {m.is_admin && <p className="text-[10px] font-bold mb-1" style={{ color: BRAND_MID }}>RepEAT Support</p>}
                 {m.content}
               </div>
             </div>
@@ -156,7 +162,7 @@ function TicketDetailModal({ ticket, onClose }: { ticket: SupportTicket; onClose
               placeholder="Add a message…"
               className="flex-1 px-3 py-2 rounded-xl text-[13px] outline-none"
               style={{ background: BG_INPUT, border: `1px solid ${BORDER}`, color: TEXT }}
-              onFocus={e => { e.target.style.borderColor = BRAND; }}
+              onFocus={e => { e.target.style.borderColor = BRAND_MID; }}
               onBlur={e => { e.target.style.borderColor = BORDER; }}
             />
             <button onClick={send} disabled={!newMsg.trim() || sending}
@@ -178,8 +184,8 @@ function TicketDetailModal({ ticket, onClose }: { ticket: SupportTicket; onClose
 }
 
 function NewTicketModal({
-  category, user, restaurant, onClose, onCreated,
-}: { category: CategoryId; user: User; restaurant: RestaurantInfo | null; onClose: () => void; onCreated: (t: SupportTicket) => void }) {
+  category, user, creator, onClose, onCreated,
+}: { category: CategoryId; user: User; creator: CreatorInfo | null; onClose: () => void; onCreated: (t: SupportTicket) => void }) {
   const cat = CATEGORIES.find(c => c.id === category)!;
   const [subject,    setSubject]    = useState('');
   const [desc,       setDesc]       = useState('');
@@ -191,12 +197,16 @@ function NewTicketModal({
 
   const inputStyle = { background: BG_INPUT, border: `1px solid ${BORDER}`, color: TEXT };
 
+  const creatorLabel = creator?.instagram_handle
+    ? `@${creator.instagram_handle}`
+    : creator?.display_name ?? user.email ?? '';
+
   const submit = async () => {
     if (!subject.trim() || !desc.trim() || !email.trim()) { setError('Please fill in all fields.'); return; }
     setSubmitting(true); setError('');
     const res = await fetch('/api/support/tickets', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ portal: 'restaurant', restaurant_id: restaurant?.id ?? null, category, subject: subject.trim(), description: desc.trim(), contact_email: email.trim(), priority }),
+      body: JSON.stringify({ portal: 'restaurant', category, subject: subject.trim(), description: desc.trim(), contact_email: email.trim(), priority }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error ?? 'Something went wrong.'); setSubmitting(false); return; }
@@ -211,7 +221,7 @@ function NewTicketModal({
         <div className="flex items-center justify-between p-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: BRAND_SOFT }}>
-              <cat.icon size={18} style={{ color: '#60A5FA' }} />
+              <cat.icon size={18} style={{ color: BRAND_MID }} />
             </div>
             <div>
               <p className="font-bold text-[15px]" style={{ color: TEXT }}>{cat.label}</p>
@@ -226,7 +236,7 @@ function NewTicketModal({
         {submitted ? (
           <div className="p-10 flex flex-col items-center text-center gap-4">
             <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: BRAND_SOFT }}>
-              <IconCircleCheck size={32} style={{ color: '#60A5FA' }} />
+              <IconCircleCheck size={32} style={{ color: BRAND_MID }} />
             </div>
             <p className="font-bold text-[18px]" style={{ color: TEXT }}>Ticket submitted!</p>
             <p className="text-[14px]" style={{ color: TEXT_MUTED }}>
@@ -236,18 +246,21 @@ function NewTicketModal({
         ) : (
           <div className="p-4 space-y-4">
             <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl" style={{ background: BRAND_SOFT }}>
-              <IconClock size={14} style={{ color: '#60A5FA' }} className="flex-shrink-0 mt-0.5" />
-              <p className="text-[12px] leading-relaxed" style={{ color: '#60A5FA' }}>
+              <IconClock size={14} style={{ color: BRAND_MID }} className="flex-shrink-0 mt-0.5" />
+              <p className="text-[12px] leading-relaxed" style={{ color: BRAND_MID }}>
                 We typically respond within <strong>24 hours</strong>. For urgent issues, use WhatsApp.
               </p>
             </div>
 
-            {restaurant && (
+            {/* Creator identity auto-fill */}
+            {creatorLabel && (
               <div>
-                <label className="block text-[12px] font-semibold mb-1.5" style={{ color: TEXT_MUTED }}>Restaurant</label>
+                <label className="block text-[12px] font-semibold mb-1.5" style={{ color: TEXT_MUTED }}>Creator account</label>
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={inputStyle}>
-                  <IconBuildingStore size={14} style={{ color: TEXT_MUTED }} className="flex-shrink-0" />
-                  <span className="text-[13px]" style={{ color: TEXT_MUTED }}>{restaurant.name}</span>
+                  {creator?.instagram_handle
+                    ? <IconBrandInstagram size={14} style={{ color: TEXT_MUTED }} className="flex-shrink-0" />
+                    : <IconAt size={14} style={{ color: TEXT_MUTED }} className="flex-shrink-0" />}
+                  <span className="text-[13px]" style={{ color: TEXT_MUTED }}>{creatorLabel}</span>
                 </div>
               </div>
             )}
@@ -268,7 +281,7 @@ function NewTicketModal({
                 placeholder="Brief summary of your issue"
                 className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none"
                 style={inputStyle}
-                onFocus={e => { e.target.style.borderColor = BRAND; }}
+                onFocus={e => { e.target.style.borderColor = BRAND_MID; }}
                 onBlur={e => { e.target.style.borderColor = BORDER; }}
               />
             </div>
@@ -279,7 +292,7 @@ function NewTicketModal({
                 rows={4} placeholder="Describe your issue in as much detail as possible…"
                 className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none resize-none"
                 style={inputStyle}
-                onFocus={e => { e.target.style.borderColor = BRAND; }}
+                onFocus={e => { e.target.style.borderColor = BRAND_MID; }}
                 onBlur={e => { e.target.style.borderColor = BORDER; }}
               />
             </div>
@@ -293,7 +306,7 @@ function NewTicketModal({
                     style={priority === p
                       ? p === 'urgent'
                         ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#F87171' }
-                        : { background: BRAND_SOFT, border: `1px solid ${BRAND}`, color: '#60A5FA' }
+                        : { background: BRAND_SOFT, border: `1px solid ${BRAND_MID}`, color: BRAND_MID }
                       : { background: BG_INPUT, border: `1px solid ${BORDER}`, color: TEXT_MUTED }}>
                     {p === 'urgent' ? '🚨 Urgent' : '🟢 Normal'}
                   </button>
@@ -321,10 +334,10 @@ function NewTicketModal({
   );
 }
 
-export default function RestaurantHelpPage() {
+export default function InfluencerHelpPage() {
   const router = useRouter();
   const [user,           setUser]           = useState<User | null>(null);
-  const [restaurant,     setRestaurant]     = useState<RestaurantInfo | null>(null);
+  const [creator,        setCreator]        = useState<CreatorInfo | null>(null);
   const [tickets,        setTickets]        = useState<SupportTicket[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
@@ -334,10 +347,14 @@ export default function RestaurantHelpPage() {
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user) { router.replace('/restaurant'); return; }
+      if (!session?.user) { router.replace('/influencer'); return; }
       setUser(session.user);
-      const { data: rest } = await supabase.from('restaurants').select('id, name').eq('owner_id', session.user.id).maybeSingle();
-      if (rest) setRestaurant(rest);
+      const { data: inf } = await supabase
+        .from('influencers')
+        .select('display_name, instagram_handle, tiktok_handle')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      if (inf) setCreator(inf);
       fetch('/api/support/tickets?portal=restaurant').then(r => r.json()).then(d => { setTickets(d.tickets ?? []); setLoading(false); });
     });
   }, [router]);
@@ -346,22 +363,25 @@ export default function RestaurantHelpPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: BG }}>
-      <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: BRAND, borderTopColor: 'transparent' }} />
+      <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: BRAND_MID, borderTopColor: 'transparent' }} />
     </div>
   );
 
   const pendingCount = tickets.filter(t => t.status !== 'resolved').length;
+  const creatorName  = creator?.instagram_handle
+    ? `@${creator.instagram_handle}`
+    : creator?.display_name ?? null;
 
   return (
     <div className="min-h-screen pb-28" style={{ background: BG }}>
       <header className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
         style={{ background: '#111', borderBottom: `1px solid ${BORDER}`, backdropFilter: 'blur(12px)' }}>
-        <Link href="/restaurant" className="w-8 h-8 flex items-center justify-center rounded-full" style={{ background: BG_INPUT }}>
+        <Link href="/influencer" className="w-8 h-8 flex items-center justify-center rounded-full" style={{ background: BG_INPUT }}>
           <IconArrowLeft size={18} style={{ color: TEXT_MUTED }} />
         </Link>
         <div className="flex-1">
           <h1 className="font-bold text-[17px]" style={{ color: TEXT }}>Help &amp; Support</h1>
-          {restaurant && <p className="text-[12px]" style={{ color: TEXT_MUTED }}>{restaurant.name}</p>}
+          {creatorName && <p className="text-[12px]" style={{ color: TEXT_MUTED }}>{creatorName}</p>}
         </div>
         {pendingCount > 0 && (
           <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white"
@@ -371,21 +391,23 @@ export default function RestaurantHelpPage() {
 
       <div className="max-w-lg mx-auto px-4 pt-6 space-y-5">
         {/* Hero */}
-        <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #1249A9 0%, #2C68C8 100%)' }}>
+        <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #7E22CE 0%, #A855F7 100%)' }}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="font-bold text-[20px] text-white leading-tight">Restaurant<br/>Support Centre</p>
-              <p className="text-[13px] mt-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>We&apos;re here to help you succeed.</p>
+              <p className="font-bold text-[20px] text-white leading-tight">Creator<br/>Support Centre</p>
+              <p className="text-[13px] mt-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>We&apos;ve got your back.</p>
             </div>
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)' }}>
               <IconMessage size={24} color="#fff" />
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {restaurant && (
+            {creatorName && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <IconBuildingStore size={13} color="#fff" />
-                <span className="text-[12px] text-white font-semibold">{restaurant.name}</span>
+                {creator?.instagram_handle
+                  ? <IconBrandInstagram size={13} color="#fff" />
+                  : <IconAt size={13} color="#fff" />}
+                <span className="text-[12px] text-white font-semibold">{creatorName}</span>
               </div>
             )}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.15)' }}>
@@ -403,14 +425,14 @@ export default function RestaurantHelpPage() {
               <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
                 className="rounded-2xl p-4 text-left transition-all active:scale-95"
                 style={{ background: BG_CARD, border: `1px solid ${BORDER}` }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = BRAND; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = BRAND_MID; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; }}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: BRAND_SOFT }}>
-                  <cat.icon size={20} style={{ color: '#60A5FA' }} />
+                  <cat.icon size={20} style={{ color: BRAND_MID }} />
                 </div>
                 <p className="font-bold text-[14px]" style={{ color: TEXT }}>{cat.label}</p>
                 <p className="text-[11px] mt-0.5 leading-snug" style={{ color: TEXT_MUTED }}>{cat.desc}</p>
-                <div className="mt-3 flex items-center gap-1" style={{ color: '#60A5FA' }}>
+                <div className="mt-3 flex items-center gap-1" style={{ color: BRAND_MID }}>
                   <span className="text-[12px] font-semibold">Get help</span>
                   <IconChevronRight size={13} />
                 </div>
@@ -476,12 +498,12 @@ export default function RestaurantHelpPage() {
       <WhatsAppFloat />
 
       {activeCategory && user && (
-        <NewTicketModal category={activeCategory} user={user} restaurant={restaurant}
+        <NewTicketModal category={activeCategory} user={user} creator={creator}
           onClose={() => setActiveCategory(null)} onCreated={handleCreated} />
       )}
       {openTicket && <TicketDetailModal ticket={openTicket} onClose={() => setOpenTicket(null)} />}
 
-      <MobileNav portal="restaurant" />
+      <MobileNav portal="influencer" />
     </div>
   );
 }

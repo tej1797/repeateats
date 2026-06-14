@@ -555,7 +555,8 @@ export default function CreatorProfilePage() {
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-100 p-4 space-y-2 text-[13px] text-gray-400">
-                  <p className="font-semibold text-gray-600">About & Support</p>
+                  <p className="font-semibold text-gray-600">About &amp; Support</p>
+                  <Link href="/influencer/help" className="block hover:text-[#7E22CE] transition-colors">Help &amp; Support</Link>
                   <a href="mailto:support@repeateats.ca" className="block hover:text-[#7E22CE] transition-colors">Contact support</a>
                   <a href="/privacy" className="block hover:text-[#7E22CE] transition-colors">Privacy policy</a>
                   <a href="/terms" className="block hover:text-[#7E22CE] transition-colors">Terms of service</a>

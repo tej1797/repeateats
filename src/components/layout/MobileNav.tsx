@@ -37,6 +37,7 @@ const NAV_ITEMS: Record<Portal, NavItem[]> = {
     { href: '/influencer',        icon: <IconMessage size={22} />,         label: 'Chat' },
     { href: '/influencer/profile',icon: <IconCoin size={22} />,            label: 'Earnings' },
     { href: '/influencer/profile',icon: <IconStar size={22} />,            label: 'Profile' },
+    { href: '/influencer/help',   icon: <IconHelp size={22} />,            label: 'Help' },
   ],
 };
 
