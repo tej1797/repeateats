@@ -71,7 +71,7 @@ import {
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
 import { fetchRestaurantDashboardStats } from '@/lib/fetchRestaurantDashboardStats';
-import { setPortalIntent, startGoogleOAuth } from '@/lib/portalAuth';
+import { setPortalIntent, startGoogleOAuth, signOutFromPortal } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import { formatDealTitle } from '@/lib/utils';
 import {
@@ -500,9 +500,7 @@ export default function RestaurantPage() {
   }, [user, wizard, supabase]);
 
   const handleSignOut = useCallback(async () => {
-    // Clear any per-restaurant localStorage state so the next user starts clean
-    localStorage.removeItem('repeateats.manager_locked');
-    await supabase.auth.signOut();
+    await signOutFromPortal(supabase, 'restaurant');
   }, [supabase]);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -2110,7 +2108,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               </span>
             </div>
           ) : (
-            <button onClick={onSignOut} className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors">
+            <button type="button" onClick={() => void onSignOut()} className="inline-flex items-center gap-1.5 text-[13px] text-t2 hover:text-tx transition-colors">
               <IconLogout size={16} /> Sign out
             </button>
           )}
@@ -2507,6 +2505,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         {tab === 'analytics' && (!managerMode || managerPerms.analytics) && (
           <RestaurantAnalytics
             restaurantName={restaurant.name}
+            restaurantCoverUrl={restaurant.cover_url}
             claims={claimRows}
             activeDealCount={activeDealCount}
             deals={deals.map((d) => ({ id: d.id, max_claims: d.max_claims }))}
@@ -3192,7 +3191,7 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
             <span className="font-medium text-tx">{new Date(user.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short' })}</span>
           </div>
         </div>
-        <button onClick={onSignOut} className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors pt-2">
+        <button type="button" onClick={() => void onSignOut()} className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors pt-2">
           <IconLogout size={15} /> Sign out of RepEAT
         </button>
       </div>

@@ -77,6 +77,21 @@ export function oauthCallbackUrl(): string {
 
 type SupabaseBrowserClient = ReturnType<typeof import('@/lib/supabase/client').createClient>;
 
+/** Sign out and hard-navigate to the portal entry (reliable across all portals). */
+export async function signOutFromPortal(
+  supabase: SupabaseBrowserClient,
+  portal: Portal,
+): Promise<void> {
+  clearPortalIntent();
+  localStorage.removeItem('repeateats.manager_locked');
+  try {
+    await supabase.auth.signOut({ scope: 'global' });
+  } catch {
+    // Still navigate — user intent is to leave the session
+  }
+  window.location.assign(portalPath(portal));
+}
+
 /** Start Google OAuth and return to the correct portal after sign-in. */
 export async function startGoogleOAuth(
   supabase: SupabaseBrowserClient,

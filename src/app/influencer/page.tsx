@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { startGoogleOAuth } from '@/lib/portalAuth';
+import { startGoogleOAuth, signOutFromPortal } from '@/lib/portalAuth';
 import { handleOAuthReturn } from '@/lib/oauthCallback';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Influencer, CollabWithDetails } from '@/types';
@@ -141,9 +141,7 @@ export default function InfluencerPage() {
   }
 
   const handleSignOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setActiveCollab(null);
-    setChatOpen(false);
+    await signOutFromPortal(supabase, 'influencer');
   }, [supabase]);
 
   // Close chat panel (keeps modal open)
@@ -189,7 +187,8 @@ export default function InfluencerPage() {
               My profile
             </a>
             <button
-              onClick={handleSignOut}
+              type="button"
+              onClick={() => void handleSignOut()}
               className="text-[13px] text-t2 hover:text-tx transition-colors"
             >
               Sign out

@@ -11,6 +11,7 @@ import {
   IconArrowLeft, IconEdit, IconX, IconLoader2,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import { signOutFromPortal } from '@/lib/portalAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface CreatorProfile {
@@ -331,8 +332,11 @@ export default function CreatorProfilePage() {
             Rep<span style={{ color: '#E85D04' }}>EAT</span>
             <span className="text-[12px] font-semibold text-gray-400 ml-1.5">Creator</span>
           </div>
-          <button onClick={() => supabase.auth.signOut().then(() => router.replace('/influencer'))}
-            className="text-[13px] text-gray-400 hover:text-gray-700 transition-colors">
+          <button
+            type="button"
+            onClick={() => void signOutFromPortal(supabase, 'influencer')}
+            className="text-[13px] text-gray-400 hover:text-gray-700 transition-colors"
+          >
             Sign out
           </button>
         </div>

@@ -12,6 +12,7 @@ import {
   IconArrowsLeftRight, IconLogout, IconCheck, IconSparkles,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import { signOutFromPortal } from '@/lib/portalAuth';
 import CustomerPortalHeader from '@/components/customer/CustomerPortalHeader';
 import LocationModal from '@/components/customer/LocationModal';
 import { usePlan } from '@/hooks/usePlan';
@@ -144,8 +145,7 @@ export default function CustomerProfilePage() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/customer/login');
+    await signOutFromPortal(supabase, 'customer');
   };
 
   if (loading) {
