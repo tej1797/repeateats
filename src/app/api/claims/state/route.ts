@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const { data: claim, error } = await supabase
     .from('claims')
-    .select('reveals_used, last_revealed_at, qr_code, qr_token_current, status, expires_at')
+    .select('reveals_used, last_revealed_at, qr_code, qr_token_current, status, expires_at, redeemed_at')
     .eq('id', claimId)
     .eq('user_id', user.id)
     .single();
@@ -36,5 +36,6 @@ export async function GET(req: NextRequest) {
     qr_token_current:  claim.qr_token_current ?? claim.qr_code,
     status:            claim.status,
     expires_at:        claim.expires_at,
+    redeemed_at:       claim.redeemed_at,
   });
 }

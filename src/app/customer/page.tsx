@@ -52,7 +52,7 @@ import type { User } from '@supabase/supabase-js';
 type DayKey = 'today' | 'tomorrow' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type Tab    = DayKey | 'all';
 interface DayTabDef { key: DayKey; label: string; offset: number; earlyAccess?: boolean; locked?: boolean; claimable?: boolean }
-interface ClaimInfo { id: string; qr_code: string; status: string; expires_at: string | null }
+interface ClaimInfo { id: string; qr_code: string; status: string; expires_at: string | null; redeemed_at?: string | null }
 
 // ─── Day-tab utilities ────────────────────────────────────────────────────
 // DOW index matches JS Date.getDay() — 0 = Sunday
@@ -456,19 +456,51 @@ export default function CustomerPage() {
     if (!authChecked || !user) return;
     fetch('/api/claims')
       .then(r => r.json())
-      .then(({ data }: { data?: Array<{ id: string; deal_id: string; qr_code: string; status: string; expires_at: string | null; claimed_at: string }> }) => {
+      .then(({ data }: { data?: Array<{ id: string; deal_id: string; qr_code: string; status: string; expires_at: string | null; redeemed_at: string | null; claimed_at: string }> }) => {
         if (!data) return;
         const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
           if (!c.deal_id) continue;
           if (c.status === 'claimed' || c.status === 'redeemed') {
-            map[c.deal_id] = { id: c.id, qr_code: c.qr_code, status: c.status, expires_at: c.expires_at };
+            map[c.deal_id] = { id: c.id, qr_code: c.qr_code, status: c.status, expires_at: c.expires_at, redeemed_at: c.redeemed_at };
           }
         }
         setUserClaimMap(map);
       })
       .catch(() => {});
   }, [authChecked, user]);
+
+  // Realtime — update claim status when restaurant redeems (stops timer, refreshes badges)
+  useEffect(() => {
+    if (!authChecked || !user) return;
+    const channel = supabase
+      .channel(`user-claims-${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'claims',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        const row = payload.new as {
+          id: string; deal_id: string; qr_code: string; status: string;
+          expires_at: string | null; redeemed_at: string | null;
+        };
+        if (!row.deal_id) return;
+        setUserClaimMap(prev => ({
+          ...prev,
+          [row.deal_id]: {
+            id: row.id,
+            qr_code: row.qr_code,
+            status: row.status,
+            expires_at: row.expires_at,
+            redeemed_at: row.redeemed_at,
+          },
+        }));
+        if (row.status === 'redeemed') plan.refetch();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [supabase, authChecked, user, plan]);
 
   // Realtime claim counts (unchanged)
   const [liveClaimCounts, setLiveClaimCounts] = useState<Record<string, number>>({});
@@ -703,11 +735,8 @@ export default function CustomerPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       results = results.filter(d => ((d as any).diet_type ?? 'nonveg') === 'nonveg');
     }
-    return results.filter(d => {
-      const c = userClaimMap[d.id];
-      return !(c?.status === 'redeemed');
-    });
-  }, [tab, dealsWithLive, search, dealType, sheetOffer, serviceMode, minRating, priceFilter, sortBy, dietFilter, userClaimMap]);
+    return results;
+  }, [tab, dealsWithLive, search, dealType, sheetOffer, serviceMode, minRating, priceFilter, sortBy, dietFilter]);
 
   // ── Derived data for new sections ───────────────────────────
   const trendingDeals = useMemo(
@@ -803,11 +832,8 @@ export default function CustomerPage() {
     ? filteredDeals.filter(d => ((d as any).diet_type ?? 'nonveg') === 'nonveg')
     : filteredDeals;
 
-  // Hide deals the user has already redeemed from the main feed
-  const visibleFilteredDeals = dietFilteredDeals.filter(d => !isRedeemed(d.id));
-
   const loading    = tab === 'all' ? restsLoading : dealsLoading;
-  const tabDeals   = tab === 'all' ? [] : visibleFilteredDeals;
+  const tabDeals   = tab === 'all' ? [] : dietFilteredDeals;
   const isEmpty    = !loading && (
     tab === 'all'
       ? filteredRests.length === 0
@@ -1015,6 +1041,7 @@ export default function CustomerPage() {
                       deal={deal}
                       onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                       claimed={isActiveClaim(deal.id)}
+                      redeemed={isRedeemed(deal.id)}
                       saved={favorites.has(deal.id)}
                       onToggleSave={() => toggleFavorite(deal.id)}
                     />
@@ -1039,6 +1066,7 @@ export default function CustomerPage() {
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
+                    redeemed={isRedeemed(deal.id)}
                   />
                 </div>
               ))}
@@ -1059,7 +1087,12 @@ export default function CustomerPage() {
             <div className="flex gap-3.5 overflow-x-auto scrollbar-none pb-2 -mx-5 px-5">
               {trendingDeals.map(deal => (
                 <div key={deal.id} className="flex-shrink-0 w-[180px]">
-                  <DiscoverDealCard deal={deal} onClick={() => { setActiveDeal(deal); setClaimError(null); }} showCrown={plan.tier === 'pro' || plan.tier === 'yearly'} />
+                  <DiscoverDealCard
+                    deal={deal}
+                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    showCrown={plan.tier === 'pro' || plan.tier === 'yearly'}
+                    redeemed={isRedeemed(deal.id)}
+                  />
                 </div>
               ))}
             </div>
@@ -1112,6 +1145,7 @@ export default function CustomerPage() {
                     deal={deal}
                     onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
+                    redeemed={isRedeemed(deal.id)}
                     saved={favorites.has(deal.id)}
                     onToggleSave={() => toggleFavorite(deal.id)}
                     showCrown={plan.tier === 'pro' || plan.tier === 'yearly'}
@@ -1156,6 +1190,7 @@ export default function CustomerPage() {
                     deal={deal}
                     onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
+                    redeemed={isRedeemed(deal.id)}
                     saved={favorites.has(deal.id)}
                     onToggleSave={() => toggleFavorite(deal.id)}
                     locked={plan.tier === 'free'}
@@ -1230,6 +1265,7 @@ export default function CustomerPage() {
                     deal={deal}
                     onClick={() => { setActiveDeal(deal); setClaimError(null); }}
                     claimed={isActiveClaim(deal.id)}
+                    redeemed={isRedeemed(deal.id)}
                   />
                 </div>
               ))}
@@ -1259,6 +1295,7 @@ export default function CustomerPage() {
           alreadyClaimed={isActiveClaim(activeDeal.id)}
           existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
           isRedeemed={isRedeemed(activeDeal.id)}
+          redeemedAt={userClaimMap[activeDeal.id]?.redeemed_at}
           dailyLimitReached={plan.dailyHit}
           claimLocked={activeClaimLocked}
           claimForDate={activeTabDate}
@@ -1278,6 +1315,18 @@ export default function CustomerPage() {
           dealTitle={formatCustomerDealTitle(activeDeal.title)}
           restaurantName={activeDeal.restaurant?.name}
           onClose={() => { setQrCode(null); setActiveDeal(null); setActiveClaimId(null); }}
+          onRedeemed={(redeemedAt) => {
+            setUserClaimMap(prev => ({
+              ...prev,
+              [activeDeal.id]: {
+                ...prev[activeDeal.id],
+                id: activeClaimId,
+                status: 'redeemed',
+                redeemed_at: redeemedAt,
+              },
+            }));
+            plan.refetch();
+          }}
         />
       )}
 
