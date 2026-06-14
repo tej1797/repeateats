@@ -67,3 +67,12 @@ export function generateQRCode(): string {
   }
   return code
 }
+
+/** Mobile parity — e.g. "Jun 14 at 1:12 AM" */
+export function formatRedeemedAt(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${date} at ${time}`;
+}

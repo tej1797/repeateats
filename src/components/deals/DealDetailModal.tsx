@@ -7,7 +7,7 @@ import type { DealWithRestaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
-import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
+import { formatCustomerDealTitle, getRestaurantRating, formatRedeemedAt } from '@/lib/utils';
 import StarRating from '@/components/form/StarRating';
 
 // Unsplash fallback images per cuisine category
@@ -47,6 +47,7 @@ interface DealDetailModalProps {
   alreadyClaimed?:    boolean;
   existingQrCode?:    string;
   isRedeemed?:        boolean;
+  redeemedAt?:        string | null;
   dailyLimitReached?: boolean;
   /** YYYY-MM-DD of the day tab the deal was opened from (today if omitted). */
   claimForDate?:      string;
@@ -75,6 +76,7 @@ export default function DealDetailModal({
   alreadyClaimed     = false,
   existingQrCode,
   isRedeemed         = false,
+  redeemedAt         = null,
   dailyLimitReached  = false,
   claimForDate,
   visitWindowMinutes = 45,
@@ -423,6 +425,22 @@ export default function DealDetailModal({
           className="sticky bottom-0 px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))]"
           style={{ background: CUSTOMER_UI.bg, borderTop: `1px solid ${CUSTOMER_UI.glassBorder}` }}
         >
+          {isRedeemed && (
+            <div
+              className="rounded-2xl px-4 py-3 mb-3 flex items-start gap-3"
+              style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)' }}
+            >
+              <IconCircleCheck size={20} style={{ color: '#4ade80', flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <p className="text-[14px] font-bold" style={{ color: '#4ade80' }}>Deal redeemed</p>
+                {redeemedAt && (
+                  <p className="text-[12px] mt-0.5" style={{ color: CUSTOMER_UI.textMuted }}>
+                    Redeemed {formatRedeemedAt(redeemedAt)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {deal.is_coming ? (
             <div className="w-full h-13 py-3.5 rounded-2xl flex items-center justify-center text-[15px] font-semibold" style={{ background: CUSTOMER_UI.glassBg, color: CUSTOMER_UI.textSecondary }}>
               Available next week
@@ -440,8 +458,8 @@ export default function DealDetailModal({
               Sign in to claim
             </Link>
           ) : isRedeemed ? (
-            <div className="w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>
-              <IconCircleCheck size={18} /> Redeemed — deal used
+            <div className="w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-semibold" style={{ background: 'rgba(255,255,255,0.08)', color: '#888' }}>
+              Already redeemed
             </div>
           ) : claimLocked && user ? (
             <button

@@ -1,54 +1,84 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { IconCircleCheck } from '@tabler/icons-react';
 import { QRCode } from 'react-qrcode-logo';
+import { formatRedeemedAt } from '@/lib/utils';
 
 interface VanishingQRProps {
   claimId: string;
+  onRedeemed?: (redeemedAt: string | null) => void;
 }
 
-type QRState = 'hidden' | 'visible' | 'exhausted';
+type QRState = 'hidden' | 'visible' | 'exhausted' | 'redeemed';
 
-export function VanishingQR({ claimId }: VanishingQRProps) {
+interface ClaimStateResponse {
+  reveals_used?:     number;
+  last_revealed_at?: string | null;
+  qr_token_current?: string | null;
+  status?:           string;
+  redeemed_at?:      string | null;
+}
+
+export function VanishingQR({ claimId, onRedeemed }: VanishingQRProps) {
   const [state,            setState]            = useState<QRState>('hidden');
   const [qrToken,          setQrToken]          = useState<string | null>(null);
   const [revealsRemaining, setRevealsRemaining] = useState<number | null>(null);
   const [secondsLeft,      setSecondsLeft]      = useState(0);
+  const [redeemedAt,       setRedeemedAt]       = useState<string | null>(null);
   const [loading,          setLoading]          = useState(false);
   const [initialising,     setInitialising]     = useState(true);
 
   const timerRef     = useRef<ReturnType<typeof setTimeout>>();
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
+  const pollRef      = useRef<ReturnType<typeof setInterval>>();
 
-  const hideQR = useCallback(() => {
-    setState('hidden');
-    setSecondsLeft(0);
+  const stopTimers = useCallback(() => {
     clearInterval(countdownRef.current);
     clearTimeout(timerRef.current);
+    setSecondsLeft(0);
+  }, []);
+
+  const hideQR = useCallback(() => {
+    setState(s => (s === 'redeemed' ? 'redeemed' : 'hidden'));
+    stopTimers();
     document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stopTimers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden) hideQR();
   }, [hideQR]);
 
+  const applyRedeemed = useCallback((at: string | null) => {
+    stopTimers();
+    clearInterval(pollRef.current);
+    setRedeemedAt(at);
+    setState('redeemed');
+    onRedeemed?.(at);
+  }, [onRedeemed, stopTimers]);
+
+  const applyClaimState = useCallback((data: ClaimStateResponse) => {
+    if (data.status === 'redeemed') {
+      applyRedeemed(data.redeemed_at ?? null);
+      return true;
+    }
+    return false;
+  }, [applyRedeemed]);
+
   useEffect(() => {
     const fetchClaimState = async () => {
       try {
         const res  = await fetch(`/api/claims/state?claim_id=${claimId}`);
-        const data = await res.json() as {
-          reveals_used?:     number;
-          last_revealed_at?: string | null;
-          qr_token_current?: string | null;
-          status?:           string;
-        };
+        const data = await res.json() as ClaimStateResponse;
 
         if (!res.ok) {
           setRevealsRemaining(0);
           setState('exhausted');
           return;
         }
+
+        if (applyClaimState(data)) return;
 
         const remaining = Math.max(0, 2 - (data.reveals_used ?? 0));
         setRevealsRemaining(remaining);
@@ -68,8 +98,7 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
           const msLeft = visibleUntil - Date.now();
           setSecondsLeft(Math.ceil(msLeft / 1000));
 
-          clearTimeout(timerRef.current);
-          clearInterval(countdownRef.current);
+          stopTimers();
 
           timerRef.current = setTimeout(hideQR, msLeft);
           countdownRef.current = setInterval(() => {
@@ -87,7 +116,20 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
     };
 
     void fetchClaimState();
-  }, [claimId, hideQR]);
+  }, [claimId, hideQR, applyClaimState, stopTimers]);
+
+  // Poll while open so restaurant scan stops the timer immediately
+  useEffect(() => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res  = await fetch(`/api/claims/state?claim_id=${claimId}`);
+        const data = await res.json() as ClaimStateResponse;
+        if (res.ok) applyClaimState(data);
+      } catch { /* ignore */ }
+    }, 3000);
+
+    return () => clearInterval(pollRef.current);
+  }, [claimId, applyClaimState]);
 
   useEffect(() => {
     if (state !== 'visible') return;
@@ -97,12 +139,12 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
   }, [state, hideQR]);
 
   useEffect(() => () => {
-    clearTimeout(timerRef.current);
-    clearInterval(countdownRef.current);
-  }, []);
+    stopTimers();
+    clearInterval(pollRef.current);
+  }, [stopTimers]);
 
   const revealQR = async () => {
-    if (loading || state === 'exhausted' || initialising) return;
+    if (loading || state === 'exhausted' || state === 'redeemed' || initialising) return;
     setLoading(true);
 
     try {
@@ -127,8 +169,7 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
       const msLeft = Math.max(0, new Date(data.visible_until!).getTime() - Date.now());
       setSecondsLeft(Math.ceil(msLeft / 1000));
 
-      clearTimeout(timerRef.current);
-      clearInterval(countdownRef.current);
+      stopTimers();
 
       timerRef.current = setTimeout(hideQR, msLeft);
       countdownRef.current = setInterval(() => {
@@ -143,6 +184,37 @@ export function VanishingQR({ claimId }: VanishingQRProps) {
       setLoading(false);
     }
   };
+
+  if (state === 'redeemed') {
+    return (
+      <div style={{ textAlign: 'center', padding: '0 16px' }}>
+        <div
+          className="rounded-2xl px-4 py-4 mb-4 text-left"
+          style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)' }}
+        >
+          <div className="flex items-start gap-3">
+            <IconCircleCheck size={22} style={{ color: '#4ade80', flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <p className="text-[15px] font-bold" style={{ color: '#4ade80' }}>Deal redeemed</p>
+              {redeemedAt && (
+                <p className="text-[13px] mt-0.5" style={{ color: '#888' }}>
+                  Redeemed {formatRedeemedAt(redeemedAt)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled
+          className="w-full py-3.5 rounded-2xl text-[15px] font-semibold"
+          style={{ background: 'rgba(255,255,255,0.08)', color: '#666', cursor: 'default' }}
+        >
+          Already redeemed
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ textAlign: 'center', padding: '0 16px' }}>

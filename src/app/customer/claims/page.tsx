@@ -68,7 +68,7 @@ function Countdown({ expiresAt }: { expiresAt: string | null }) {
   return <span className="text-[12px] font-bold tabular-nums" style={{ color: CUSTOMER_UI.claimBlue }}>{label}</span>;
 }
 
-function QrModal({ claim, onClose }: { claim: ClaimRow; onClose: () => void }) {
+function QrModal({ claim, onClose, onRedeemed }: { claim: ClaimRow; onClose: () => void; onRedeemed?: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -83,7 +83,7 @@ function QrModal({ claim, onClose }: { claim: ClaimRow; onClose: () => void }) {
           {claim.deal?.emoji} {formatCustomerDealTitle(claim.deal?.title)}
         </h3>
         <p className="text-[12px] mb-4" style={{ color: CUSTOMER_UI.textSecondary }}>{claim.deal?.restaurant?.name}</p>
-        <VanishingQR claimId={claim.id} />
+        <VanishingQR claimId={claim.id} onRedeemed={() => onRedeemed?.()} />
         <button
           onClick={onClose}
           className="w-full mt-4 py-3 rounded-xl text-[14px] font-bold text-white"
@@ -128,6 +128,26 @@ export default function CustomerClaimsPage() {
   }, []);
 
   useEffect(() => { if (authed) load(); }, [authed, load]);
+
+  // Refresh when restaurant redeems (stops active timers / QR)
+  useEffect(() => {
+    if (!authed) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id;
+      if (!uid) return;
+      channel = supabase
+        .channel(`claims-page-${uid}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'claims',
+          filter: `user_id=eq.${uid}`,
+        }, () => { load(); plan.refetch(); })
+        .subscribe();
+    });
+    return () => { if (channel) void supabase.removeChannel(channel); };
+  }, [authed, supabase, load, plan]);
 
   const handleCancel = async (claim: ClaimRow) => {
     // Optimistic — mark reverted locally; backend revert via claims revert endpoint
@@ -324,7 +344,13 @@ export default function CustomerClaimsPage() {
         </section>
       </main>
 
-      {qrClaim && <QrModal claim={qrClaim} onClose={() => setQrClaim(null)} />}
+      {qrClaim && (
+        <QrModal
+          claim={qrClaim}
+          onClose={() => setQrClaim(null)}
+          onRedeemed={() => { load(); plan.refetch(); }}
+        />
+      )}
 
       {showLocation && (
         <LocationModal

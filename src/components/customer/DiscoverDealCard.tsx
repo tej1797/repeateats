@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { IconHeart, IconStar, IconCrown, IconFlame } from '@tabler/icons-react';
+import { IconHeart, IconStar, IconCrown, IconFlame, IconCircleCheck } from '@tabler/icons-react';
 import type { DealWithRestaurant } from '@/types/index';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
@@ -37,6 +37,7 @@ interface DiscoverDealCardProps {
   deal:           DealWithRestaurant;
   onClick:        () => void;
   claimed?:       boolean;
+  redeemed?:      boolean;
   saved?:         boolean;
   onToggleSave?:  () => void;
   showCrown?:     boolean;
@@ -47,6 +48,7 @@ export default function DiscoverDealCard({
   deal,
   onClick,
   claimed = false,
+  redeemed = false,
   saved = false,
   onToggleSave,
   showCrown = false,
@@ -92,8 +94,16 @@ export default function DiscoverDealCard({
         />
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent 55%)' }} />
 
-        {/* X claimed badge — top-left */}
-        {deal.current_claims > 0 && (
+        {/* Already redeemed — top-left (mobile parity) */}
+        {redeemed ? (
+          <span
+            className="absolute top-2 left-2 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full"
+            style={{ background: '#166534', color: '#fff' }}
+          >
+            <IconCircleCheck size={12} />
+            Already redeemed
+          </span>
+        ) : deal.current_claims > 0 ? (
           <span
             className="absolute top-2 left-2 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
             style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}
@@ -101,7 +111,7 @@ export default function DiscoverDealCard({
             <IconFlame size={10} style={{ color: CUSTOMER_UI.accent }} />
             {deal.current_claims} claimed
           </span>
-        )}
+        ) : null}
 
         {/* Crown (Pro) */}
         {showCrown && !onToggleSave && (
@@ -167,7 +177,7 @@ export default function DiscoverDealCard({
           </div>
         )}
 
-        {claimed && (
+        {claimed && !redeemed && (
           <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>
             Active claim
           </span>
