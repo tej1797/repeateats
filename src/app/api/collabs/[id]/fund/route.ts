@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const { data: restaurant } = await db
     .from('restaurants')
-    .select('id, owner_id')
+    .select('id, owner_id, name, owner_email, stripe_customer_id')
     .eq('id', collab.restaurant_id)
     .maybeSingle();
 
@@ -51,16 +51,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const amountCents = Math.round(amountDollars * 100);
   const feeCents    = Math.round(amountCents * PLATFORM_FEE_RATE);
 
-  // Owner's Stripe customer + a payment method to charge.
-  const { data: ownerUser } = await db
-    .from('users')
-    .select('stripe_customer_id')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const customerId = ownerUser?.stripe_customer_id as string | undefined;
+  // Charge the RESTAURANT's Stripe customer (separate from the personal user
+  // customer) — same customer the restaurant's payment-method routes use, so the
+  // saved card added on web or the mobile app is the one charged here.
+  let customerId = restaurant.stripe_customer_id as string | undefined;
   if (!customerId) {
-    return NextResponse.json({ error: 'Add a payment method in Settings first' }, { status: 400 });
+    const customer = await stripe.customers.create({
+      name:     restaurant.name ?? undefined,
+      email:    restaurant.owner_email ?? undefined,
+      metadata: { restaurant_id: restaurant.id, owner_id: user.id, portal: 'restaurant' },
+    });
+    customerId = customer.id;
+    await db.from('restaurants').update({ stripe_customer_id: customerId }).eq('id', restaurant.id);
   }
 
   let paymentMethodId = body.payment_method_id;

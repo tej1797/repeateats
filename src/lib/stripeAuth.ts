@@ -87,6 +87,43 @@ export async function getOrCreateCustomer(
   return customer.id;
 }
 
+/**
+ * The restaurant owned by this user (owner_id is unique → at most one).
+ * Returns the row fields needed to resolve/create its Stripe customer.
+ */
+export async function getOwnedRestaurant(supabase: SupabaseClient, userId: string) {
+  const { data } = await supabase
+    .from('restaurants')
+    .select('id, name, owner_email, stripe_customer_id')
+    .eq('owner_id', userId)
+    .maybeSingle();
+  return data as { id: string; name: string | null; owner_email: string | null; stripe_customer_id: string | null } | null;
+}
+
+/**
+ * Resolve (or create) the RESTAURANT's Stripe customer — separate from the
+ * personal user customer. Restaurant-portal payment methods + collab funding
+ * all live on this customer, so web and the mobile app share one store.
+ * Returns null if the user does not own a restaurant.
+ */
+export async function getOrCreateRestaurantCustomer(
+  stripe: Stripe,
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ customerId: string; restaurantId: string } | null> {
+  const rest = await getOwnedRestaurant(supabase, userId);
+  if (!rest) return null;
+  if (rest.stripe_customer_id) return { customerId: rest.stripe_customer_id, restaurantId: rest.id };
+
+  const customer = await stripe.customers.create({
+    name:     rest.name ?? undefined,
+    email:    rest.owner_email ?? undefined,
+    metadata: { restaurant_id: rest.id, owner_id: userId, portal: 'restaurant' },
+  });
+  await supabase.from('restaurants').update({ stripe_customer_id: customer.id }).eq('id', rest.id);
+  return { customerId: customer.id, restaurantId: rest.id };
+}
+
 /** Service-role Supabase client for privileged writes (webhooks, transfers). */
 export function getServiceClient(): SupabaseClient {
   return createClient(

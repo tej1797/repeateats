@@ -3623,7 +3623,7 @@ function PaymentMethodsEditor() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/stripe/payment-methods');
+      const res = await fetch('/api/stripe/payment-methods?context=restaurant');
       if (!res.ok) throw new Error('Failed to load payment methods');
       const data = await res.json();
       setMethods(data.methods ?? []);
@@ -3657,7 +3657,7 @@ function PaymentMethodsEditor() {
       const res = await fetch('/api/stripe/payment-methods/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, return_url: `${window.location.origin}/restaurant?tab=settings` }),
+        body: JSON.stringify({ context: 'restaurant', method, return_url: `${window.location.origin}/restaurant?tab=settings` }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not start Stripe');
@@ -3674,7 +3674,7 @@ function PaymentMethodsEditor() {
       const res = await fetch('/api/stripe/payment-methods/detach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_method_id: id }),
+        body: JSON.stringify({ context: 'restaurant', payment_method_id: id }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Could not remove'); }
       setMethods(prev => prev.filter(m => m.id !== id));

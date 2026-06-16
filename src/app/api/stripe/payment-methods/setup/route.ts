@@ -1,10 +1,11 @@
 // POST /api/stripe/payment-methods/setup — create a Stripe-hosted Checkout session
 // in `setup` mode so the user can securely add a reusable payment method.
+// Body: { context?: 'restaurant'|'customer', method?: 'card'|'acss_debit', return_url? }
 // We never touch raw card/bank data; Stripe collects and stores it.
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getStripe, resolveUser, getOrCreateCustomer } from '@/lib/stripeAuth';
+import { getStripe, resolveUser, getOrCreateCustomer, getOrCreateRestaurantCustomer } from '@/lib/stripeAuth';
 
 export async function POST(request: NextRequest) {
   const stripe = getStripe();
@@ -13,12 +14,20 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({})) as {
     return_url?: string;
-    // 'card' (also enables Apple Pay / Google Pay on the hosted page) or
-    // 'acss_debit' for Canadian pre-authorized bank debit.
     method?: 'card' | 'acss_debit';
+    context?: 'restaurant' | 'customer';
   };
 
-  const customerId = await getOrCreateCustomer(stripe, supabase, user);
+  // Resolve the customer for the requested portal context.
+  let customerId: string;
+  if (body.context === 'restaurant') {
+    const r = await getOrCreateRestaurantCustomer(stripe, supabase, user.id);
+    if (!r) return NextResponse.json({ error: 'No restaurant found for this account' }, { status: 404 });
+    customerId = r.customerId;
+  } else {
+    customerId = await getOrCreateCustomer(stripe, supabase, user);
+  }
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://repeateats.ca';
   const returnUrl = body.return_url ?? `${siteUrl}/restaurant?tab=settings`;
 
@@ -30,7 +39,6 @@ export async function POST(request: NextRequest) {
     mode:                 'setup',
     customer:             customerId,
     payment_method_types: paymentMethodTypes,
-    // Append a marker so the client knows it came back from a successful add.
     success_url: `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}pm_added=1`,
     cancel_url:  returnUrl,
     ...(body.method === 'acss_debit'
