@@ -64,6 +64,7 @@ import {
   IconTag,
   IconClock,
   IconChevronRight,
+  IconChevronDown,
   IconSettings,
   IconRepeat,
   IconMinus,
@@ -265,7 +266,10 @@ export default function RestaurantPage() {
         // This prevents a stale cached session from loading the wrong restaurant.
         const { data: { user: verifiedUser } } = await supabase.auth.getUser();
         if (!mounted) return;
-        if (verifiedUser) await resolveSession(verifiedUser.id);
+        if (verifiedUser) {
+          await resolveSession(verifiedUser.id);
+          if (mounted) setUser(verifiedUser);
+        }
       } catch (err) {
         console.error('[RestaurantPage] init error:', err);
       }
@@ -286,6 +290,7 @@ export default function RestaurantPage() {
         if (!mounted) return;
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
           await resolveSession(session.user.id);
+          if (mounted) setUser(session.user);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setRestaurant(null);
@@ -2526,7 +2531,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
         {/* ── SETTINGS TAB ──────────────────────────────────────── */}
         {tab === 'settings' && (
-          <SettingsTab restaurant={restaurant} setRestaurant={setRestaurant} user={user} supabase={supabase} onSignOut={onSignOut} />
+          <SettingsTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} onSignOut={onSignOut} />
         )}
 
       </main>
@@ -2560,10 +2565,94 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               localStorage.removeItem('repeateats.manager_locked');
               supabase.from('restaurants').update({ manager_mode_enabled: false }).eq('id', restaurant.id);
               setManagerMode(false);
+              setRestaurant({ ...restaurant, manager_mode_enabled: false } as Restaurant);
               setTabPersist('dashboard');
               void reloadDashboardStats();
             }}
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Hours Accordion ─────────────────────────────────────────────────────────
+function HoursAccordion({ hoursEntries, updateHours, setEditing, labelCls }: {
+  hoursEntries: Record<string, HoursEntry>;
+  updateHours: (day: string, field: keyof HoursEntry, value: string | boolean) => void;
+  setEditing: (v: boolean) => void;
+  labelCls: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const summary = RESTAURANT_DAYS.map(day => {
+    const e = hoursEntries[day];
+    return e.closed ? null : `${day} ${e.open}–${e.close}`;
+  }).filter(Boolean);
+
+  const summaryText = summary.length === 0
+    ? 'All days closed'
+    : summary.length <= 2
+      ? summary.join(', ')
+      : `${summary[0]}, +${summary.length - 1} more`;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between"
+      >
+        <label className={`${labelCls} flex items-center gap-1.5 pointer-events-none`}>
+          <IconClock size={14} /> Opening hours
+        </label>
+        <div className="flex items-center gap-2">
+          {!open && <span className="text-[12px] text-[#888] truncate max-w-[180px]">{summaryText}</span>}
+          <IconChevronDown size={15} className="text-[#888] shrink-0 transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
+        </div>
+      </button>
+      {open && (
+        <div className="space-y-2 mt-3">
+          {RESTAURANT_DAYS.map((day) => {
+            const entry = hoursEntries[day];
+            return (
+              <div key={day} className="flex items-center gap-2">
+                <span className="w-9 text-[12px] font-bold text-[#888] shrink-0">{day}</span>
+                {entry.closed ? (
+                  <button
+                    type="button"
+                    onClick={() => { updateHours(day, 'closed', false); setEditing(true); }}
+                    className="flex-1 h-9 px-3 rounded-lg text-[13px] text-[#888] border border-[#333] bg-[#1A1A1A] text-left"
+                  >
+                    Closed
+                  </button>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={`${entry.open}–${entry.close}`}
+                      onChange={(e) => {
+                        const parts = e.target.value.split(/[–\-]/);
+                        if (parts.length >= 2) {
+                          updateHours(day, 'open', parts[0].trim());
+                          updateHours(day, 'close', parts[1].trim());
+                        }
+                        setEditing(true);
+                      }}
+                      className="flex-1 h-9 px-3 rounded-lg text-[13px] text-white border border-[#333] bg-[#1A1A1A] outline-none focus:border-[#1249A9]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { updateHours(day, 'closed', true); setEditing(true); }}
+                      className="h-9 px-3 rounded-lg text-[12px] font-semibold text-[#888] border border-[#333] bg-[#1A1A1A] hover:text-white transition-colors shrink-0"
+                    >
+                      Closed
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -2837,54 +2926,13 @@ function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, t
           <input value={form.website} onChange={(e) => { setForm((f) => ({ ...f, website: e.target.value })); setEditing(true); }} className={inputCls} />
         </div>
 
-        {/* Opening hours */}
-        <div>
-          <label className={`${labelCls} flex items-center gap-1.5`}>
-            <IconClock size={14} /> Opening hours
-          </label>
-          <div className="space-y-2 mt-2">
-            {RESTAURANT_DAYS.map((day) => {
-              const entry = hoursEntries[day];
-              return (
-                <div key={day} className="flex items-center gap-2">
-                  <span className="w-9 text-[12px] font-bold text-[#888] shrink-0">{day}</span>
-                  {entry.closed ? (
-                    <button
-                      type="button"
-                      onClick={() => updateHours(day, 'closed', false)}
-                      className="flex-1 h-9 px-3 rounded-lg text-[13px] text-[#888] border border-[#333] bg-[#1A1A1A] text-left"
-                    >
-                      Closed
-                    </button>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        value={`${entry.open}–${entry.close}`}
-                        onChange={(e) => {
-                          const parts = e.target.value.split(/[–\-]/);
-                          if (parts.length >= 2) {
-                            updateHours(day, 'open', parts[0].trim());
-                            updateHours(day, 'close', parts[1].trim());
-                          }
-                          setEditing(true);
-                        }}
-                        className="flex-1 h-9 px-3 rounded-lg text-[13px] text-white border border-[#333] bg-[#1A1A1A] outline-none focus:border-[#1249A9]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateHours(day, 'closed', true)}
-                        className="h-9 px-3 rounded-lg text-[12px] font-semibold text-[#888] border border-[#333] bg-[#1A1A1A] hover:text-white transition-colors shrink-0"
-                      >
-                        Closed
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {/* Opening hours — collapsible */}
+        <HoursAccordion
+          hoursEntries={hoursEntries}
+          updateHours={updateHours}
+          setEditing={setEditing}
+          labelCls={labelCls}
+        />
 
         {/* Toggles */}
         <div className="space-y-4 pt-2 border-t border-[#222]">
@@ -2930,6 +2978,31 @@ function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, t
       >
         {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save changes'}
       </button>
+
+      {/* Account info — shown at the bottom of Profile */}
+      <div className="rounded-2xl p-5 space-y-3" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
+        <h3 className="font-semibold text-[15px] text-white">Account</h3>
+        <div className="space-y-2.5 text-[13px]">
+          <div className="flex justify-between items-center">
+            <span className="text-[#888]">Name</span>
+            <span className="font-medium text-white">
+              {user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split('@')[0] ?? '—'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[#888]">Email</span>
+            <span className="font-medium text-white truncate max-w-[220px] text-right">{user.email ?? '—'}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[#888]">Member since</span>
+            <span className="font-medium text-white">
+              {user.created_at
+                ? new Date(user.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short' })
+                : '—'}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2991,10 +3064,9 @@ function ManagerExitPrompt({ restaurant, onExit }: {
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
-function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
+function SettingsTab({ restaurant, setRestaurant, supabase, onSignOut }: {
   restaurant: Restaurant;
   setRestaurant: (r: Restaurant) => void;
-  user: SupabaseUser;
   supabase: ReturnType<typeof createClient>;
   onSignOut: () => void;
 }) {
@@ -3013,6 +3085,11 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
   const [mgrEnabled,  setMgrEnabled]  = useState(!!(rest.manager_mode_enabled as boolean));
   const [showMgrSetup, setShowMgrSetup] = useState(false);
   const [showDisableMgr, setShowDisableMgr] = useState(false);
+
+  // Keep local mgrEnabled in sync when restaurant prop changes (e.g. after exit prompt)
+  useEffect(() => {
+    setMgrEnabled(!!(restaurant as unknown as Record<string,unknown>).manager_mode_enabled);
+  }, [(restaurant as unknown as Record<string,unknown>).manager_mode_enabled]);
 
   // Payment methods
   const [ownerPinForPay, setOwnerPinForPay] = useState('');
@@ -3175,28 +3252,6 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
         ))}
       </div>
 
-      {/* ── Account ────────────────────────────────────────────── */}
-      <div className="bg-surface rounded-brand shadow-brand p-5 space-y-3">
-        <h3 className="font-semibold text-base">Account</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-t2">Name</span>
-            <span className="font-medium text-tx">{user.user_metadata?.full_name ?? user.email?.split('@')[0]}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-t2">Email</span>
-            <span className="font-medium text-tx">{user.email}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-t2">Member since</span>
-            <span className="font-medium text-tx">{new Date(user.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short' })}</span>
-          </div>
-        </div>
-        <button type="button" onClick={() => void onSignOut()} className="flex items-center gap-2 text-[13px] text-t2 hover:text-tx transition-colors pt-2">
-          <IconLogout size={15} /> Sign out of RepEAT
-        </button>
-      </div>
-
       {/* ── Help & Support ─────────────────────────────────────── */}
       <div className="bg-surface rounded-brand shadow-brand p-5">
         <h3 className="font-semibold text-base mb-3">Help & Support</h3>
@@ -3269,6 +3324,7 @@ function SettingsTab({ restaurant, setRestaurant, user, supabase, onSignOut }: {
               await supabase.from('restaurants').update({ manager_mode_enabled: false }).eq('id', restaurant.id);
               localStorage.removeItem('repeateats.manager_locked');
               setMgrEnabled(false);
+              setRestaurant({ ...restaurant, manager_mode_enabled: false } as Restaurant);
               setShowDisableMgr(false);
             }}
             onClose={() => setShowDisableMgr(false)}
