@@ -65,6 +65,9 @@ import {
   IconClock,
   IconChevronRight,
   IconChevronDown,
+  IconBrandApple,
+  IconBrandGoogle,
+  IconBuildingBank,
   IconSettings,
   IconRepeat,
   IconMinus,
@@ -3615,6 +3618,8 @@ function PaymentMethodsEditor() {
   const [loaded,  setLoaded]  = useState(false);
   const [busy,    setBusy]    = useState(false);
   const [error,   setError]   = useState('');
+  // Which express wallet this device supports — drives Apple Pay vs Google Pay button.
+  const [wallet,  setWallet]  = useState<'apple' | 'google' | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -3636,6 +3641,13 @@ function PaymentMethodsEditor() {
       const url = new URL(window.location.href);
       url.searchParams.delete('pm_added');
       window.history.replaceState({}, '', url.toString());
+    }
+    // Detect which express wallet to surface: Apple Pay on Apple devices, else Google Pay.
+    try {
+      const AP = (window as unknown as { ApplePaySession?: { canMakePayments?: () => boolean } }).ApplePaySession;
+      setWallet(AP?.canMakePayments?.() ? 'apple' : 'google');
+    } catch {
+      setWallet('google');
     }
   }, [load]);
 
@@ -3724,7 +3736,23 @@ function PaymentMethodsEditor() {
 
       {error && <p className="text-[12px] text-red-500">{error}</p>}
 
-      {/* Add buttons → Stripe-hosted */}
+      {/* Express wallet — Apple Pay on Apple devices, Google Pay elsewhere.
+          Opens the secure Stripe page where the device's wallet sheet appears. */}
+      {wallet === 'apple' && (
+        <button onClick={() => addMethod('card')} disabled={busy}
+          className="w-full h-11 rounded-brands text-[15px] font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-1.5"
+          style={{ background: '#000' }}>
+          <IconBrandApple size={20} /> Pay
+        </button>
+      )}
+      {wallet === 'google' && (
+        <button onClick={() => addMethod('card')} disabled={busy}
+          className="w-full h-11 rounded-brands text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 bg-white text-[#3c4043] border border-[var(--bd2)] hover:bg-gray-50 transition-colors">
+          <IconBrandGoogle size={18} /> Pay
+        </button>
+      )}
+
+      {/* Add card / bank → Stripe-hosted */}
       <div className="grid grid-cols-2 gap-3 pt-1">
         <button onClick={() => addMethod('card')} disabled={busy}
           className="h-10 rounded-brands text-[13px] font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
@@ -3733,10 +3761,15 @@ function PaymentMethodsEditor() {
         </button>
         <button onClick={() => addMethod('acss_debit')} disabled={busy}
           className="h-10 rounded-brands text-[13px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 border border-[var(--bd2)] text-tx hover:bg-surface2 transition-colors">
-          Add bank account
+          <IconBuildingBank size={15} /> Add bank account
         </button>
       </div>
-      <p className="text-[11px] text-t3 text-center">Card option also supports Apple Pay &amp; Google Pay on the secure Stripe page.</p>
+      <p className="text-[11px] text-t3 text-center leading-relaxed">
+        {wallet === 'apple'
+          ? 'Apple Pay opens the secure Stripe page to confirm with your wallet.'
+          : 'Google Pay opens the secure Stripe page to confirm with your wallet.'}
+        <br />Bank account uses Interac-linked pre-authorized debit (ACSS).
+      </p>
     </div>
   );
 }
