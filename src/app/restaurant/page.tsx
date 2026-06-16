@@ -3325,6 +3325,9 @@ function SettingsTab({ restaurant, setRestaurant, supabase, onSignOut }: {
         )}
       </div>
 
+      {/* ── Security & PINs ────────────────────────────────────── */}
+      <PinSettings restaurant={restaurant} setRestaurant={setRestaurant} />
+
       {/* ── Payment Methods ────────────────────────────────────── */}
       <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -3599,6 +3602,115 @@ function ManagerSetupModal({ restaurant, supabase, onDone, onClose }: {
           {saving ? 'Saving…' : 'Enable Manager Mode'}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Security & PINs ──────────────────────────────────────────────────────────
+// Set/change the Owner and Manager PINs via the shared server endpoint, so a PIN
+// set on the website also works in the mobile app (and vice-versa). The owner is
+// authenticated, so setting a new PIN here also serves as "forgot PIN" recovery.
+function PinSettings({ restaurant, setRestaurant }: {
+  restaurant: Restaurant;
+  setRestaurant: (r: Restaurant) => void;
+}) {
+  const GREEN = '#1249A9';
+  const rest = restaurant as unknown as Record<string, unknown>;
+
+  const ROWS = [
+    { kind: 'owner'   as const, label: 'Owner PIN',   col: 'owner_pin_hash',   sub: 'Unlocks payment methods & disables Manager Mode' },
+    { kind: 'manager' as const, label: 'Manager PIN', col: 'manager_pin_hash', sub: 'Lets staff sign in to Manager Mode (scanner-only)' },
+  ];
+
+  const [draft, setDraft] = useState<Record<string, { pin: string; confirm: string; open: boolean }>>({
+    owner:   { pin: '', confirm: '', open: false },
+    manager: { pin: '', confirm: '', open: false },
+  });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg,  setMsg]  = useState<{ kind: string; ok: boolean; text: string } | null>(null);
+
+  const update = (kind: string, patch: Partial<{ pin: string; confirm: string; open: boolean }>) =>
+    setDraft((d) => ({ ...d, [kind]: { ...d[kind], ...patch } }));
+
+  const save = async (kind: 'owner' | 'manager', col: string) => {
+    const { pin, confirm } = draft[kind];
+    if (!/^\d{6}$/.test(pin)) { setMsg({ kind, ok: false, text: 'PIN must be 6 digits.' }); return; }
+    if (pin !== confirm)      { setMsg({ kind, ok: false, text: 'PINs do not match.' }); return; }
+    setBusy(kind); setMsg(null);
+    try {
+      const res = await fetch('/api/restaurant/pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, pin }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Could not save PIN');
+      // Sync local state so unlock checks use the new hash immediately.
+      setRestaurant({ ...(restaurant as object), [col]: data.hash } as Restaurant);
+      update(kind, { pin: '', confirm: '', open: false });
+      setMsg({ kind, ok: true, text: 'PIN saved.' });
+    } catch (e) {
+      setMsg({ kind, ok: false, text: e instanceof Error ? e.message : 'Something went wrong' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="bg-surface rounded-brand shadow-brand p-5 space-y-4">
+      <h3 className="font-semibold text-base flex items-center gap-2">
+        <IconLock size={16} style={{ color: GREEN }} /> Security &amp; PINs
+      </h3>
+      <p className="text-[13px] text-t2">Set or change your PINs. They stay valid until you change them, and work on both the website and the app.</p>
+
+      {ROWS.map(({ kind, label, col, sub }) => {
+        const isSet = !!(rest[col] as string | null);
+        const d = draft[kind];
+        return (
+          <div key={kind} className="rounded-brands border border-[var(--bd)] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-tx">{label}</div>
+                <div className="text-[12px] text-t2">{sub}</div>
+              </div>
+              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${isSet ? 'bg-green-100 text-green-700' : 'bg-surface2 text-t3'}`}>
+                {isSet ? 'Set' : 'Not set'}
+              </span>
+            </div>
+
+            {d.open ? (
+              <div className="space-y-2">
+                <input type="password" inputMode="numeric" maxLength={6} value={d.pin}
+                  onChange={(e) => update(kind, { pin: e.target.value.replace(/\D/g, '') })}
+                  placeholder={isSet ? 'New 6-digit PIN' : '6-digit PIN'}
+                  className="w-full h-10 px-3 font-mono text-[15px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface text-tx outline-none focus:border-[#1249A9]" />
+                <input type="password" inputMode="numeric" maxLength={6} value={d.confirm}
+                  onChange={(e) => update(kind, { confirm: e.target.value.replace(/\D/g, '') })}
+                  placeholder="Confirm PIN"
+                  className="w-full h-10 px-3 font-mono text-[15px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface text-tx outline-none focus:border-[#1249A9]" />
+                {msg?.kind === kind && <p className={`text-[12px] ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => { update(kind, { pin: '', confirm: '', open: false }); setMsg(null); }}
+                    className="flex-1 h-9 rounded-brands border border-[var(--bd2)] text-[13px] font-semibold text-t2">Cancel</button>
+                  <button onClick={() => save(kind, col)} disabled={busy === kind}
+                    className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50"
+                    style={{ background: GREEN }}>
+                    {busy === kind ? 'Saving…' : 'Save PIN'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button onClick={() => { update(kind, { open: true }); setMsg(null); }}
+                  className="h-9 px-4 rounded-brands text-[13px] font-semibold text-white" style={{ background: GREEN }}>
+                  {isSet ? `Change ${label}` : `Set ${label}`}
+                </button>
+                {msg?.kind === kind && msg.ok && <span className="text-[12px] text-green-600">{msg.text}</span>}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
