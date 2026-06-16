@@ -89,6 +89,17 @@ export async function POST(request: NextRequest) {
       break;
     }
 
+    case 'account.updated': {
+      // Connect (influencer) onboarding progress — keep cached payout flags fresh.
+      const account = event.data.object as Stripe.Account;
+      const { error: wErr } = await supabase.from('influencers').update({
+        stripe_onboarded: account.details_submitted ?? false,
+        payouts_enabled:  account.payouts_enabled ?? false,
+      }).eq('stripe_account_id', account.id);
+      if (wErr) console.error('[webhook] account.updated DB error:', JSON.stringify(wErr));
+      break;
+    }
+
     case 'invoice.payment_failed': {
       const invoice    = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;

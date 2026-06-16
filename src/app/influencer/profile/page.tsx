@@ -132,66 +132,83 @@ function ActiveCollabCard({ collab }: { collab: any }) {
   );
 }
 
-// ─── Payment section ──────────────────────────────────────────────────────────
-function PaymentSection({
-  profile, onSave,
-}: {
-  profile: CreatorProfile;
-  onSave: (patch: Record<string, string>) => Promise<void>;
-}) {
-  const [etransfer, setEtransfer] = useState(profile.etransfer_email ?? '');
-  const [paypal,    setPaypal]    = useState(profile.paypal_email ?? '');
-  const [preferred, setPreferred] = useState(profile.preferred_payment ?? 'etransfer');
-  const [saving,    setSaving]    = useState(false);
-  const [saved,     setSaved]     = useState(false);
+// ─── Payment section (Stripe Connect payouts) ─────────────────────────────────
+function PaymentSection() {
+  const [status,  setStatus]  = useState<'loading' | 'none' | 'pending' | 'ready'>('loading');
+  const [busy,    setBusy]    = useState(false);
+  const [error,   setError]   = useState('');
 
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave({ etransfer_email: etransfer, paypal_email: paypal, preferred_payment: preferred });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/stripe/connect/status')
+      .then(r => r.json())
+      .then((d) => {
+        if (!mounted) return;
+        if (!d.connected) setStatus('none');
+        else if (d.payouts_enabled) setStatus('ready');
+        else setStatus('pending');
+      })
+      .catch(() => mounted && setStatus('none'));
+    // Clean the ?connect= marker after returning from Stripe-hosted onboarding.
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('connect')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('connect');
+      window.history.replaceState({}, '', url.toString());
+    }
+    return () => { mounted = false; };
+  }, []);
+
+  const startOnboarding = async () => {
+    setBusy(true); setError('');
+    try {
+      const res = await fetch('/api/stripe/connect/onboard', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok || !d.url) throw new Error(d.error ?? 'Could not start Stripe');
+      window.location.href = d.url; // hosted redirect
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setBusy(false);
+    }
   };
-
-  const METHODS = [
-    { id: 'etransfer', label: 'E-Transfer (Interac)', emoji: '💸' },
-    { id: 'paypal',    label: 'PayPal',              emoji: '🅿️' },
-  ];
 
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-gray-400 leading-relaxed">
-        Your payment info is shared with restaurants only after a collab is accepted and content is approved.
+        Payouts are powered by <strong>Stripe</strong>. When a restaurant funds a collab, RepEAT holds
+        the money in escrow and releases it to your Stripe account once your content is approved
+        (RepEAT keeps a 2% platform fee).
       </p>
 
-      {METHODS.map((m) => (
-        <div key={m.id} className="rounded-xl border p-4" style={{ borderColor: preferred === m.id ? '#7E22CE' : '#E5E7EB' }}>
-          <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={() => setPreferred(m.id)}
-              className="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0"
-              style={{ borderColor: preferred === m.id ? '#7E22CE' : '#D1D5DB' }}>
-              {preferred === m.id && <div className="w-2 h-2 rounded-full bg-purple-700" />}
-            </button>
-            <span className="font-semibold text-[14px]">{m.emoji} {m.label}</span>
+      {status === 'loading' ? (
+        <div className="h-24 rounded-xl bg-gray-100 animate-pulse" />
+      ) : status === 'ready' ? (
+        <div className="rounded-xl border p-4 flex items-center gap-3" style={{ borderColor: '#16a34a', background: '#F0FDF4' }}>
+          <IconCheck size={20} className="text-green-600 flex-shrink-0" />
+          <div>
+            <div className="font-semibold text-[14px] text-green-700">Payouts active</div>
+            <div className="text-[12px] text-gray-500">Your Stripe account is ready to receive collab payments.</div>
           </div>
-          <input
-            value={m.id === 'etransfer' ? etransfer : paypal}
-            onChange={(e) => m.id === 'etransfer' ? setEtransfer(e.target.value) : setPaypal(e.target.value)}
-            placeholder={m.id === 'etransfer' ? 'your@email.com (for Interac)' : 'your@paypal.com'}
-            className="w-full h-10 px-3 rounded-lg text-[14px] outline-none transition-all"
-            style={{ border: '1.5px solid #E5E7EB', background: '#F9FAFB' }}
-          />
         </div>
-      ))}
+      ) : (
+        <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: status === 'pending' ? '#D97706' : '#E5E7EB' }}>
+          <div className="font-semibold text-[14px]">
+            {status === 'pending' ? '⏳ Finish your payout setup' : '💳 Set up payouts'}
+          </div>
+          <div className="text-[12px] text-gray-500">
+            {status === 'pending'
+              ? 'Stripe still needs a few more details before you can be paid.'
+              : 'Connect a bank account or debit card with Stripe to get paid for collabs.'}
+          </div>
+          <button onClick={startOnboarding} disabled={busy}
+            className="w-full h-11 rounded-xl font-bold text-[14px] text-white transition-all disabled:opacity-60"
+            style={{ background: '#7E22CE' }}>
+            {busy ? <IconLoader2 size={18} className="mx-auto animate-spin" />
+              : status === 'pending' ? 'Continue setup with Stripe' : 'Set up payouts with Stripe'}
+          </button>
+        </div>
+      )}
 
-      <button onClick={handleSave} disabled={saving}
-        className="w-full h-11 rounded-xl font-bold text-[14px] text-white transition-all disabled:opacity-60"
-        style={{ background: saved ? '#16a34a' : '#7E22CE' }}>
-        {saving
-          ? <IconLoader2 size={18} className="mx-auto animate-spin" />
-          : saved ? 'Saved!' : 'Save payment details'}
-      </button>
+      {error && <p className="text-[12px] text-red-500">{error}</p>}
     </div>
   );
 }
@@ -519,8 +536,7 @@ export default function CreatorProfilePage() {
 
             {/* Payment */}
             {activeTab === 'payment' && (
-              <PaymentSection profile={profile}
-                onSave={async (patch) => { await savePatch(patch); }} />
+              <PaymentSection />
             )}
 
             {/* Checklist */}

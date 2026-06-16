@@ -3229,7 +3229,7 @@ function SettingsTab({ restaurant, setRestaurant, supabase, onSignOut }: {
             )}
           </div>
         ) : (
-          <PaymentMethodsEditor restaurantId={restaurant.id} supabase={supabase} />
+          <PaymentMethodsEditor />
         )}
       </div>
 
@@ -3474,74 +3474,142 @@ function ManagerSetupModal({ restaurant, supabase, onDone, onClose }: {
 }
 
 // ─── Payment Methods Editor ───────────────────────────────────────────────────
-function PaymentMethodsEditor({ restaurantId, supabase }: {
-  restaurantId: string;
-  supabase: ReturnType<typeof createClient>;
-}) {
+interface StripePaymentMethod {
+  id: string;
+  type: string;
+  card: { brand: string; last4: string; exp_month: number; exp_year: number } | null;
+  acss: { bank_name: string | null; last4: string } | null;
+  is_default: boolean;
+}
+
+function PaymentMethodsEditor() {
   const GREEN = '#1249A9';
-  interface Payout {
-    card_last4: string; bank_account_name: string; bank_transit: string;
-    bank_institution: string; bank_account: string; paypal_email: string; etransfer_email: string;
-  }
-  const [form, setForm] = useState<Payout>({ card_last4: '', bank_account_name: '', bank_transit: '', bank_institution: '', bank_account: '', paypal_email: '', etransfer_email: '' });
-  const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [methods, setMethods] = useState<StripePaymentMethod[]>([]);
+  const [loaded,  setLoaded]  = useState(false);
+  const [busy,    setBusy]    = useState(false);
+  const [error,   setError]   = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/stripe/payment-methods');
+      if (!res.ok) throw new Error('Failed to load payment methods');
+      const data = await res.json();
+      setMethods(data.methods ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
 
   useEffect(() => {
-    supabase.from('restaurant_payouts').select('*').eq('restaurant_id', restaurantId).maybeSingle()
-      .then(({ data }) => {
-        if (data) setForm(f => ({ ...f, ...data }));
-        setLoaded(true);
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantId]);
+    void load();
+    // If we just returned from Stripe's hosted add flow, refresh + clean the URL.
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('pm_added')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('pm_added');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [load]);
 
-  const save = async () => {
-    setSaving(true);
-    await supabase.from('restaurant_payouts').upsert({ restaurant_id: restaurantId, ...form, updated_at: new Date().toISOString() });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const addMethod = async (method: 'card' | 'acss_debit') => {
+    setBusy(true); setError('');
+    try {
+      const res = await fetch('/api/stripe/payment-methods/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method, return_url: `${window.location.origin}/restaurant?tab=settings` }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not start Stripe');
+      window.location.href = data.url; // hosted redirect
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setBusy(false);
+    }
+  };
+
+  const removeMethod = async (id: string) => {
+    setBusy(true); setError('');
+    try {
+      const res = await fetch('/api/stripe/payment-methods/detach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_method_id: id }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? 'Could not remove'); }
+      setMethods(prev => prev.filter(m => m.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!loaded) return <div className="h-10 bg-surface2 rounded-brands animate-pulse" />;
 
-  const Field = ({ label, k, placeholder }: { label: string; k: keyof Payout; placeholder?: string }) => (
-    <div>
-      <label className="block text-[12px] font-semibold text-t2 mb-1">{label}</label>
-      <input value={form[k]} placeholder={placeholder}
-        onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-        className="w-full h-9 px-3 border border-[var(--bd2)] rounded-brands bg-surface text-[13px] text-tx outline-none focus:border-[#1249A9]"
-      />
-    </div>
-  );
-
   return (
     <div className="space-y-4">
-      <div className="space-y-3">
-        <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Credit Card</p>
-        <Field label="Card last 4 digits" k="card_last4" placeholder="1234" />
+      {/* Trust note */}
+      <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-brands" style={{ background: 'rgba(18,73,169,0.08)' }}>
+        <IconLock size={14} style={{ color: GREEN }} className="flex-shrink-0 mt-0.5" />
+        <p className="text-[12px] text-t2 leading-relaxed">
+          Payment methods are stored securely by <strong>Stripe</strong> — RepEAT never sees or
+          keeps your card or bank details. Used to pay your RepEAT subscription and to fund creator collabs.
+        </p>
       </div>
-      <div className="space-y-3 pt-3 border-t border-[var(--bd)]">
-        <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Bank Deposit</p>
-        <Field label="Account name" k="bank_account_name" />
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Transit #" k="bank_transit" placeholder="12345" />
-          <Field label="Institution #" k="bank_institution" placeholder="001" />
+
+      {/* Saved methods */}
+      {methods.length === 0 ? (
+        <p className="text-[13px] text-t2">No payment methods yet. Add one to get started.</p>
+      ) : (
+        <div className="space-y-2">
+          {methods.map((m) => (
+            <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-brands border border-[var(--bd2)]">
+              <div className="flex items-center gap-3 min-w-0">
+                <IconCreditCard size={18} className="text-t2 flex-shrink-0" />
+                <div className="min-w-0">
+                  {m.card ? (
+                    <div className="text-[13px] font-semibold text-tx capitalize truncate">
+                      {m.card.brand} •••• {m.card.last4}
+                    </div>
+                  ) : m.acss ? (
+                    <div className="text-[13px] font-semibold text-tx truncate">
+                      {m.acss.bank_name ?? 'Bank account'} •••• {m.acss.last4}
+                    </div>
+                  ) : (
+                    <div className="text-[13px] font-semibold text-tx capitalize truncate">{m.type.replace('_', ' ')}</div>
+                  )}
+                  <div className="text-[11px] text-t3">
+                    {m.card ? `Expires ${String(m.card.exp_month).padStart(2,'0')}/${m.card.exp_year}` : 'Pre-authorized debit'}
+                    {m.is_default && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(18,73,169,0.12)', color: GREEN }}>Default</span>}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => removeMethod(m.id)} disabled={busy}
+                className="text-[12px] font-semibold text-red-500 hover:text-red-600 disabled:opacity-50 flex-shrink-0">
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
-        <Field label="Account #" k="bank_account" />
+      )}
+
+      {error && <p className="text-[12px] text-red-500">{error}</p>}
+
+      {/* Add buttons → Stripe-hosted */}
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <button onClick={() => addMethod('card')} disabled={busy}
+          className="h-10 rounded-brands text-[13px] font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{ background: GREEN }}>
+          <IconCreditCard size={15} /> Add card
+        </button>
+        <button onClick={() => addMethod('acss_debit')} disabled={busy}
+          className="h-10 rounded-brands text-[13px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 border border-[var(--bd2)] text-tx hover:bg-surface2 transition-colors">
+          Add bank account
+        </button>
       </div>
-      <div className="space-y-3 pt-3 border-t border-[var(--bd)]">
-        <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Online</p>
-        <Field label="PayPal email" k="paypal_email" placeholder="you@paypal.com" />
-        <Field label="Interac e-Transfer email" k="etransfer_email" placeholder="you@bank.com" />
-      </div>
-      <button onClick={save} disabled={saving}
-        className="w-full h-10 rounded-brands text-[13px] font-bold text-white disabled:opacity-50"
-        style={{ background: GREEN }}>
-        {saved ? '✓ Saved!' : saving ? 'Saving…' : 'Save payment details'}
-      </button>
+      <p className="text-[11px] text-t3 text-center">Card option also supports Apple Pay &amp; Google Pay on the secure Stripe page.</p>
     </div>
   );
 }
