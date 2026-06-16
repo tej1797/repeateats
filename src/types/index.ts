@@ -152,6 +152,8 @@ export interface Collab {
   id: string;
   restaurant_id: string;
   influencer_id: string | null;
+  title: string | null;
+  deadline: string | null;
   offer_amount_min: number | null;
   offer_amount_max: number | null;
   deliverables: string | null;    // "1 Reel + 3 Stories"
@@ -162,6 +164,13 @@ export interface Collab {
   payment_status: PaymentStatus;
   stripe_payment_id: string | null;
   created_at: string;
+  // Escrow (Stripe Connect) — populated once a collab is funded/released
+  agreed_amount?: number | null;        // final price, CAD dollars
+  platform_fee_cents?: number | null;   // RepEAT's 2% cut
+  stripe_payment_intent_id?: string | null;
+  stripe_transfer_id?: string | null;
+  funded_at?: string | null;
+  released_at?: string | null;
 }
 
 // Collab with restaurant and influencer joined (for the collab feed)

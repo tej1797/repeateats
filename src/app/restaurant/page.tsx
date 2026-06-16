@@ -1855,6 +1855,16 @@ async function sha256hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Collab joined with the creator's handle + payout readiness (restaurant view).
+type RestaurantCollab = Collab & {
+  influencer: {
+    id: string;
+    instagram_handle: string | null;
+    tiktok_handle: string | null;
+    payouts_enabled: boolean | null;
+  } | null;
+};
+
 function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }: {
   restaurant: Restaurant;
   user: SupabaseUser;
@@ -1879,7 +1889,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   });
   const [restaurant,      setRestaurant]      = useState<Restaurant>(initialRestaurant);
   const [deals,           setDeals]           = useState<Deal[]>([]);
-  const [collabs,         setCollabs]         = useState<Collab[]>([]);
+  const [collabs,         setCollabs]         = useState<RestaurantCollab[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
@@ -1960,10 +1970,13 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     async function load() {
       const [dr, cr] = await Promise.all([
         supabase.from('deals').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
-        supabase.from('collabs').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
+        supabase.from('collabs')
+          .select('*, influencer:influencers(id, instagram_handle, tiktok_handle, payouts_enabled)')
+          .eq('restaurant_id', restaurant.id)
+          .order('created_at', { ascending: false }),
       ]);
       setDeals((dr.data ?? []) as Deal[]);
-      setCollabs((cr.data ?? []) as Collab[]);
+      setCollabs((cr.data ?? []) as RestaurantCollab[]);
       await reloadDashboardStats();
       setLoading(false);
     }
@@ -1988,6 +2001,53 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const toggleActive = async (deal: Deal) => {
     await supabase.from('deals').update({ is_active: !deal.is_active }).eq('id', deal.id);
     setDeals((prev) => prev.map((d) => d.id === deal.id ? { ...d, is_active: !d.is_active } : d));
+  };
+
+  // ── Collab escrow actions ──────────────────────────────────────────────────
+  const [collabBusyId, setCollabBusyId] = useState<string | null>(null);
+  const [collabError,  setCollabError]  = useState<{ id: string; msg: string } | null>(null);
+
+  const fundCollab = async (c: RestaurantCollab) => {
+    const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min;
+    if (!amount) { setCollabError({ id: c.id, msg: 'Set an agreed amount first.' }); return; }
+    if (!confirm(`Fund this collab? $${amount} CAD will be charged to your saved payment method and held in escrow until you release it.`)) return;
+    setCollabBusyId(c.id); setCollabError(null);
+    try {
+      const res = await fetch(`/api/collabs/${c.id}/fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agreed_amount: amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Could not fund collab');
+      setCollabs((prev) => prev.map((x) => x.id === c.id
+        ? { ...x, payment_status: 'escrowed', agreed_amount: data.amount, platform_fee_cents: data.platform_fee_cents, funded_at: new Date().toISOString() }
+        : x));
+    } catch (e) {
+      setCollabError({ id: c.id, msg: e instanceof Error ? e.message : 'Something went wrong' });
+    } finally {
+      setCollabBusyId(null);
+    }
+  };
+
+  const releaseCollab = async (c: RestaurantCollab) => {
+    if (!c.influencer?.payouts_enabled) { setCollabError({ id: c.id, msg: 'Creator hasn’t finished payout setup yet.' }); return; }
+    const fee = c.platform_fee_cents ?? Math.round((c.agreed_amount ?? 0) * 2);
+    const net = ((c.agreed_amount ?? 0) * 100 - fee) / 100;
+    if (!confirm(`Release payment to the creator? They receive $${net.toFixed(2)} CAD (after RepEAT's 2% fee). This cannot be undone.`)) return;
+    setCollabBusyId(c.id); setCollabError(null);
+    try {
+      const res = await fetch(`/api/collabs/${c.id}/release`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Could not release payment');
+      setCollabs((prev) => prev.map((x) => x.id === c.id
+        ? { ...x, payment_status: 'released', status: 'completed', released_at: new Date().toISOString() }
+        : x));
+    } catch (e) {
+      setCollabError({ id: c.id, msg: e instanceof Error ? e.message : 'Something went wrong' });
+    } finally {
+      setCollabBusyId(null);
+    }
   };
 
   const deleteDeal = async (deal: Deal) => {
@@ -2247,6 +2307,73 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               <IconSettings size={18} className="text-white" />
               <span className="text-[13px] font-semibold text-white">Settings</span>
             </button>
+
+            {/* ── Creator Collabs (escrow) ───────────────────────── */}
+            {collabs.filter((c) => c.influencer_id).length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 pt-1">
+                  <IconStar size={16} style={{ color: '#A855F7' }} />
+                  <h3 className="font-display text-[16px] font-bold text-white">Creator Collabs</h3>
+                </div>
+                {collabs.filter((c) => c.influencer_id).map((c) => {
+                  const handle = c.influencer?.instagram_handle
+                    ? `@${c.influencer.instagram_handle}`
+                    : c.influencer?.tiktok_handle ? `@${c.influencer.tiktok_handle}` : 'Creator';
+                  const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min ?? 0;
+                  const busy = collabBusyId === c.id;
+                  const PAY_BADGE = {
+                    pending:  { label: 'Not funded', color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' },
+                    escrowed: { label: 'In escrow',  color: '#60A5FA', bg: 'rgba(96,165,250,0.15)' },
+                    released: { label: 'Paid out',   color: '#4ADE80', bg: 'rgba(74,222,128,0.15)' },
+                  }[c.payment_status] ?? { label: c.payment_status, color: '#888', bg: '#222' };
+                  return (
+                    <div key={c.id} className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #222' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-[14px] text-white truncate">{c.title ?? c.deliverables ?? 'Collab'}</div>
+                          <div className="text-[12px] text-[#888] mt-0.5">{handle} · ${amount} CAD</div>
+                        </div>
+                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: PAY_BADGE.bg, color: PAY_BADGE.color }}>
+                          {PAY_BADGE.label}
+                        </span>
+                      </div>
+
+                      {c.payment_status === 'escrowed' && (
+                        <div className="text-[11px] text-[#888]">
+                          ${amount} held in escrow · creator gets ${(((amount * 100) - (c.platform_fee_cents ?? Math.round(amount * 2))) / 100).toFixed(2)} after RepEAT&apos;s 2% fee
+                        </div>
+                      )}
+
+                      {collabError?.id === c.id && (
+                        <p className="text-[12px] text-red-400">{collabError.msg}</p>
+                      )}
+
+                      {c.payment_status === 'pending' && (
+                        <button onClick={() => fundCollab(c)} disabled={busy}
+                          className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                          style={{ background: '#7E22CE' }}>
+                          {busy ? <IconLoader2 size={15} className="animate-spin" /> : <><IconLock size={14} /> Fund collab (hold ${amount})</>}
+                        </button>
+                      )}
+                      {c.payment_status === 'escrowed' && (
+                        <button onClick={() => releaseCollab(c)} disabled={busy || !c.influencer?.payouts_enabled}
+                          className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                          style={{ background: '#16A34A' }}>
+                          {busy ? <IconLoader2 size={15} className="animate-spin" />
+                            : !c.influencer?.payouts_enabled ? 'Waiting on creator payout setup'
+                            : <><IconCheck size={14} /> Release payment</>}
+                        </button>
+                      )}
+                      {c.payment_status === 'released' && (
+                        <div className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: '#4ADE80' }}>
+                          <IconCheck size={14} /> Paid out{c.released_at ? ` · ${new Date(c.released_at).toLocaleDateString('en-CA')}` : ''}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
           </div>
         )}
