@@ -1305,6 +1305,7 @@ export default function CustomerPage() {
           isRedeemed={isRedeemed(activeDeal.id)}
           redeemedAt={userClaimMap[activeDeal.id]?.redeemed_at}
           dailyLimitReached={plan.dailyHit}
+          monthlyLimitReached={plan.monthlyHit}
           claimLocked={activeClaimLocked}
           claimForDate={activeTabDate}
           visitWindowMinutes={plan.visit_window_minutes}

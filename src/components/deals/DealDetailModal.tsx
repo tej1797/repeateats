@@ -50,7 +50,8 @@ interface DealDetailModalProps {
   existingQrCode?:    string;
   isRedeemed?:        boolean;
   redeemedAt?:        string | null;
-  dailyLimitReached?: boolean;
+  dailyLimitReached?:   boolean;
+  monthlyLimitReached?: boolean;
   /** YYYY-MM-DD of the day tab the deal was opened from (today if omitted). */
   claimForDate?:      string;
   /** Minutes the visit window stays open once it starts (tier-based). */
@@ -79,7 +80,8 @@ export default function DealDetailModal({
   existingQrCode,
   isRedeemed         = false,
   redeemedAt         = null,
-  dailyLimitReached  = false,
+  dailyLimitReached   = false,
+  monthlyLimitReached = false,
   claimForDate,
   visitWindowMinutes = 45,
   claimLocked        = false,
@@ -348,7 +350,7 @@ export default function DealDetailModal({
           </div>
 
           {/* Error */}
-          {claimError && !dailyLimitReached && (
+          {claimError && !dailyLimitReached && !monthlyLimitReached && (
             <p
               className="text-[13px] rounded-xl px-3 py-2.5"
               style={{ background: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)' }}
@@ -357,16 +359,20 @@ export default function DealDetailModal({
             </p>
           )}
 
-          {dailyLimitReached && !alreadyClaimed && !isRedeemed && user && (
+          {(dailyLimitReached || monthlyLimitReached) && !alreadyClaimed && !isRedeemed && user && (
             <div
               className="rounded-xl px-4 py-3.5"
               style={{ background: CUSTOMER_UI.accentSoft, border: `1px solid ${CUSTOMER_UI.accent}` }}
             >
               <p className="text-[14px] font-bold mb-1" style={{ color: CUSTOMER_UI.accent }}>
-                You&apos;ve hit your redemption limit
+                {monthlyLimitReached
+                  ? "No redemptions left this month"
+                  : "You’ve hit your daily limit"}
               </p>
               <p className="text-[13px] mb-3" style={{ color: CUSTOMER_UI.textSecondary }}>
-                Upgrade to RepEAT+ for more daily redemptions and full-week access.
+                {monthlyLimitReached
+                  ? 'Upgrade to RepEAT+ for more monthly redemptions, or earn bonus slots with points.'
+                  : 'Upgrade to RepEAT+ for more daily redemptions and full-week access.'}
               </p>
               <button
                 onClick={() => router.push('/repeat-plus')}
@@ -379,7 +385,7 @@ export default function DealDetailModal({
           )}
 
           {/* Visit-time scheduling (Starter / Pro / yearly) */}
-          {canSchedule && user && !alreadyClaimed && !isRedeemed && !soldOut && !deal.is_coming && !dailyLimitReached && (
+          {canSchedule && user && !alreadyClaimed && !isRedeemed && !soldOut && !deal.is_coming && !dailyLimitReached && !monthlyLimitReached && (
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide mb-2.5" style={{ color: CUSTOMER_UI.textMuted }}>
                 Visit time
@@ -497,10 +503,10 @@ export default function DealDetailModal({
               : (claiming ? 'Claiming…' : 'Claim now');
             return (
               <button
-                onClick={dailyLimitReached ? undefined : () => submitClaim(mode)}
-                disabled={claiming || dailyLimitReached}
+                onClick={(dailyLimitReached || monthlyLimitReached) ? undefined : () => submitClaim(mode)}
+                disabled={claiming || dailyLimitReached || monthlyLimitReached}
                 className="w-full py-3.5 rounded-2xl transition-opacity text-[16px] font-bold text-white"
-                style={{ background: CUSTOMER_UI.accent, opacity: dailyLimitReached ? 0.4 : 1, cursor: dailyLimitReached ? 'default' : 'pointer' }}
+                style={{ background: CUSTOMER_UI.accent, opacity: (dailyLimitReached || monthlyLimitReached) ? 0.4 : 1, cursor: (dailyLimitReached || monthlyLimitReached) ? 'default' : 'pointer' }}
               >
                 {label}
               </button>
