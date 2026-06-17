@@ -30,6 +30,20 @@ interface ScannerPanelProps {
   compact?: boolean;
 }
 
+// Customer's remaining redemptions, returned by claim-deal on redeem (success or
+// blocked). Rendered only when present, so this is safe before the edge function
+// that supplies it is deployed.
+interface RedeemLimits {
+  daily_cap: number;
+  daily_used_today: number;
+  daily_remaining: number;
+  monthly_cap: number;
+  monthly_pool_used: number;
+  monthly_remaining: number;
+  total_remaining: number;
+  timezone?: string;
+}
+
 export default function ScannerPanel({ restaurantId, compact = false }: ScannerPanelProps) {
   const supabase = useRef(createClient()).current;
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,6 +53,7 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
   const [error,       setError]       = useState('');
   const [successMsg,  setSuccessMsg]  = useState('');
   const [todayCount,  setTodayCount]  = useState<number | null>(null);
+  const [limits,      setLimits]      = useState<RedeemLimits | null>(null);
 
   const fullCode = buildFullRedeemCode(codePart);
   const canSubmit = isCompleteRedeemCode(codePart) && !processing;
@@ -55,6 +70,7 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
     setCodePart('');
     setError('');
     setSuccessMsg('');
+    setLimits(null);
     setProcessing(false);
   }, []);
 
@@ -99,7 +115,10 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
         error?: string;
         claim?: { deal_title?: string; discount_value?: string };
         message?: string;
+        limits?: RedeemLimits;
       };
+
+      setLimits(json.limits ?? null);
 
       if (!res.ok) {
         setError(json.error ?? 'Failed to redeem');
@@ -129,6 +148,7 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
     setCodePart(formatRedeemCodePart(stripped));
     setError('');
     setSuccessMsg('');
+    setLimits(null);
     clearResetTimer();
   };
 
@@ -196,6 +216,21 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
           >
             <IconCheck size={14} className="flex-shrink-0" /> {successMsg}
           </p>
+        )}
+
+        {/* Customer's remaining redemptions (rendered only when claim-deal returns it). */}
+        {limits && (
+          <div className="mb-3 px-3 py-2.5 rounded-xl" style={{ background: '#141414', border: '1px solid #222' }}>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[18px] font-extrabold text-white leading-none">{limits.total_remaining}</span>
+              <span className="text-[12px] font-semibold text-[#888]">
+                {limits.total_remaining === 1 ? 'redemption left for this customer' : 'redemptions left for this customer'}
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] text-[#888]">
+              {limits.monthly_remaining} monthly + {limits.daily_remaining} today
+            </div>
+          </div>
         )}
 
         <button

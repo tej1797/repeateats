@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
         error,
         error_type: payload?.error_type ?? payload?.errorType,
         limitReached: payload?.limitReached,
+        // Forwarded from claim-deal so the scanner can show why it's blocked.
+        limits: payload?.limits,
       }, { status: status >= 400 ? status : 400 });
     }
 
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
       claim?: Record<string, unknown>;
       success?: boolean;
       message?: string;
+      limits?: unknown;
     };
 
     const claim = result.claim as Record<string, unknown> | undefined;
@@ -64,6 +67,9 @@ export async function POST(req: NextRequest) {
         discount_type:   claim.discount_type,
         restaurant_name: claim.restaurant_name,
       } : undefined,
+      // Customer's remaining redemptions (daily + monthly). Present once claim-deal
+      // returns it; the scanner renders it defensively only when available.
+      limits: result.limits,
     });
 
   } catch (err: unknown) {
