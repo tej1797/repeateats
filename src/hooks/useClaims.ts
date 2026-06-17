@@ -14,8 +14,9 @@ interface ClaimResult {
 }
 
 interface ClaimFailure {
-  error:        string;
+  error:         string;
   limitReached?: boolean;
+  errorCode?:    string;
 }
 
 type ClaimOutcome = ClaimResult | ClaimFailure;
@@ -80,7 +81,7 @@ export function useClaims(): UseClaimsResult {
       if (!res.ok && !json.alreadyClaimed) {
         const message = friendlyClaimError(json.error);
         setError(message);
-        return { error: message, limitReached: json.limitReached };
+        return { error: message, limitReached: json.limitReached, errorCode: json.error };
       }
 
       const qrCode = json.data?.qr_code;

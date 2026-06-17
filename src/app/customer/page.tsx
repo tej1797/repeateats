@@ -391,6 +391,7 @@ export default function CustomerPage() {
   const [showSignIn,   setShowSignIn]   = useState(false);
   const [showDrawer,   setShowDrawer]   = useState(false);
   const [claimError,   setClaimError]   = useState<string | null>(null);
+  const [claimLimitType, setClaimLimitType] = useState<'daily' | 'monthly' | null>(null);
 
   // ── Active claims banner ─────────────────────────────────────
   const [claimsBannerDismissed, setClaimsBannerDismissed] = useState(false);
@@ -798,6 +799,7 @@ export default function CustomerPage() {
       return;
     }
     setClaimError(null);
+    setClaimLimitType(null);
     const result = await claimDeal(activeDeal.id, opts);
     if (result && 'qr_code' in result) {
       const isScheduled = result.status === 'scheduled';
@@ -811,9 +813,7 @@ export default function CustomerPage() {
           expires_at: expiresAt,
         },
       }));
-      // Quota counter only increases on restaurant redeem (counted_against_limit).
       if (isScheduled) {
-        // Reserved for a future time — no live QR yet. Send the user to Waiting.
         setActiveDeal(null);
         router.push('/customer/claims');
       } else {
@@ -821,7 +821,16 @@ export default function CustomerPage() {
         if (result.claim_id) setActiveClaimId(result.claim_id);
       }
     } else {
-      setClaimError(result?.error ?? 'Could not claim this deal. Please try again.');
+      const code = (result as { errorCode?: string } | null)?.errorCode;
+      if (code === 'daily_redemption_limit') {
+        setClaimLimitType('daily');
+        plan.refetch();
+      } else if (code === 'monthly_redemption_limit') {
+        setClaimLimitType('monthly');
+        plan.refetch();
+      } else {
+        setClaimError(result?.error ?? 'Could not claim this deal. Please try again.');
+      }
     }
   };
 
@@ -1047,7 +1056,7 @@ export default function CustomerPage() {
                     </button>
                     <DiscoverDealCard
                       deal={deal}
-                      onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
+                      onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); setClaimLimitType(null); }}
                       claimed={isActiveClaim(deal.id)}
                       redeemed={isRedeemed(deal.id)}
                       saved={favorites.has(deal.id)}
@@ -1072,7 +1081,7 @@ export default function CustomerPage() {
                 <div key={deal.id} className="flex-shrink-0 w-[200px] relative">
                   <DiscoverDealCard
                     deal={deal}
-                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    onClick={() => { setActiveDeal(deal); setClaimError(null); setClaimLimitType(null); }}
                     claimed={isActiveClaim(deal.id)}
                     redeemed={isRedeemed(deal.id)}
                   />
@@ -1097,7 +1106,7 @@ export default function CustomerPage() {
                 <div key={deal.id} className="flex-shrink-0 w-[180px]">
                   <DiscoverDealCard
                     deal={deal}
-                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    onClick={() => { setActiveDeal(deal); setClaimError(null); setClaimLimitType(null); }}
                     showCrown={plan.tier === 'pro' || plan.tier === 'yearly'}
                     redeemed={isRedeemed(deal.id)}
                   />
@@ -1151,7 +1160,7 @@ export default function CustomerPage() {
                 >
                   <DiscoverDealCard
                     deal={deal}
-                    onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
+                    onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); setClaimLimitType(null); }}
                     claimed={isActiveClaim(deal.id)}
                     redeemed={isRedeemed(deal.id)}
                     saved={favorites.has(deal.id)}
@@ -1196,7 +1205,7 @@ export default function CustomerPage() {
                 >
                   <DiscoverDealCard
                     deal={deal}
-                    onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); }}
+                    onClick={() => { addRecentlyViewed(deal); setActiveDeal(deal); setClaimError(null); setClaimLimitType(null); }}
                     claimed={isActiveClaim(deal.id)}
                     redeemed={isRedeemed(deal.id)}
                     saved={favorites.has(deal.id)}
@@ -1271,7 +1280,7 @@ export default function CustomerPage() {
                   </span>
                   <DiscoverDealCard
                     deal={deal}
-                    onClick={() => { setActiveDeal(deal); setClaimError(null); }}
+                    onClick={() => { setActiveDeal(deal); setClaimError(null); setClaimLimitType(null); }}
                     claimed={isActiveClaim(deal.id)}
                     redeemed={isRedeemed(deal.id)}
                   />
@@ -1304,8 +1313,8 @@ export default function CustomerPage() {
           existingQrCode={userClaimMap[activeDeal.id]?.qr_code}
           isRedeemed={isRedeemed(activeDeal.id)}
           redeemedAt={userClaimMap[activeDeal.id]?.redeemed_at}
-          dailyLimitReached={plan.dailyHit}
-          monthlyLimitReached={plan.monthlyHit}
+          dailyLimitReached={plan.dailyHit || claimLimitType === 'daily'}
+          monthlyLimitReached={plan.monthlyHit || claimLimitType === 'monthly'}
           claimLocked={activeClaimLocked}
           claimForDate={activeTabDate}
           visitWindowMinutes={plan.visit_window_minutes}
