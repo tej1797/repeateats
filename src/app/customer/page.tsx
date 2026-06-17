@@ -839,14 +839,17 @@ export default function CustomerPage() {
   // Veg mode ON: hide only explicitly non-veg deals (unmarked deals still show).
   // Veg mode OFF ('all'): show everything including non-veg.
   const dietFilteredDeals = dietFilter === 'veg'
+    // veg: hide nonveg; show veg + both
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? filteredDeals.filter(d => ((d as any).diet_type ?? 'veg') !== 'nonveg')
     : dietFilter === 'egg'
+    // egg: veg + egg + both (anything with vegetarian options)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? filteredDeals.filter(d => ['veg', 'egg'].includes((d as any).diet_type ?? 'veg'))
+    ? filteredDeals.filter(d => ['veg', 'egg', 'both'].includes((d as any).diet_type ?? 'veg'))
     : dietFilter === 'nonveg'
+    // nonveg: nonveg + both (anything with non-veg options)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? filteredDeals.filter(d => ((d as any).diet_type ?? 'nonveg') === 'nonveg')
+    ? filteredDeals.filter(d => ['nonveg', 'both'].includes((d as any).diet_type ?? 'nonveg'))
     : filteredDeals;
 
   const loading    = tab === 'all' ? restsLoading : dealsLoading;

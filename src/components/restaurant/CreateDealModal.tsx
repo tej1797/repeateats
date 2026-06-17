@@ -47,8 +47,11 @@ interface Props {
   onClose:            () => void;
 }
 
-function initialDiet(existing?: ExistingDeal): 'veg' | 'nonveg' {
+type DietType = 'veg' | 'nonveg' | 'both';
+
+function initialDiet(existing?: ExistingDeal): DietType {
   if (existing?.diet_type === 'nonveg') return 'nonveg';
+  if (existing?.diet_type === 'both') return 'both';
   return 'veg';
 }
 
@@ -88,7 +91,7 @@ export default function CreateDealModal({
   const [validFrom,      setValidFrom]      = useState(existingDeal?.valid_from ?? '');
   const [validUntil,     setValidUntil]     = useState(existingDeal?.valid_until ?? '');
   const [isComing,       setIsComing]       = useState(existingDeal?.is_coming ?? false);
-  const [dietType,       setDietType]       = useState<'veg' | 'nonveg'>(initialDiet(existingDeal));
+  const [dietType,       setDietType]       = useState<DietType>(initialDiet(existingDeal));
   const [submitting,     setSubmitting]     = useState(false);
   const [error,          setError]          = useState('');
   const [done,           setDone]           = useState(false);
@@ -156,33 +159,37 @@ export default function CreateDealModal({
       price_tag:      priceTag,
     };
 
-    let data: Record<string, unknown> | null = null;
-    let opError: { message: string } | null = null;
+    try {
+      let data: Record<string, unknown> | null = null;
+      let opError: { message: string } | null = null;
 
-    if (isEdit && existingDeal) {
-      const { data: updated, error: updateError } = await supabase
-        .from('deals').update(payload).eq('id', existingDeal.id).select().single();
-      data = updated as Record<string, unknown> | null;
-      opError = updateError;
-    } else {
-      const { data: created, error: insertError } = await supabase
-        .from('deals').insert({ ...payload, current_claims: 0 }).select().single();
-      data = created as Record<string, unknown> | null;
-      opError = insertError;
+      if (isEdit && existingDeal) {
+        const { data: updated, error: updateError } = await supabase
+          .from('deals').update(payload).eq('id', existingDeal.id).select().single();
+        data = updated as Record<string, unknown> | null;
+        opError = updateError;
+      } else {
+        const { data: created, error: insertError } = await supabase
+          .from('deals').insert({ ...payload, current_claims: 0 }).select().single();
+        data = created as Record<string, unknown> | null;
+        opError = insertError;
+      }
+
+      if (opError) {
+        setError(opError.message);
+        return;
+      }
+
+      setDone(true);
+      setTimeout(() => {
+        onCreated(data as Record<string, unknown>);
+        onClose();
+      }, 800);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
-
-    if (opError) {
-      setError(opError.message);
-      return;
-    }
-
-    setDone(true);
-    setTimeout(() => {
-      onCreated(data as Record<string, unknown>);
-      onClose();
-    }, 800);
   };
 
   return (
@@ -458,8 +465,9 @@ export default function CreateDealModal({
               </label>
               <div className="flex gap-2">
                 {([
-                  { id: 'veg',    label: '🟢 Vegetarian',      dot: '#16a34a' },
-                  { id: 'nonveg', label: '🔴 Non-Vegetarian', dot: '#dc2626' },
+                  { id: 'veg',    label: '🟢 Veg',     dot: '#16a34a' },
+                  { id: 'nonveg', label: '🔴 Non-Veg', dot: '#dc2626' },
+                  { id: 'both',   label: '🟢🔴 Both',  dot: '#b45309' },
                 ] as const).map(({ id, label, dot }) => (
                   <button
                     key={id}
@@ -472,7 +480,7 @@ export default function CreateDealModal({
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-t3 mt-1.5">*eggs are considered as non-veg</p>
+              <p className="text-[11px] text-t3 mt-1.5">*eggs are considered as non-veg · &ldquo;Both&rdquo; shows in veg and non-veg filters</p>
             </div>
 
             <div className="flex items-center justify-between py-2 border-t border-[var(--bd)]">

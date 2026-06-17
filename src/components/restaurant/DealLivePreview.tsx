@@ -14,7 +14,7 @@ interface DealLivePreviewProps {
   discountValue: string;
   scopeDetail?: string;
   dealTypes: string[];
-  dietType: 'veg' | 'nonveg';
+  dietType: 'veg' | 'nonveg' | 'both';
   priceTag: PriceTag;
   isComing: boolean;
   restaurantName: string;
@@ -104,15 +104,22 @@ export default function DealLivePreview({
                 {priceLabel}
               </span>
             )}
-            <span
-              className="text-[11px] font-semibold px-2 py-0.5 rounded-md"
-              style={{
-                background: dietType === 'veg' ? 'rgba(22,163,74,0.2)' : 'rgba(220,38,38,0.2)',
-                color: dietType === 'veg' ? '#86EFAC' : '#FCA5A5',
-              }}
-            >
-              {dietType === 'veg' ? 'Veg' : 'Non-Veg'}
-            </span>
+            {dietType === 'both' ? (
+              <>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ background: 'rgba(22,163,74,0.2)', color: '#86EFAC' }}>Veg</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ background: 'rgba(220,38,38,0.2)', color: '#FCA5A5' }}>Non-Veg</span>
+              </>
+            ) : (
+              <span
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-md"
+                style={{
+                  background: dietType === 'veg' ? 'rgba(22,163,74,0.2)' : 'rgba(220,38,38,0.2)',
+                  color: dietType === 'veg' ? '#86EFAC' : '#FCA5A5',
+                }}
+              >
+                {dietType === 'veg' ? 'Veg' : 'Non-Veg'}
+              </span>
+            )}
           </div>
 
           <span

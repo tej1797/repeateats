@@ -142,7 +142,7 @@ interface DealDraft {
   valid_until: string;
   max_claims: string;   // kept as string so empty means "unlimited"
   is_coming: boolean;
-  diet_type: 'veg' | 'nonveg';
+  diet_type: 'veg' | 'nonveg' | 'both';
   price_tag: PriceTag;
 }
 
@@ -1462,6 +1462,7 @@ function DealEditor({
               {([
                 { id: 'veg' as const,    label: '🟢 Veg' },
                 { id: 'nonveg' as const, label: '🔴 Non-Veg' },
+                { id: 'both' as const,   label: '🟢🔴 Both' },
               ]).map(({ id, label }) => (
                 <button
                   key={id}
@@ -1473,7 +1474,7 @@ function DealEditor({
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-t3 mt-1">*eggs are considered as non-veg</p>
+            <p className="text-[10px] text-t3 mt-1">*eggs are non-veg · &ldquo;Both&rdquo; appears in veg &amp; non-veg filters</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
