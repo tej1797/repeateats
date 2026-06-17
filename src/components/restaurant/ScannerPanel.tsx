@@ -220,17 +220,18 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
           </p>
         )}
 
-        {/* Customer's remaining redemptions (rendered only when claim-deal returns it). */}
+        {/* Customer's remaining redemptions (rendered only when claim-deal returns it).
+            total_remaining == monthly_remaining (v23 model: both caps apply). */}
         {limits && (
           <div className="mb-3 px-3 py-2.5 rounded-xl" style={{ background: '#141414', border: '1px solid #222' }}>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-[18px] font-extrabold text-white leading-none">{limits.total_remaining}</span>
+              <span className="text-[18px] font-extrabold text-white leading-none">{limits.monthly_remaining}</span>
               <span className="text-[12px] font-semibold text-[#888]">
-                {limits.total_remaining === 1 ? 'redemption left for this customer' : 'redemptions left for this customer'}
+                {limits.monthly_remaining === 1 ? 'redemption left this month' : 'redemptions left this month'}
               </span>
             </div>
             <div className="mt-1 text-[11px] text-[#888]">
-              {limits.monthly_remaining} monthly + {limits.daily_remaining} today
+              {limits.daily_remaining} more available today
             </div>
           </div>
         )}

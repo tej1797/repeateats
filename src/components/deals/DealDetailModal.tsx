@@ -367,12 +367,12 @@ export default function DealDetailModal({
               <p className="text-[14px] font-bold mb-1" style={{ color: CUSTOMER_UI.accent }}>
                 {monthlyLimitReached
                   ? "No redemptions left this month"
-                  : "You’ve hit your daily limit"}
+                  : "Daily limit reached"}
               </p>
               <p className="text-[13px] mb-3" style={{ color: CUSTOMER_UI.textSecondary }}>
                 {monthlyLimitReached
-                  ? 'Upgrade to RepEAT+ for more monthly redemptions, or earn bonus slots with points.'
-                  : 'Upgrade to RepEAT+ for more daily redemptions and full-week access.'}
+                  ? "Upgrade to RepEAT+ for a higher monthly cap, or earn bonus slots with points."
+                  : "Come back tomorrow or use points for a bonus redemption today."}
               </p>
               <button
                 onClick={() => router.push('/repeat-plus')}
