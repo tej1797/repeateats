@@ -6,6 +6,7 @@ import type { DealWithRestaurant } from '@/types/index';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
 import { getDealOfferHeadline } from '@/lib/dealOfferLabel';
+import { getDealPriceTag } from '@/lib/dealPricing';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80',
@@ -64,6 +65,13 @@ export default function DiscoverDealCard({
   const [imgSrc, setImgSrc] = useState(initialSrc);
 
   const headline = offerLabel(deal);
+  const priceTag = getDealPriceTag({
+    discount_type: (deal as { discount_type?: string | null }).discount_type,
+    discount_value: deal.discount_value,
+    base_price: deal.base_price ?? null,
+    free_condition_type: deal.free_condition_type ?? null,
+    free_condition_value: deal.free_condition_value ?? null,
+  });
   const rating   = getRestaurantRating(deal.restaurant);
   const maxClaims = deal.max_claims;
   const pct = maxClaims && maxClaims > 0 ? Math.min(100, (deal.current_claims / maxClaims) * 100) : 0;
@@ -141,9 +149,16 @@ export default function DiscoverDealCard({
         <p className="font-display text-[17px] font-extrabold leading-tight" style={{ color: CUSTOMER_UI.textPrimary }}>
           {headline}
         </p>
-        <p className="text-[13px] font-semibold leading-snug line-clamp-1 mb-1.5" style={{ color: CUSTOMER_UI.textSecondary }}>
-          {formatCustomerDealTitle(deal.title)}
-        </p>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p className="text-[13px] font-semibold leading-snug line-clamp-1" style={{ color: CUSTOMER_UI.textSecondary }}>
+            {formatCustomerDealTitle(deal.title)}
+          </p>
+          {priceTag && (
+            <span className="text-[13px] font-extrabold leading-snug flex-shrink-0" style={{ color: CUSTOMER_UI.textPrimary }}>
+              {priceTag}
+            </span>
+          )}
+        </div>
 
         {/* Restaurant · city · rating */}
         <div className="flex items-center justify-between gap-2 mb-2">

@@ -19,6 +19,7 @@ import {
   type RestaurantDiscountType,
 } from '@/lib/restaurantDealForm';
 import DealLivePreview from '@/components/restaurant/DealLivePreview';
+import { dealUsesBasePrice, isFreeItemDiscount } from '@/lib/dealPricing';
 
 const BLUE = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -35,6 +36,9 @@ interface ExistingDeal {
   diet_type?: string | null;
   price_tag?: PriceTag;
   scope_detail?: string | null;
+  base_price?: number | null;
+  free_condition_type?: 'spend' | 'item' | null;
+  free_condition_value?: string | null;
 }
 
 interface Props {
@@ -92,6 +96,9 @@ export default function CreateDealModal({
   const [validUntil,     setValidUntil]     = useState(existingDeal?.valid_until ?? '');
   const [isComing,       setIsComing]       = useState(existingDeal?.is_coming ?? false);
   const [dietType,       setDietType]       = useState<DietType>(initialDiet(existingDeal));
+  const [basePrice,      setBasePrice]      = useState(existingDeal?.base_price != null ? String(existingDeal.base_price) : '');
+  const [freeCondType,   setFreeCondType]   = useState<'spend' | 'item'>(existingDeal?.free_condition_type ?? 'spend');
+  const [freeCondValue,  setFreeCondValue]  = useState(existingDeal?.free_condition_value ?? '');
   const [submitting,     setSubmitting]     = useState(false);
   const [error,          setError]          = useState('');
   const [done,           setDone]           = useState(false);
@@ -131,6 +138,12 @@ export default function CreateDealModal({
       setError('Enter the item name for your lb deal (e.g. Fish Pakora)');
       return;
     }
+    if (isFreeItemDiscount(discountType) && !freeCondValue.trim()) {
+      setError(freeCondType === 'spend'
+        ? 'Enter the minimum spend for the free item'
+        : 'Enter the dish the customer must buy to get the free item');
+      return;
+    }
     if (selectedTypes.size === 0) { setError('Select at least one deal type'); return; }
     if (!allDays && selectedDays.size === 0) { setError('Select at least one day'); return; }
 
@@ -138,6 +151,8 @@ export default function CreateDealModal({
     setSubmitting(true);
 
     const scopeDetail = isLbDiscount(discountType) ? lbItem.trim() : null;
+    const parsedBasePrice = dealUsesBasePrice(discountType) && basePrice.trim()
+      ? parseFloat(basePrice) : null;
 
     const payload = {
       restaurant_id:  restaurantId,
@@ -157,6 +172,9 @@ export default function CreateDealModal({
       scope:          isLbDiscount(discountType) ? 'single' : 'menu',
       scope_detail:   scopeDetail,
       price_tag:      priceTag,
+      base_price:     parsedBasePrice && !Number.isNaN(parsedBasePrice) ? parsedBasePrice : null,
+      free_condition_type:  isFreeItemDiscount(discountType) ? freeCondType : null,
+      free_condition_value: isFreeItemDiscount(discountType) ? freeCondValue.trim() || null : null,
     };
 
     try {
@@ -309,6 +327,87 @@ export default function CreateDealModal({
                 </div>
                 <p className="text-[11px] text-t3">
                   Example: Buy 1 lb Fish Pakora, get the 2nd lb 50% off (Wednesdays).
+                </p>
+              </div>
+            )}
+
+            {/* Item price — shown for all types except Free item, so customers see
+                the cost before claiming (e.g. BOGO needs a base price). */}
+            {dealUsesBasePrice(discountType) && (
+              <div>
+                <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">
+                  {discountType === 'percentage' || discountType === 'dollar' ? 'Regular price' : 'Item price'}
+                  {' '}<span className="normal-case font-normal text-t3">(per item)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[16px] font-bold text-t2">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={basePrice}
+                    onChange={(e) => setBasePrice(e.target.value.replace(/[^0-9.]/g, ''))}
+                    placeholder="20"
+                    className="flex-1 h-11 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[15px] outline-none focus:border-[var(--brand)] transition-colors"
+                  />
+                </div>
+                <p className="text-[11px] text-t3 mt-1.5">
+                  {discountType === 'bogo'      && 'Price of one item — customer pays this and gets a 2nd free.'}
+                  {discountType === 'bogo_half' && 'Price of one item — 2nd is shown at 50% off automatically.'}
+                  {discountType === 'bogo_lb'   && 'Price per lb — 2nd lb is shown at 50% off automatically.'}
+                  {(discountType === 'percentage' || discountType === 'dollar') && 'Regular price so the discounted price can be shown.'}
+                  {discountType === 'set_price' && 'The set price customers will pay.'}
+                  {discountType === 'other'     && 'Optional — helps customers see the price upfront.'}
+                </p>
+              </div>
+            )}
+
+            {/* Free item — a qualifying condition instead of a price. */}
+            {isFreeItemDiscount(discountType) && (
+              <div className="rounded-brands border-2 border-[var(--bd2)] p-3 space-y-3 bg-surface2/50">
+                <p className="text-[12px] font-bold text-t2 uppercase tracking-wide">Free item condition</p>
+                <div className="flex gap-2">
+                  {([
+                    { id: 'spend' as const, label: 'Min spend' },
+                    { id: 'item'  as const, label: 'With purchase of' },
+                  ]).map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => { setFreeCondType(id); setFreeCondValue(''); }}
+                      className="flex-1 h-9 rounded-brands border-2 text-[12px] font-semibold transition-all"
+                      style={freeCondType === id
+                        ? { borderColor: BLUE, background: 'rgba(18,73,169,0.08)', color: BLUE }
+                        : { borderColor: 'var(--bd2)', color: 'var(--t2)', background: 'transparent' }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {freeCondType === 'spend' ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[16px] font-bold text-t2">$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={freeCondValue}
+                      onChange={(e) => setFreeCondValue(e.target.value.replace(/[^0-9.]/g, ''))}
+                      placeholder="30"
+                      className="flex-1 h-10 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)]"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={freeCondValue}
+                    onChange={(e) => setFreeCondValue(e.target.value)}
+                    placeholder="e.g. any large pizza"
+                    className="w-full h-10 px-3 border-2 border-[var(--bd2)] rounded-brands bg-surface text-tx text-[14px] outline-none focus:border-[var(--brand)]"
+                  />
+                )}
+                <p className="text-[11px] text-t3">
+                  {freeCondType === 'spend'
+                    ? 'Customer gets the free item when they spend at least this amount.'
+                    : 'Customer gets the free item when they buy this dish.'}
                 </p>
               </div>
             )}
@@ -512,6 +611,9 @@ export default function CreateDealModal({
               isComing={isComing}
               restaurantName={restaurantName}
               restaurantCity={restaurantCity}
+              basePrice={basePrice}
+              freeConditionType={freeCondType}
+              freeConditionValue={freeCondValue}
             />
 
             {error && (

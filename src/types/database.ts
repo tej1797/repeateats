@@ -119,9 +119,12 @@ export interface DealRow {
   title:           string
   description:     string | null
   discount_type:   'percentage' | 'fixed' | 'free_item' | 'bogo' | 'bogo_half' | 'bogo_lb' | 'set_price' | 'free_delivery' | null
-  diet_type:       'veg' | 'nonveg' | 'egg' | null
+  diet_type:       'veg' | 'nonveg' | 'egg' | 'both' | null
   price_tag:       'under6' | 'under12' | null
   discount_value:  string | null
+  base_price:          number | null
+  free_condition_type:  'spend' | 'item' | null
+  free_condition_value: string | null
   deal_types:      string[]
   available_days:  string[]
   scope:           'single' | 'category' | 'menu' | 'bundle'

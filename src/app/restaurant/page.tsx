@@ -20,6 +20,7 @@ import {
   type PriceTag,
   type RestaurantDiscountType,
 } from '@/lib/restaurantDealForm';
+import { dealUsesBasePrice, isFreeItemDiscount } from '@/lib/dealPricing';
 import ScannerPanel from '@/components/restaurant/ScannerPanel';
 import RestaurantSearch, { type PlaceResult } from '@/components/restaurant/RestaurantSearch';
 import {
@@ -144,6 +145,9 @@ interface DealDraft {
   is_coming: boolean;
   diet_type: 'veg' | 'nonveg' | 'both';
   price_tag: PriceTag;
+  base_price: string;            // kept as string; '' = not set
+  free_condition_type: 'spend' | 'item';
+  free_condition_value: string;
 }
 
 // All data collected across the 5 wizard steps
@@ -484,6 +488,10 @@ export default function RestaurantPage() {
           is_active:      !draft.is_coming,
           diet_type:      draft.diet_type || 'veg',
           price_tag:      draft.price_tag || null,
+          base_price:     draft.discount_type !== 'free_item' && draft.base_price?.trim()
+                            ? parseFloat(draft.base_price) : null,
+          free_condition_type:  draft.discount_type === 'free_item' ? draft.free_condition_type : null,
+          free_condition_value: draft.discount_type === 'free_item' ? (draft.free_condition_value?.trim() || null) : null,
           current_claims: 0,
         });
       }
@@ -1229,6 +1237,7 @@ function Step4Deals({
           discount_value: '', scope: 'menu', scope_detail: '', deal_types: ['dine-in'],
           available_days: ['all'], valid_from: todayStr(), valid_until: nextMonthStr(),
           max_claims: '', is_coming: false, diet_type: 'veg', price_tag: null,
+          base_price: '', free_condition_type: 'spend', free_condition_value: '',
           ...draft,
         },
       ],
@@ -1434,6 +1443,46 @@ function DealEditor({
                 value={deal.scope_detail}
                 onChange={(e) => onChange({ scope_detail: e.target.value })}
                 placeholder="e.g. Fish Pakora"
+                className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
+              />
+            </div>
+          )}
+          {dealUsesBasePrice(deal.discount_type) && (
+            <div>
+              <label className="block text-[12px] font-semibold text-t2 mb-1">
+                {deal.discount_type === 'percentage' || deal.discount_type === 'dollar' ? 'Regular price' : 'Item price'} ($ per item)
+              </label>
+              <input
+                type="text" inputMode="decimal" value={deal.base_price}
+                onChange={(e) => onChange({ base_price: e.target.value.replace(/[^0-9.]/g, '') })}
+                placeholder="20"
+                className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
+              />
+            </div>
+          )}
+          {isFreeItemDiscount(deal.discount_type) && (
+            <div>
+              <label className="block text-[12px] font-semibold text-t2 mb-1">Free item condition</label>
+              <div className="flex gap-1.5 mb-1.5">
+                {([{ id: 'spend' as const, label: 'Min spend' }, { id: 'item' as const, label: 'With purchase of' }]).map(({ id, label }) => (
+                  <button
+                    key={id} type="button"
+                    onClick={() => onChange({ free_condition_type: id, free_condition_value: '' })}
+                    className="flex-1 h-8 rounded-brands border text-[12px] font-semibold transition-all"
+                    style={deal.free_condition_type === id
+                      ? { borderColor: 'var(--brand)', background: 'rgba(232,93,4,0.08)', color: 'var(--brand)' }
+                      : { borderColor: 'var(--bd2)', color: 'var(--t2)' }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                inputMode={deal.free_condition_type === 'spend' ? 'decimal' : 'text'}
+                value={deal.free_condition_value}
+                onChange={(e) => onChange({ free_condition_value: deal.free_condition_type === 'spend' ? e.target.value.replace(/[^0-9.]/g, '') : e.target.value })}
+                placeholder={deal.free_condition_type === 'spend' ? '$30 min spend' : 'e.g. any large pizza'}
                 className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
               />
             </div>
@@ -2061,7 +2110,10 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   };
 
   const duplicateDeal = async (deal: Deal) => {
-    const meta = deal as Deal & { diet_type?: string; price_tag?: PriceTag };
+    const meta = deal as Deal & {
+      diet_type?: string; price_tag?: PriceTag;
+      base_price?: number | null; free_condition_type?: 'spend' | 'item' | null; free_condition_value?: string | null;
+    };
     const { valid_from, valid_until } = nextDuplicateDates(deal);
     const duration = dealDurationDays(deal);
     const newTitle = duplicateDealTitle(deal.title);
@@ -2094,6 +2146,9 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         is_active:      true,
         diet_type:      meta.diet_type ?? 'veg',
         price_tag:      meta.price_tag ?? null,
+        base_price:           meta.base_price ?? null,
+        free_condition_type:  meta.free_condition_type ?? null,
+        free_condition_value: meta.free_condition_value ?? null,
       })
       .select()
       .single();

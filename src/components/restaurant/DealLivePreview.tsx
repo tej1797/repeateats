@@ -2,6 +2,7 @@
 
 import { formatCustomerDealTitle } from '@/lib/utils';
 import { getDealOfferBadge } from '@/lib/dealOfferLabel';
+import { getDealPriceTag } from '@/lib/dealPricing';
 import { toDbDiscountType, type PriceTag, type RestaurantDiscountType } from '@/lib/restaurantDealForm';
 
 const PREVIEW_BLUE = '#1249A9';
@@ -19,6 +20,9 @@ interface DealLivePreviewProps {
   isComing: boolean;
   restaurantName: string;
   restaurantCity?: string;
+  basePrice?: string;
+  freeConditionType?: 'spend' | 'item';
+  freeConditionValue?: string;
 }
 
 function serviceTags(dealTypes: string[]): string[] {
@@ -45,12 +49,23 @@ export default function DealLivePreview({
   isComing,
   restaurantName,
   restaurantCity,
+  basePrice,
+  freeConditionType,
+  freeConditionValue,
 }: DealLivePreviewProps) {
   const badge = getDealOfferBadge({
     discount_type: toDbDiscountType(discountType),
     discount_value: discountValue,
     title,
     scope_detail: scopeDetail,
+  });
+
+  const priceTagText = getDealPriceTag({
+    discount_type: toDbDiscountType(discountType),
+    discount_value: discountValue,
+    base_price: basePrice && basePrice.trim() ? parseFloat(basePrice) : null,
+    free_condition_type: freeConditionType ?? null,
+    free_condition_value: freeConditionValue ?? null,
   });
 
   const displayTitle = formatCustomerDealTitle(title.trim()) || 'Your deal title';
@@ -74,9 +89,16 @@ export default function DealLivePreview({
             {badge}
           </span>
 
-          <p className="font-display text-[18px] font-extrabold leading-tight text-white">
-            {displayTitle}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-display text-[18px] font-extrabold leading-tight text-white">
+              {displayTitle}
+            </p>
+            {priceTagText && (
+              <span className="font-display text-[18px] font-extrabold leading-tight text-white flex-shrink-0">
+                {priceTagText}
+              </span>
+            )}
+          </div>
 
           {subtitle && (
             <p className="text-[13px] mt-1" style={{ color: '#A8A29E' }}>

@@ -8,6 +8,7 @@ import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating, formatRedeemedAt } from '@/lib/utils';
+import { getDealPriceTag, getDealPriceBreakdown } from '@/lib/dealPricing';
 import { initialRestaurantImageSrc, nextRestaurantImageFallback } from '@/lib/restaurantImage';
 import RestaurantHutAvatar from '@/components/customer/RestaurantHutAvatar';
 import StarRating from '@/components/form/StarRating';
@@ -149,6 +150,16 @@ export default function DealDetailModal({
   const dealTypeChips = deal.deal_types ?? [];
   const dayChips      = (deal.available_days ?? []).filter(d => d.toLowerCase() !== 'all');
 
+  const pricingInput = {
+    discount_type: (deal as { discount_type?: string | null }).discount_type,
+    discount_value: deal.discount_value,
+    base_price: deal.base_price ?? null,
+    free_condition_type: deal.free_condition_type ?? null,
+    free_condition_value: deal.free_condition_value ?? null,
+  };
+  const priceTag       = getDealPriceTag(pricingInput);
+  const priceBreakdown = getDealPriceBreakdown(pricingInput);
+
   // Terms list — mirrors mobile copy
   const terms = [
     'One redemption per customer per deal',
@@ -240,15 +251,49 @@ export default function DealDetailModal({
 
           {/* Big title */}
           <div>
-            <h1 className="font-display text-[34px] font-extrabold leading-[1.05]" style={{ color: CUSTOMER_UI.textPrimary }}>
-              {formatCustomerDealTitle(deal.title)}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="font-display text-[34px] font-extrabold leading-[1.05]" style={{ color: CUSTOMER_UI.textPrimary }}>
+                {formatCustomerDealTitle(deal.title)}
+              </h1>
+              {priceTag && (
+                <span className="font-display text-[26px] font-extrabold leading-[1.1] flex-shrink-0 mt-0.5" style={{ color: CUSTOMER_UI.accent }}>
+                  {priceTag}
+                </span>
+              )}
+            </div>
             {deal.description && (
               <p className="text-[15px] mt-1" style={{ color: CUSTOMER_UI.textSecondary }}>
                 {deal.description}
               </p>
             )}
           </div>
+
+          {/* Pricing breakdown — shows what the customer pays (BOGO, half-off, etc.). */}
+          {priceBreakdown && (priceBreakdown.lines.length > 0 || priceBreakdown.note) && (
+            <div
+              className="rounded-2xl px-4 py-3.5"
+              style={{ background: CUSTOMER_UI.glassBg, border: `1px solid ${CUSTOMER_UI.glassBorder}` }}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide mb-2.5" style={{ color: CUSTOMER_UI.textMuted }}>
+                Pricing
+              </p>
+              {priceBreakdown.lines.map(line => (
+                <div key={line.label} className="flex items-center justify-between py-1">
+                  <span className="text-[14px]" style={{ color: CUSTOMER_UI.textSecondary }}>{line.label}</span>
+                  <span className="text-[15px] font-bold" style={{ color: CUSTOMER_UI.textPrimary }}>{line.value}</span>
+                </div>
+              ))}
+              {priceBreakdown.total && (
+                <div className="flex items-center justify-between pt-2 mt-1.5" style={{ borderTop: `1px solid ${CUSTOMER_UI.glassBorder}` }}>
+                  <span className="text-[14px] font-bold" style={{ color: CUSTOMER_UI.textPrimary }}>Total</span>
+                  <span className="text-[16px] font-extrabold" style={{ color: CUSTOMER_UI.accent }}>{priceBreakdown.total}</span>
+                </div>
+              )}
+              {priceBreakdown.note && (
+                <p className="text-[14px]" style={{ color: CUSTOMER_UI.textSecondary }}>{priceBreakdown.note}</p>
+              )}
+            </div>
+          )}
 
           {/* Restaurant card */}
           {deal.restaurant?.id && (

@@ -98,8 +98,11 @@ export interface Deal {
   current_claims: number;
   is_coming: boolean;
   is_active: boolean;
-  diet_type?: 'veg' | 'nonveg' | 'egg';
+  diet_type?: 'veg' | 'nonveg' | 'egg' | 'both';
   price_tag?: DealPriceTag | null;
+  base_price?: number | null;          // price of one item (so customers see the cost)
+  free_condition_type?: 'spend' | 'item' | null;   // free_item deals only
+  free_condition_value?: string | null;            // $ amount (text) or dish name
   created_at: string;
 }
 
