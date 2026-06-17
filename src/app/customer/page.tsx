@@ -45,6 +45,7 @@ import { useRestaurants } from '@/hooks/useRestaurants';
 import DealDetailModal from '@/components/deals/DealDetailModal';
 import QRCodeModal from '@/components/deals/QRCodeModal';
 import Skeleton from '@/components/ui/Skeleton';
+import { isTodayInTZ } from '@/lib/tz';
 import type { DealWithRestaurant, Restaurant } from '@/types/index';
 import type { User } from '@supabase/supabase-js';
 
@@ -458,9 +459,11 @@ export default function CustomerPage() {
       .then(r => r.json())
       .then(({ data }: { data?: Array<{ id: string; deal_id: string; qr_code: string; status: string; expires_at: string | null; redeemed_at: string | null; claimed_at: string }> }) => {
         if (!data) return;
+        // /api/claims is ordered by claimed_at desc, so the FIRST claim seen per
+        // deal is the most recent — keep that one (don't let an older claim win).
         const map: Record<string, ClaimInfo> = {};
         for (const c of data) {
-          if (!c.deal_id) continue;
+          if (!c.deal_id || map[c.deal_id]) continue;
           if (c.status === 'claimed' || c.status === 'redeemed') {
             map[c.deal_id] = { id: c.id, qr_code: c.qr_code, status: c.status, expires_at: c.expires_at, redeemed_at: c.redeemed_at };
           }
@@ -564,8 +567,13 @@ export default function CustomerPage() {
     return new Date(c.expires_at) > new Date();
   };
 
-  const isRedeemed = (dealId: string): boolean =>
-    userClaimMap[dealId]?.status === 'redeemed';
+  // Day-scoped (America/Toronto): a deal only counts as "redeemed" if it was
+  // redeemed TODAY. Recurring/daily deals reopen the next day — matches the
+  // claim-deal edge function's day-scoped re-claim rule.
+  const isRedeemed = (dealId: string): boolean => {
+    const c = userClaimMap[dealId];
+    return c?.status === 'redeemed' && isTodayInTZ(c.redeemed_at);
+  };
 
   // Init favorites from localStorage
   useEffect(() => {

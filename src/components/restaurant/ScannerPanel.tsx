@@ -5,6 +5,7 @@ import {
   IconQrcode, IconCheck, IconX, IconLoader2, IconDeviceMobile, IconSun,
 } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
+import { startOfDayInTZ } from '@/lib/tz';
 
 const BLUE = '#1249A9';
 const SUCCESS_RESET_MS = 1600;
@@ -77,8 +78,9 @@ export default function ScannerPanel({ restaurantId, compact = false }: ScannerP
   useEffect(() => () => clearResetTimer(), []);
 
   const fetchCount = useCallback(async (rid: string) => {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // America/Toronto day boundary — matches the claim-deal edge function so the
+    // restaurant's "today" counter never disagrees with the customer limits.
+    const startOfDay = startOfDayInTZ();
     const { count } = await supabase
       .from('claims')
       .select('id, deals!inner(restaurant_id)', { count: 'exact', head: true })
