@@ -56,7 +56,7 @@ export function dealRunsOnOffset(deal: SchedulableDeal, offset: number): boolean
   if (deal.valid_until && iso > deal.valid_until) return false;
 
   const days = deal.available_days ?? ['all'];
-  if (!days.length || days.includes('all')) return true;
+  if (!days.length || days.some(d => ['all', 'everyday', 'daily'].includes(d.toLowerCase()))) return true;
 
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -67,7 +67,7 @@ export function dealRunsOnOffset(deal: SchedulableDeal, offset: number): boolean
 /** True if deal is configured for a weekday name (Mon, Tue, …) or every day. */
 export function dealConfiguredForWeekday(deal: SchedulableDeal, weekday: WeekdayLabel): boolean {
   const days = deal.available_days ?? ['all'];
-  if (!days.length || days.includes('all')) return true;
+  if (!days.length || days.some(d => ['all', 'everyday', 'daily'].includes(d.toLowerCase()))) return true;
   const target = weekday.toLowerCase();
   return days.some((day) => day.toLowerCase() === target || day === weekday);
 }
