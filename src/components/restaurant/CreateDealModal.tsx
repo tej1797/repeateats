@@ -3,7 +3,7 @@
 // CreateDealModal — restaurant staff can create a new deal from the dashboard
 // Submits directly to Supabase via the browser client.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { IconX, IconLoader2, IconCheck } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -19,7 +19,7 @@ import {
   type RestaurantDiscountType,
 } from '@/lib/restaurantDealForm';
 import DealLivePreview from '@/components/restaurant/DealLivePreview';
-import { dealUsesBasePrice, isFreeItemDiscount } from '@/lib/dealPricing';
+import { dealUsesBasePrice, isFreeItemDiscount, getEffectivePrice, priceTagForPrice } from '@/lib/dealPricing';
 
 const BLUE = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -105,9 +105,22 @@ export default function CreateDealModal({
 
   const handleDiscountTypeChange = (next: RestaurantDiscountType) => {
     setDiscountType(next);
-    const preset = defaultDiscountValue(next);
-    if (preset) setDiscountValue(preset);
+    // Always reset to the new type's preset (which may be '') so a stale value
+    // from the previous type (e.g. "By weight") doesn't linger.
+    setDiscountValue(defaultDiscountValue(next));
   };
+
+  // Auto-pick the price tag from the effective price (≤$6 → $6 & under,
+  // ≤$12 → $12 & under). Recomputes as the price / discount changes.
+  useEffect(() => {
+    const eff = getEffectivePrice({
+      discount_type: toDbDiscountType(discountType),
+      discount_value: discountValue,
+      base_price: basePrice.trim() ? parseFloat(basePrice) : null,
+    });
+    if (eff === null) return;
+    setPriceTag(priceTagForPrice(eff));
+  }, [basePrice, discountValue, discountType]);
 
   const toggleType = (t: DealTypeKey) => {
     setSelectedTypes(prev => {
@@ -326,7 +339,7 @@ export default function CreateDealModal({
                   </div>
                 </div>
                 <p className="text-[11px] text-t3">
-                  Example: Buy 1 lb Fish Pakora, get the 2nd lb 50% off (Wednesdays).
+                  Example: Fish Pakora sold by weight — set the price per lb above.
                 </p>
               </div>
             )}
@@ -336,7 +349,8 @@ export default function CreateDealModal({
             {dealUsesBasePrice(discountType) && (
               <div>
                 <label className="block text-[12px] font-bold text-t2 uppercase tracking-wide mb-1.5">
-                  {discountType === 'percentage' || discountType === 'dollar' ? 'Regular price' : 'Item price'}
+                  {discountType === 'percentage' || discountType === 'dollar' || discountType === 'set_price' ? 'Regular price'
+                    : discountType === 'bogo_lb' ? 'Price per lb' : 'Item price'}
                   {' '}<span className="normal-case font-normal text-t3">(per item)</span>
                 </label>
                 <div className="flex items-center gap-2">
@@ -353,9 +367,9 @@ export default function CreateDealModal({
                 <p className="text-[11px] text-t3 mt-1.5">
                   {discountType === 'bogo'      && 'Price of one item — customer pays this and gets a 2nd free.'}
                   {discountType === 'bogo_half' && 'Price of one item — 2nd is shown at 50% off automatically.'}
-                  {discountType === 'bogo_lb'   && 'Price per lb — 2nd lb is shown at 50% off automatically.'}
-                  {(discountType === 'percentage' || discountType === 'dollar') && 'Regular price so the discounted price can be shown.'}
-                  {discountType === 'set_price' && 'The set price customers will pay.'}
+                  {discountType === 'bogo_lb'   && 'Price for one lb — shown on the deal so customers know the cost.'}
+                  {(discountType === 'percentage' || discountType === 'dollar') && 'Regular price — the discounted price is shown automatically.'}
+                  {discountType === 'set_price' && 'Regular price — the special price goes in the Value box above (shown struck through).'}
                   {discountType === 'other'     && 'Optional — helps customers see the price upfront.'}
                 </p>
               </div>

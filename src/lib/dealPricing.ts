@@ -1,12 +1,14 @@
 /** Shared deal-pricing display helpers — used by the customer card, deal detail
  *  modal, and the restaurant live preview so price math stays consistent.
  *
- *  base_price = the price of ONE item (what the customer pays for the first one).
+ *  base_price = the REGULAR price of one item.
  *  - BOGO (buy 1 get 1 free):  pay base_price, get a 2nd free.
  *  - BOGO half (buy 1 get 1 50% off): 1st = base_price, 2nd = base_price * 0.5.
- *  - set_price: base_price (or discount_value) IS the price.
+ *  - BOGO lb (buy by weight): base_price is the price per lb.
  *  - percentage / dollar off: base_price is the regular price; we compute the
- *    discounted price for display.
+ *    discounted price and show the regular price struck through.
+ *  - set_price: base_price is the regular price; discount_value is the special
+ *    price the customer pays (regular shown struck through).
  *  - free_item: no price — a qualifying condition is shown instead.
  */
 
@@ -42,24 +44,75 @@ function numFromValue(val?: string | null): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-/** Short price tag for the right side of a deal card (or null to omit). */
-export function getDealPriceTag(deal: DealPricingInput): string | null {
-  const dt = (deal.discount_type ?? '').toLowerCase();
-
-  if (dt === 'free_item') {
-    if (deal.free_condition_type === 'spend' && deal.free_condition_value) {
-      const amt = formatPrice(numFromValue(deal.free_condition_value));
-      return amt ? `Spend ${amt}+` : null;
-    }
-    if (deal.free_condition_type === 'item' && deal.free_condition_value) {
-      return `+ ${deal.free_condition_value.trim()}`;
-    }
-    return null;
+/** Short condition tag for a free-item deal (or null). */
+function freeItemTag(deal: DealPricingInput): string | null {
+  if (deal.free_condition_type === 'spend' && deal.free_condition_value) {
+    const amt = formatPrice(numFromValue(deal.free_condition_value));
+    return amt ? `Spend ${amt}+` : null;
   }
+  if (deal.free_condition_type === 'item' && deal.free_condition_value) {
+    return `+ ${deal.free_condition_value.trim()}`;
+  }
+  return null;
+}
 
-  // Set price: prefer base_price, fall back to the numeric discount_value.
-  const price = deal.base_price ?? (dt === 'set_price' ? numFromValue(deal.discount_value) : null);
-  return formatPrice(price);
+/** The price the customer effectively pays — used for the auto price-tag bucket. */
+export function getEffectivePrice(deal: DealPricingInput): number | null {
+  const dt = (deal.discount_type ?? '').toLowerCase();
+  if (dt === 'free_item') return null;
+  const base = deal.base_price ?? null;
+
+  if (dt === 'set_price') {
+    const special = numFromValue(deal.discount_value);
+    return special ?? base;
+  }
+  if (base === null) return null;
+  if (dt === 'percentage') {
+    const pct = numFromValue(deal.discount_value);
+    return pct ? Math.round(base * (1 - pct / 100) * 100) / 100 : base;
+  }
+  if (dt === 'fixed' || dt === 'dollar') {
+    const off = numFromValue(deal.discount_value);
+    return off ? Math.max(0, base - off) : base;
+  }
+  return base; // bogo, bogo_half, bogo_lb, other
+}
+
+export interface DealPriceParts { final: string | null; original?: string }
+
+/** Final price + (optional) struck-through original, for cards / preview / title. */
+export function getDealPriceParts(deal: DealPricingInput): DealPriceParts {
+  const dt = (deal.discount_type ?? '').toLowerCase();
+  const base = deal.base_price ?? null;
+
+  if (dt === 'free_item') return { final: freeItemTag(deal) };
+
+  if (dt === 'percentage') {
+    const pct = numFromValue(deal.discount_value);
+    if (base !== null && pct) return { final: formatPrice(base * (1 - pct / 100))!, original: formatPrice(base)! };
+    return { final: base !== null ? formatPrice(base) : null };
+  }
+  if (dt === 'fixed' || dt === 'dollar') {
+    const off = numFromValue(deal.discount_value);
+    if (base !== null && off) return { final: formatPrice(Math.max(0, base - off))!, original: formatPrice(base)! };
+    return { final: base !== null ? formatPrice(base) : null };
+  }
+  if (dt === 'set_price') {
+    const special = numFromValue(deal.discount_value);
+    if (base !== null && special !== null && base > special) return { final: formatPrice(special)!, original: formatPrice(base)! };
+    if (special !== null) return { final: formatPrice(special) };
+    return { final: base !== null ? formatPrice(base) : null };
+  }
+  if (dt === 'bogo_lb') {
+    return { final: base !== null ? `${formatPrice(base)}/lb` : null };
+  }
+  // bogo, bogo_half, other
+  return { final: base !== null ? formatPrice(base) : null };
+}
+
+/** Short price tag for the right side of a deal card (final price only, or null). */
+export function getDealPriceTag(deal: DealPricingInput): string | null {
+  return getDealPriceParts(deal).final;
 }
 
 export interface PriceLine { label: string; value: string }
@@ -81,15 +134,19 @@ export function getDealPriceBreakdown(deal: DealPricingInput): DealPriceBreakdow
     return null;
   }
 
-  if (base === null) {
-    // set_price can still show its price from discount_value.
-    if (dt === 'set_price') {
-      const p = formatPrice(numFromValue(deal.discount_value));
-      return p ? { lines: [{ label: 'Price', value: p }] } : null;
+  if (dt === 'set_price') {
+    const special = numFromValue(deal.discount_value);
+    if (base !== null && special !== null && base > special) {
+      return { lines: [
+        { label: 'Regular price', value: formatPrice(base)! },
+        { label: 'You pay', value: formatPrice(special)! },
+      ] };
     }
-    return null;
+    const price = formatPrice(special ?? base);
+    return price ? { lines: [{ label: 'Price', value: price }] } : null;
   }
 
+  if (base === null) return null;
   const baseStr = formatPrice(base)!;
 
   if (dt === 'bogo') {
@@ -114,14 +171,7 @@ export function getDealPriceBreakdown(deal: DealPricingInput): DealPriceBreakdow
   }
 
   if (dt === 'bogo_lb') {
-    const second = base * 0.5;
-    return {
-      lines: [
-        { label: '1st lb', value: baseStr },
-        { label: '2nd lb (50% off)', value: formatPrice(second)! },
-      ],
-      total: `${formatPrice(base + second)} for 2 lb`,
-    };
+    return { lines: [{ label: 'Price per lb', value: baseStr }] };
   }
 
   if (dt === 'percentage') {
@@ -152,6 +202,13 @@ export function getDealPriceBreakdown(deal: DealPricingInput): DealPriceBreakdow
     return { lines: [{ label: 'Regular price', value: baseStr }] };
   }
 
-  // set_price / other: just show the price.
   return { lines: [{ label: 'Price', value: baseStr }] };
+}
+
+/** Auto price-tag bucket from the effective price (≤6 → under6, ≤12 → under12). */
+export function priceTagForPrice(price: number | null): 'under6' | 'under12' | null {
+  if (price === null || Number.isNaN(price)) return null;
+  if (price <= 6) return 'under6';
+  if (price <= 12) return 'under12';
+  return null;
 }

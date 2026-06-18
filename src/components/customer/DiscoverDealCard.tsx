@@ -6,7 +6,7 @@ import type { DealWithRestaurant } from '@/types/index';
 import { CUSTOMER_UI, METALLIC_GOLD } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating } from '@/lib/utils';
 import { getDealOfferHeadline } from '@/lib/dealOfferLabel';
-import { getDealPriceTag } from '@/lib/dealPricing';
+import { getDealPriceParts } from '@/lib/dealPricing';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   indian:    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=500&q=80',
@@ -65,7 +65,7 @@ export default function DiscoverDealCard({
   const [imgSrc, setImgSrc] = useState(initialSrc);
 
   const headline = offerLabel(deal);
-  const priceTag = getDealPriceTag({
+  const priceParts = getDealPriceParts({
     discount_type: (deal as { discount_type?: string | null }).discount_type,
     discount_value: deal.discount_value,
     base_price: deal.base_price ?? null,
@@ -153,9 +153,16 @@ export default function DiscoverDealCard({
           <p className="text-[13px] font-semibold leading-snug line-clamp-1" style={{ color: CUSTOMER_UI.textSecondary }}>
             {formatCustomerDealTitle(deal.title)}
           </p>
-          {priceTag && (
-            <span className="text-[13px] font-extrabold leading-snug flex-shrink-0" style={{ color: CUSTOMER_UI.textPrimary }}>
-              {priceTag}
+          {priceParts.final && (
+            <span className="flex items-baseline gap-1 flex-shrink-0">
+              {priceParts.original && (
+                <span className="text-[11px] font-semibold line-through" style={{ color: CUSTOMER_UI.textMuted }}>
+                  {priceParts.original}
+                </span>
+              )}
+              <span className="text-[13px] font-extrabold leading-snug" style={{ color: CUSTOMER_UI.textPrimary }}>
+                {priceParts.final}
+              </span>
             </span>
           )}
         </div>

@@ -55,7 +55,7 @@ export function discountValuePlaceholder(type: string): string {
     case 'free_item':   return 'Free appetizer';
     case 'bogo':        return 'Buy 1 Get 1 Free';
     case 'bogo_half':   return '50% off 2nd item';
-    case 'bogo_lb':     return '50% off 2nd lb';
+    case 'bogo_lb':     return 'By weight';
     case 'free_delivery': return 'Free delivery';
     default:            return 'Describe the deal';
   }
@@ -65,7 +65,7 @@ export function defaultDiscountValue(type: string): string {
   switch (type) {
     case 'bogo':        return 'Buy 1 Get 1 Free';
     case 'bogo_half':   return '50% off 2nd item';
-    case 'bogo_lb':     return '50% off 2nd lb';
+    case 'bogo_lb':     return 'By weight';
     default:            return '';
   }
 }

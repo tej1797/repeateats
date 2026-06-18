@@ -20,7 +20,7 @@ import {
   type PriceTag,
   type RestaurantDiscountType,
 } from '@/lib/restaurantDealForm';
-import { dealUsesBasePrice, isFreeItemDiscount } from '@/lib/dealPricing';
+import { dealUsesBasePrice, isFreeItemDiscount, getEffectivePrice, priceTagForPrice } from '@/lib/dealPricing';
 import ScannerPanel from '@/components/restaurant/ScannerPanel';
 import RestaurantSearch, { type PlaceResult } from '@/components/restaurant/RestaurantSearch';
 import {
@@ -1365,6 +1365,17 @@ function DealEditor({
 }: { deal: DealDraft; onChange: (p: Partial<DealDraft>) => void; onRemove: () => void }) {
   const [expanded, setExpanded] = useState(false);
 
+  // Merge a change, then auto-pick the price tag from the resulting effective price.
+  const changeWithAutoTag = (partial: Partial<DealDraft>) => {
+    const merged = { ...deal, ...partial };
+    const eff = getEffectivePrice({
+      discount_type: toDbDiscountType(merged.discount_type as RestaurantDiscountType),
+      discount_value: merged.discount_value,
+      base_price: merged.base_price?.trim() ? parseFloat(merged.base_price) : null,
+    });
+    onChange(eff === null ? partial : { ...partial, price_tag: priceTagForPrice(eff) });
+  };
+
   return (
     <div className="border border-[var(--bd2)] rounded-brands overflow-hidden">
       {/* Collapsed header row */}
@@ -1413,10 +1424,9 @@ function DealEditor({
                 value={deal.discount_type}
                 onChange={(e) => {
                   const next = e.target.value;
-                  onChange({
-                    discount_type: next,
-                    discount_value: defaultDiscountValue(next) || deal.discount_value,
-                  });
+                  // Always reset to the new type's preset so a stale value
+                  // (e.g. "By weight") doesn't linger when switching types.
+                  changeWithAutoTag({ discount_type: next, discount_value: defaultDiscountValue(next) });
                 }}
                 className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
               >
@@ -1429,7 +1439,7 @@ function DealEditor({
               <label className="block text-[12px] font-semibold text-t2 mb-1">Value</label>
               <input
                 type="text" value={deal.discount_value}
-                onChange={(e) => onChange({ discount_value: e.target.value })}
+                onChange={(e) => changeWithAutoTag({ discount_value: e.target.value })}
                 placeholder={discountValuePlaceholder(deal.discount_type)}
                 className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
               />
@@ -1450,11 +1460,12 @@ function DealEditor({
           {dealUsesBasePrice(deal.discount_type) && (
             <div>
               <label className="block text-[12px] font-semibold text-t2 mb-1">
-                {deal.discount_type === 'percentage' || deal.discount_type === 'dollar' ? 'Regular price' : 'Item price'} ($ per item)
+                {deal.discount_type === 'percentage' || deal.discount_type === 'dollar' || deal.discount_type === 'set_price' ? 'Regular price'
+                  : deal.discount_type === 'bogo_lb' ? 'Price per lb' : 'Item price'} ($ per item)
               </label>
               <input
                 type="text" inputMode="decimal" value={deal.base_price}
-                onChange={(e) => onChange({ base_price: e.target.value.replace(/[^0-9.]/g, '') })}
+                onChange={(e) => changeWithAutoTag({ base_price: e.target.value.replace(/[^0-9.]/g, '') })}
                 placeholder="20"
                 className="w-full h-9 px-2 border border-[var(--bd2)] rounded-brands bg-surface text-sm text-tx outline-none focus:border-brand"
               />

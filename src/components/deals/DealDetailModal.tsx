@@ -8,7 +8,7 @@ import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { CUSTOMER_UI } from '@/lib/customerUI';
 import { formatCustomerDealTitle, getRestaurantRating, formatRedeemedAt } from '@/lib/utils';
-import { getDealPriceTag, getDealPriceBreakdown } from '@/lib/dealPricing';
+import { getDealPriceParts, getDealPriceBreakdown } from '@/lib/dealPricing';
 import { initialRestaurantImageSrc, nextRestaurantImageFallback } from '@/lib/restaurantImage';
 import RestaurantHutAvatar from '@/components/customer/RestaurantHutAvatar';
 import StarRating from '@/components/form/StarRating';
@@ -157,7 +157,7 @@ export default function DealDetailModal({
     free_condition_type: deal.free_condition_type ?? null,
     free_condition_value: deal.free_condition_value ?? null,
   };
-  const priceTag       = getDealPriceTag(pricingInput);
+  const priceParts     = getDealPriceParts(pricingInput);
   const priceBreakdown = getDealPriceBreakdown(pricingInput);
 
   // Terms list — mirrors mobile copy
@@ -255,9 +255,16 @@ export default function DealDetailModal({
               <h1 className="font-display text-[34px] font-extrabold leading-[1.05]" style={{ color: CUSTOMER_UI.textPrimary }}>
                 {formatCustomerDealTitle(deal.title)}
               </h1>
-              {priceTag && (
-                <span className="font-display text-[26px] font-extrabold leading-[1.1] flex-shrink-0 mt-0.5" style={{ color: CUSTOMER_UI.accent }}>
-                  {priceTag}
+              {priceParts.final && (
+                <span className="flex items-baseline gap-1.5 flex-shrink-0 mt-0.5">
+                  {priceParts.original && (
+                    <span className="text-[16px] font-semibold line-through" style={{ color: CUSTOMER_UI.textMuted }}>
+                      {priceParts.original}
+                    </span>
+                  )}
+                  <span className="font-display text-[26px] font-extrabold leading-[1.1]" style={{ color: CUSTOMER_UI.accent }}>
+                    {priceParts.final}
+                  </span>
                 </span>
               )}
             </div>

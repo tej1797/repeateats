@@ -2,7 +2,7 @@
 
 import { formatCustomerDealTitle } from '@/lib/utils';
 import { getDealOfferBadge } from '@/lib/dealOfferLabel';
-import { getDealPriceTag } from '@/lib/dealPricing';
+import { getDealPriceParts } from '@/lib/dealPricing';
 import { toDbDiscountType, type PriceTag, type RestaurantDiscountType } from '@/lib/restaurantDealForm';
 
 const PREVIEW_BLUE = '#1249A9';
@@ -60,7 +60,7 @@ export default function DealLivePreview({
     scope_detail: scopeDetail,
   });
 
-  const priceTagText = getDealPriceTag({
+  const priceParts = getDealPriceParts({
     discount_type: toDbDiscountType(discountType),
     discount_value: discountValue,
     base_price: basePrice && basePrice.trim() ? parseFloat(basePrice) : null,
@@ -93,9 +93,16 @@ export default function DealLivePreview({
             <p className="font-display text-[18px] font-extrabold leading-tight text-white">
               {displayTitle}
             </p>
-            {priceTagText && (
-              <span className="font-display text-[18px] font-extrabold leading-tight text-white flex-shrink-0">
-                {priceTagText}
+            {priceParts.final && (
+              <span className="flex items-baseline gap-1.5 flex-shrink-0">
+                {priceParts.original && (
+                  <span className="text-[13px] font-semibold line-through" style={{ color: '#78716C' }}>
+                    {priceParts.original}
+                  </span>
+                )}
+                <span className="font-display text-[18px] font-extrabold leading-tight text-white">
+                  {priceParts.final}
+                </span>
               </span>
             )}
           </div>
