@@ -2298,7 +2298,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                   <span className="text-[#CCC]">{tierLabel}</span>
                   <button
                     type="button"
-                    onClick={() => setTabPersist('settings')}
+                    onClick={() => { window.location.href = '/restaurant/plans'; }}
                     className="text-[11px] font-bold ml-1"
                     style={{ color: BLUE }}
                   >
@@ -2739,6 +2739,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
           restaurantName={restaurant.name}
           restaurantCity={restaurant.city}
           restaurantCoverUrl={restaurant.cover_url}
+          tier={restaurantTier}
+          activeDealCount={activeDealCount}
           existingDeal={editingDeal ?? undefined}
           onCreated={(deal) => {
             if (editingDeal) {

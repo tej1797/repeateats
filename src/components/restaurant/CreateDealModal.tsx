@@ -20,6 +20,7 @@ import {
 } from '@/lib/restaurantDealForm';
 import DealLivePreview from '@/components/restaurant/DealLivePreview';
 import { dealUsesBasePrice, isFreeItemDiscount, getEffectivePrice, priceTagForPrice } from '@/lib/dealPricing';
+import { limitsForTier } from '@/lib/restaurantPlans';
 
 const BLUE = '#1249A9';
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -46,6 +47,8 @@ interface Props {
   restaurantName?:    string;
   restaurantCity?:    string;
   restaurantCoverUrl?: string | null;
+  tier?:              string | null;
+  activeDealCount?:   number;
   existingDeal?:      ExistingDeal;
   onCreated:          (deal: Record<string, unknown>) => void;
   onClose:            () => void;
@@ -64,6 +67,8 @@ export default function CreateDealModal({
   restaurantName = 'Your Restaurant',
   restaurantCity,
   restaurantCoverUrl,
+  tier,
+  activeDealCount = 0,
   existingDeal,
   onCreated,
   onClose,
@@ -141,6 +146,13 @@ export default function CreateDealModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { setError('Dish name is required'); return; }
+
+    // Active-deal limit per tier — only blocks NEW active deals once at the cap.
+    const dealCap = limitsForTier(tier).activeDeals;
+    if (!isEdit && !isComing && dealCap !== null && activeDealCount >= dealCap) {
+      setError(`Your plan allows ${dealCap} active deals. Upgrade for more, or pause a deal first.`);
+      return;
+    }
 
     const resolvedValue = discountValue.trim() || defaultDiscountValue(discountType);
     if (discountValueRequired(discountType) && !resolvedValue) {
