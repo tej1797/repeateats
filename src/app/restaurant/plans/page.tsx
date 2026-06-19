@@ -8,7 +8,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconArrowLeft, IconCircleCheck, IconBolt } from '@tabler/icons-react';
 import { createClient } from '@/lib/supabase/client';
-import { startOfMonthInTZ } from '@/lib/tz';
 import {
   planMonthlyPrice, PLAN_FEATURES, USAGE_FREE_REDEMPTIONS, USAGE_OVERAGE_CENTS,
   type BillingMode, type BillingCycle,
@@ -53,15 +52,17 @@ export default function RestaurantPlansPage() {
     setRest(r as RestRow);
     if (r.billing_mode === 'usage' || r.billing_mode === 'flat') setMode(r.billing_mode);
 
-    // Usage this month — scanner-verified redemptions for this location (Toronto month).
-    const monthStart = startOfMonthInTZ();
-    const { count } = await supabase
-      .from('claims')
-      .select('id, deals!inner(restaurant_id)', { count: 'exact', head: true })
-      .eq('status', 'redeemed')
-      .gte('redeemed_at', monthStart.toISOString())
-      .eq('deals.restaurant_id', (r as RestRow).id);
-    setUsage(count ?? 0);
+    // Usage this month — read the shared billing counter (restaurant_billing_usage).
+    // It keys by UTC CALENDAR month (matches Stripe metering), not the Toronto
+    // month used for per-diner caps — so the meter agrees with what's billed.
+    const monthKey = new Date().toISOString().slice(0, 7); // 'YYYY-MM' (UTC)
+    const { data: usageRow } = await supabase
+      .from('restaurant_billing_usage')
+      .select('billable_redemptions')
+      .eq('restaurant_id', (r as RestRow).id)
+      .eq('month_key', monthKey)
+      .maybeSingle();
+    setUsage((usageRow as { billable_redemptions: number } | null)?.billable_redemptions ?? 0);
     setLoading(false);
   }, [supabase, router]);
 
