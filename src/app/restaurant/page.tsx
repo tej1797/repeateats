@@ -3689,32 +3689,65 @@ function PinSettings({ restaurant, setRestaurant }: {
     { kind: 'manager' as const, label: 'Manager PIN', col: 'manager_pin_hash', sub: 'Lets staff sign in to Manager Mode (scanner-only)' },
   ];
 
-  const [draft, setDraft] = useState<Record<string, { pin: string; confirm: string; open: boolean }>>({
-    owner:   { pin: '', confirm: '', open: false },
-    manager: { pin: '', confirm: '', open: false },
+  // An Owner PIN already on file means ANY PIN change (owner or manager) must be
+  // proven with the current Owner PIN or an emailed OTP — matches the server gate.
+  const ownerIsSet = !!(rest.owner_pin_hash as string | null);
+
+  type DraftRow = {
+    pin: string; confirm: string; open: boolean;
+    currentPin: string; otp: string; useOtp: boolean; otpSent: boolean;
+  };
+  const blankRow: DraftRow = { pin: '', confirm: '', open: false, currentPin: '', otp: '', useOtp: false, otpSent: false };
+  const [draft, setDraft] = useState<Record<string, DraftRow>>({
+    owner:   { ...blankRow },
+    manager: { ...blankRow },
   });
   const [busy, setBusy] = useState<string | null>(null);
   const [msg,  setMsg]  = useState<{ kind: string; ok: boolean; text: string } | null>(null);
 
-  const update = (kind: string, patch: Partial<{ pin: string; confirm: string; open: boolean }>) =>
+  const update = (kind: string, patch: Partial<DraftRow>) =>
     setDraft((d) => ({ ...d, [kind]: { ...d[kind], ...patch } }));
 
+  const sendOtp = async (kind: 'owner' | 'manager') => {
+    setBusy(`${kind}:otp`); setMsg(null);
+    try {
+      const res = await fetch('/api/restaurant/pin/recovery/start', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Could not send code');
+      update(kind, { useOtp: true, otpSent: true, currentPin: '' });
+      setMsg({ kind, ok: true, text: `Code sent to ${data.email ?? 'your email'}.` });
+    } catch (e) {
+      setMsg({ kind, ok: false, text: e instanceof Error ? e.message : 'Could not send code' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const save = async (kind: 'owner' | 'manager', col: string) => {
-    const { pin, confirm } = draft[kind];
+    const { pin, confirm, currentPin, otp, useOtp } = draft[kind];
     if (!/^\d{6}$/.test(pin)) { setMsg({ kind, ok: false, text: 'PIN must be 6 digits.' }); return; }
     if (pin !== confirm)      { setMsg({ kind, ok: false, text: 'PINs do not match.' }); return; }
+    // Proof required only when an Owner PIN already exists.
+    if (ownerIsSet) {
+      if (useOtp && !/^\d{6}$/.test(otp)) { setMsg({ kind, ok: false, text: 'Enter the 6-digit code from your email.' }); return; }
+      if (!useOtp && !/^\d{6}$/.test(currentPin)) { setMsg({ kind, ok: false, text: 'Enter your current Owner PIN.' }); return; }
+    }
     setBusy(kind); setMsg(null);
     try {
       const res = await fetch('/api/restaurant/pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, pin }),
+        body: JSON.stringify({
+          kind, pin,
+          ...(ownerIsSet && !useOtp ? { current_pin: currentPin } : {}),
+          ...(ownerIsSet && useOtp  ? { otp } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Could not save PIN');
       // Sync local state so unlock checks use the new hash immediately.
       setRestaurant({ ...(restaurant as object), [col]: data.hash } as Restaurant);
-      update(kind, { pin: '', confirm: '', open: false });
+      update(kind, { ...blankRow });
       setMsg({ kind, ok: true, text: 'PIN saved.' });
     } catch (e) {
       setMsg({ kind, ok: false, text: e instanceof Error ? e.message : 'Something went wrong' });
@@ -3747,6 +3780,36 @@ function PinSettings({ restaurant, setRestaurant }: {
 
             {d.open ? (
               <div className="space-y-2">
+                {/* Proof step — only when an Owner PIN already exists. */}
+                {ownerIsSet && (
+                  <div className="space-y-2 pb-2 mb-1 border-b border-[var(--bd)]">
+                    <p className="text-[12px] text-t2">
+                      {d.useOtp
+                        ? 'Enter the 6-digit code we emailed the owner.'
+                        : 'Confirm the current Owner PIN to make this change.'}
+                    </p>
+                    {d.useOtp ? (
+                      <input type="text" inputMode="numeric" maxLength={6} value={d.otp}
+                        onChange={(e) => update(kind, { otp: e.target.value.replace(/\D/g, '') })}
+                        placeholder="6-digit email code"
+                        className="w-full h-10 px-3 font-mono text-[15px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface text-tx outline-none focus:border-[#1249A9]" />
+                    ) : (
+                      <input type="password" inputMode="numeric" maxLength={6} value={d.currentPin}
+                        onChange={(e) => update(kind, { currentPin: e.target.value.replace(/\D/g, '') })}
+                        placeholder="Current Owner PIN"
+                        className="w-full h-10 px-3 font-mono text-[15px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface text-tx outline-none focus:border-[#1249A9]" />
+                    )}
+                    {d.useOtp ? (
+                      <button type="button" onClick={() => update(kind, { useOtp: false, otp: '' })}
+                        className="text-[12px] font-semibold" style={{ color: GREEN }}>Use Owner PIN instead</button>
+                    ) : (
+                      <button type="button" onClick={() => sendOtp(kind)} disabled={busy === `${kind}:otp`}
+                        className="text-[12px] font-semibold disabled:opacity-50" style={{ color: GREEN }}>
+                        {busy === `${kind}:otp` ? 'Sending…' : 'Forgot Owner PIN? Email me a code'}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <input type="password" inputMode="numeric" maxLength={6} value={d.pin}
                   onChange={(e) => update(kind, { pin: e.target.value.replace(/\D/g, '') })}
                   placeholder={isSet ? 'New 6-digit PIN' : '6-digit PIN'}
@@ -3757,7 +3820,7 @@ function PinSettings({ restaurant, setRestaurant }: {
                   className="w-full h-10 px-3 font-mono text-[15px] tracking-widest text-center border border-[var(--bd2)] rounded-brands bg-surface text-tx outline-none focus:border-[#1249A9]" />
                 {msg?.kind === kind && <p className={`text-[12px] ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
                 <div className="flex gap-2">
-                  <button onClick={() => { update(kind, { pin: '', confirm: '', open: false }); setMsg(null); }}
+                  <button onClick={() => { update(kind, { ...blankRow }); setMsg(null); }}
                     className="flex-1 h-9 rounded-brands border border-[var(--bd2)] text-[13px] font-semibold text-t2">Cancel</button>
                   <button onClick={() => save(kind, col)} disabled={busy === kind}
                     className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50"
