@@ -33,6 +33,7 @@ export default function RestaurantPlansPage() {
 
   const [rest, setRest]       = useState<RestRow | null>(null);
   const [usage, setUsage]     = useState<number>(0);
+  const [metered, setMetered] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [mode, setMode]       = useState<BillingMode>('flat');
   const [cycle, setCycle]     = useState<BillingCycle>('monthly');
@@ -58,11 +59,13 @@ export default function RestaurantPlansPage() {
     const monthKey = new Date().toISOString().slice(0, 7); // 'YYYY-MM' (UTC)
     const { data: usageRow } = await supabase
       .from('restaurant_billing_usage')
-      .select('billable_redemptions')
+      .select('billable_redemptions, metered_redemptions')
       .eq('restaurant_id', (r as RestRow).id)
       .eq('month_key', monthKey)
       .maybeSingle();
-    setUsage((usageRow as { billable_redemptions: number } | null)?.billable_redemptions ?? 0);
+    const u = usageRow as { billable_redemptions: number; metered_redemptions: number } | null;
+    setUsage(u?.billable_redemptions ?? 0);
+    setMetered(u?.metered_redemptions ?? 0);
     setLoading(false);
   }, [supabase, router]);
 
@@ -186,6 +189,11 @@ export default function RestaurantPlansPage() {
             <p className="text-[13px] mt-1" style={{ color: TEXT_MUTED }}>
               {usage} QR redemptions · {USAGE_FREE_REDEMPTIONS} included free
             </p>
+            {metered > 0 && (
+              <p className="text-[13px] mt-1 font-semibold" style={{ color: '#F59E0B' }}>
+                {metered} past the free bucket · ≈ CA${(metered * USAGE_OVERAGE_CENTS / 100).toFixed(2)} this month
+              </p>
+            )}
             <p className="text-[12px] mt-1" style={{ color: TEXT_MUTED }}>
               Only scanner-verified QR redemptions count toward usage.
             </p>
