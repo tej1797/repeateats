@@ -60,20 +60,35 @@ trigger a review.
 **Built:** schema (`restaurant_tier`, `billing_mode`, `trial_*`,
 `stripe_customer_id`, `stripe_subscription_id`, `subscription_expires_at`),
 trial countdown badge, Stripe payment-methods storage per restaurant customer,
-collab escrow, an analytics dashboard, mobile plans screen.
+collab escrow, an analytics dashboard, mobile + web plans screens.
 
-**Not built yet (shared backend — coordinate web+mobile):**
-1. Restaurant subscription checkout (Stripe products/prices for $49/$99 flat,
-   $34/$84 + metered usage; trial-end first charge).
-2. Webhook → `restaurant_tier` / `billing_mode` sync on subscription events.
-3. Usage metering (aggregate scanner redemptions → Stripe metered usage; the
-   60-free-then-0.5¢ overage).
-4. Trial-end downgrade job (flip to Free when `trial_ends_at` passes unpaid).
-5. Tier gating: active-deal limit (4/8/∞), Free 60-redemption cap, Discover
-   placement boost + featured slot, analytics basic-vs-full + integrity
-   dashboard, diner insights, collab view-only on Free, deal scheduling.
-6. Anti-circumvention scan-rate monitoring.
+**Billing engine — already deployed as Supabase edge functions (shared by web+mobile):**
+- `restaurant-stripe` — checkout/portal. Auth via Supabase JWT (portal-agnostic).
+  Uses **dynamic price_data** — NO pre-created Stripe products / price-ID env vars.
+  Pricing in-code: flat starter $49 / pro $99; yearly = 20% off ($39/$79);
+  usage mode = flat − $15 ($34 / $84). Sets `trial_end` so first charge lands at
+  trial end. Web calls it via `supabase.functions.invoke('restaurant-stripe', …)`.
+- `restaurant-stripe-webhook` — maps Stripe subscription events → restaurants
+  row (`restaurant_tier`, `billing_mode`, `stripe_subscription_id`,
+  `subscription_expires_at`); canceled/unpaid/past_due → free.
+  Secret: `STRIPE_RESTAURANT_WEBHOOK_SECRET`.
+- Trial-end downgrade: no cron — `resolveEffectiveRestaurantTier()` returns
+  'trial' until `trial_ends_at`, then falls to the stored tier (free if unpaid).
 
-**Stripe products to create (Tejas — required before checkout works):**
-restaurant Starter/Pro × {flat, usage-base} × {monthly, yearly} price IDs, plus
-a metered price for the 0.5¢/redemption overage.
+**Not built yet:**
+1. Free **60/mo restaurant redemption hard cap** — must be enforced server-side
+   in `claim-deal` (count scanner-verified redemptions for the restaurant in the
+   current Toronto month; block at 60 on free tier). Owned by mobile/edge.
+2. Usage metering (60 free then 0.5¢ → Stripe Meter + usage reporting from the
+   redeem path). Owned by mobile/edge. **Open question:** ship real metering now
+   (needs a Stripe Meter + metered price) or keep usage-mode as the discounted
+   flat price for v1 and add metering later.
+3. Tier gating polish: Discover placement boost + featured slot, analytics
+   basic-vs-full + integrity dashboard, diner insights, collab view-only on Free,
+   deal scheduling. Active-deal cap is enforced client-side both platforms (a DB
+   trigger could harden it later).
+4. Anti-circumvention scan-rate monitoring.
+
+**Stripe products to create (Tejas):** none for flat billing (dynamic price_data).
+Only if shipping real usage metering now: one Stripe **Meter** (e.g. event
+`restaurant_redemption`) + a metered price per plan.

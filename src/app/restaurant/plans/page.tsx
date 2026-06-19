@@ -77,16 +77,27 @@ export default function RestaurantPlansPage() {
     : null;
 
   const subscribe = async (plan: 'starter' | 'pro') => {
+    if (!rest) return;
     setBusy(plan); setError('');
     try {
-      const res = await fetch('/api/restaurant/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, mode, cycle, return_url: `${window.location.origin}/restaurant?tab=settings` }),
+      // Shared billing engine — the deployed `restaurant-stripe` edge function
+      // (dynamic price_data, no pre-created Stripe products). Same fn mobile uses.
+      const planParam = cycle === 'yearly' ? `${plan}_yearly` : plan;
+      const returnBase = `${window.location.origin}/restaurant?tab=settings`;
+      const { data, error: fnErr } = await supabase.functions.invoke('restaurant-stripe', {
+        body: {
+          action: 'checkout',
+          restaurant_id: rest.id,
+          plan: planParam,
+          billing_mode: mode === 'flat' ? 'subscription_only' : 'subscription_plus_metering',
+          billing_interval: cycle === 'yearly' ? 'year' : 'month',
+          success_url: `${returnBase}&sub=success`,
+          cancel_url: `${returnBase}&sub=cancelled`,
+        },
       });
-      const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not start checkout');
-      window.location.href = data.url;
+      const url = (data as { url?: string } | null)?.url;
+      if (fnErr || !url) throw new Error(fnErr?.message ?? 'Could not start checkout');
+      window.location.href = url;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
       setBusy(null);
