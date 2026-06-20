@@ -7,7 +7,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe, resolveUser, getServiceClient } from '@/lib/stripeAuth';
 
-const PLATFORM_FEE_RATE = 0.02; // RepEAT keeps 2%
+// Even split: restaurant pays +0.5% on top, creator receives −0.5% at release.
+// Platform keeps 1% total (0.5% from each side).
+const RESTAURANT_FEE_RATE = 0.005;
+const CREATOR_FEE_RATE    = 0.005;
 
 type RouteParams = { params: { id: string } };
 
@@ -48,8 +51,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!amountDollars || amountDollars <= 0) {
     return NextResponse.json({ error: 'No agreed amount set for this collab' }, { status: 400 });
   }
-  const amountCents = Math.round(amountDollars * 100);
-  const feeCents    = Math.round(amountCents * PLATFORM_FEE_RATE);
+  const amountCents       = Math.round(amountDollars * 100);
+  const restaurantFeeCents = Math.round(amountCents * RESTAURANT_FEE_RATE);
+  const creatorFeeCents    = Math.round(amountCents * CREATOR_FEE_RATE);
+  // Restaurant is charged the agreed amount + its 0.5% half.
+  const chargeCents = amountCents + restaurantFeeCents;
+  // Stored fee = total platform take (both halves) for reporting.
+  const feeCents    = restaurantFeeCents + creatorFeeCents;
 
   // Charge the RESTAURANT's Stripe customer (separate from the personal user
   // customer) — same customer the restaurant's payment-method routes use, so the
@@ -83,7 +91,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   let intent;
   try {
     intent = await stripe.paymentIntents.create({
-      amount:         amountCents,
+      amount:         chargeCents,
       currency:       'cad',
       customer:       customerId,
       payment_method: paymentMethodId,

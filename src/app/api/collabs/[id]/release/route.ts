@@ -1,12 +1,13 @@
 // POST /api/collabs/[id]/release — restaurant releases escrowed funds to the
-// influencer. The influencer receives the net (amount − 2%); RepEAT keeps the 2%
-// platform fee (it simply stays on the platform balance, untransferred).
+// influencer. The creator receives net (amount − 0.5%); the restaurant already
+// paid +0.5% at funding, so RepEAT keeps 1% total (0.5% from each side), which
+// simply stays on the platform balance, untransferred.
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe, resolveUser, getServiceClient } from '@/lib/stripeAuth';
 
-const PLATFORM_FEE_RATE = 0.02;
+const CREATOR_FEE_RATE = 0.005; // creator's 0.5% half
 
 type RouteParams = { params: { id: string } };
 
@@ -52,9 +53,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Creator has not finished payout setup' }, { status: 409 });
   }
 
-  const amountCents = Math.round((collab.agreed_amount ?? 0) * 100);
-  const feeCents    = collab.platform_fee_cents ?? Math.round(amountCents * PLATFORM_FEE_RATE);
-  const netCents    = amountCents - feeCents;
+  const amountCents     = Math.round((collab.agreed_amount ?? 0) * 100);
+  // Creator's deduction is only their 0.5% half (the restaurant paid the other
+  // half on top at funding). Do NOT subtract the stored total platform fee here.
+  const creatorFeeCents = Math.round(amountCents * CREATOR_FEE_RATE);
+  const netCents        = amountCents - creatorFeeCents;
+  // Total platform take (both halves) for reporting.
+  const feeCents        = collab.platform_fee_cents ?? Math.round(amountCents * (CREATOR_FEE_RATE * 2));
   if (netCents <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
 
   let transfer;

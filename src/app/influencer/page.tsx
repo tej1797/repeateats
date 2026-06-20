@@ -770,28 +770,27 @@ function NegotiateModal({
     ? (Number(customOffer) || null)
     : selectedOffer;
 
-  // Apply = set influencer_id + status=negotiating + send intro message
+  // Apply = create an application (many creators can apply to one posting).
+  // The restaurant reviews applicants and accepts one; that's when a contract forms.
   const handleApply = async () => {
     setApplying(true);
     setApplyError('');
     try {
-      const res = await fetch(`/api/collabs/${collab.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ influencer_id: user.id, status: 'negotiating' }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-
-      // Send an opening message with the proposed rate
-      const intro = finalAmount
+      const pitch = finalAmount
         ? `Hi! I'm interested in this collab. I'd like to propose $${finalAmount} for ${collab.deliverables ?? 'the deliverables'}.`
         : `Hi! I'm interested in this collab. Looking forward to discussing the details!`;
 
-      await fetch('/api/messages', {
+      const res = await fetch(`/api/collabs/${collab.id}/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collab_id: collab.id, text: intro }),
+        body: JSON.stringify({ proposed_amount: finalAmount || undefined, pitch }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // "already applied" is a soft success — show the applied state.
+        if (json.code === 'already_applied') { setApplied(true); return; }
+        throw new Error(json.error ?? 'Something went wrong.');
+      }
 
       setApplied(true);
       onOpenChat(); // open chat panel automatically after applying

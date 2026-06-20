@@ -1930,6 +1930,26 @@ type RestaurantCollab = Collab & {
   } | null;
 };
 
+// A creator's application to one of this restaurant's collab postings.
+type CollabApplication = {
+  id: string;
+  posting_id: string;
+  proposed_amount: number | null;
+  pitch: string | null;
+  status: string;
+  created_at: string;
+  influencer: {
+    id: string;
+    display_name: string | null;
+    instagram_handle: string | null;
+    tiktok_handle: string | null;
+    follower_count: number | null;
+    niche: string | null;
+    rating: number | null;
+  } | null;
+  posting: { id: string; title: string | null } | null;
+};
+
 function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }: {
   restaurant: Restaurant;
   user: SupabaseUser;
@@ -1955,6 +1975,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [restaurant,      setRestaurant]      = useState<Restaurant>(initialRestaurant);
   const [deals,           setDeals]           = useState<Deal[]>([]);
   const [collabs,         setCollabs]         = useState<RestaurantCollab[]>([]);
+  const [applications,    setApplications]    = useState<CollabApplication[]>([]);
+  const [appBusyId,       setAppBusyId]       = useState<string | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
@@ -2033,15 +2055,21 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
   useEffect(() => {
     async function load() {
-      const [dr, cr] = await Promise.all([
+      const [dr, cr, ar] = await Promise.all([
         supabase.from('deals').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false }),
         supabase.from('collabs')
           .select('*, influencer:influencers(id, instagram_handle, tiktok_handle, payouts_enabled)')
           .eq('restaurant_id', restaurant.id)
           .order('created_at', { ascending: false }),
+        // Applications to this restaurant's postings — RLS restricts to the owner.
+        supabase.from('collab_applications')
+          .select('id, posting_id, proposed_amount, pitch, status, created_at, influencer:influencers(id, display_name, instagram_handle, tiktok_handle, follower_count, niche, rating), posting:collabs!posting_id(id, title)')
+          .in('status', ['pending', 'shortlisted'])
+          .order('created_at', { ascending: false }),
       ]);
       setDeals((dr.data ?? []) as Deal[]);
       setCollabs((cr.data ?? []) as RestaurantCollab[]);
+      setApplications((ar.data ?? []) as unknown as CollabApplication[]);
       await reloadDashboardStats();
       setLoading(false);
     }
@@ -2058,7 +2086,6 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
   // Prefer RPC values; fall back to locally derived counts.
   const activeDeals = deals.filter((d) => classifyDeal(d) === 'active');
-  const openCollabs = collabs.filter((c) => c.status === 'open' || c.status === 'negotiating');
   const redeemedCount = dashStats?.redeemed_claims ?? 0;
   const awaitingCount = dashStats?.awaiting_scan ?? deals.reduce((s, d) => s + d.current_claims, 0);
   const activeDealCount = dashStats?.active_deals ?? activeDeals.length;
@@ -2066,6 +2093,36 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const toggleActive = async (deal: Deal) => {
     await supabase.from('deals').update({ is_active: !deal.is_active }).eq('id', deal.id);
     setDeals((prev) => prev.map((d) => d.id === deal.id ? { ...d, is_active: !d.is_active } : d));
+  };
+
+  // ── Application decisions (accept / decline / shortlist) ────────────────────
+  const decideApplication = async (appId: string, action: 'accept' | 'decline' | 'shortlist') => {
+    setAppBusyId(appId);
+    try {
+      const res = await fetch(`/api/collabs/applications/${appId}/decide`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Could not update application');
+      if (action === 'shortlist') {
+        setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, status: 'shortlisted' } : a));
+      } else {
+        // accept/decline → remove from the inbox; on accept, refresh collabs so the contract shows.
+        setApplications((prev) => prev.filter((a) => a.id !== appId));
+        if (action === 'accept') {
+          const { data: cr } = await supabase.from('collabs')
+            .select('*, influencer:influencers(id, instagram_handle, tiktok_handle, payouts_enabled)')
+            .eq('restaurant_id', restaurant.id).order('created_at', { ascending: false });
+          setCollabs((cr ?? []) as RestaurantCollab[]);
+        }
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setAppBusyId(null);
+    }
   };
 
   // ── Collab escrow actions ──────────────────────────────────────────────────
@@ -2335,7 +2392,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                 { label: 'Awaiting scan',   value: awaitingCount,  icon: IconQrcode,  color: '#FF7A30' },
                 { label: 'Active deals',    value: activeDealCount, icon: IconTag,     color: BLUE },
                 { label: 'Redeemed',        value: redeemedCount,  icon: IconCheck,   color: GREEN },
-                { label: 'Collab requests', value: openCollabs.length, icon: IconStar, color: '#A855F7' },
+                { label: 'Collab applications', value: applications.length, icon: IconStar, color: '#A855F7' },
               ].map(({ label, value, icon: Icon, color }) => (
                 <div
                   key={label}
@@ -2380,6 +2437,63 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               <IconSettings size={18} className="text-white" />
               <span className="text-[13px] font-semibold text-white">Settings</span>
             </button>
+
+            {/* ── Creator Applications inbox ─────────────────────── */}
+            {applications.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 pt-1">
+                  <IconStar size={16} style={{ color: '#A855F7' }} />
+                  <h3 className="font-display text-[16px] font-bold text-white">
+                    Creator Applications <span className="text-[#888] font-semibold">({applications.length})</span>
+                  </h3>
+                </div>
+                {applications.map((a) => {
+                  const inf = a.influencer;
+                  const who = inf?.display_name || (inf?.instagram_handle ? `@${inf.instagram_handle}` : 'Creator');
+                  const when = new Date(a.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+                  const busy = appBusyId === a.id;
+                  return (
+                    <div key={a.id} className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-[15px] text-white truncate">{who}</p>
+                          <p className="text-[12px] text-[#888] mt-0.5">
+                            {a.posting?.title ?? 'Collab'} · applied {when}
+                            {a.status === 'shortlisted' && <span className="ml-2 text-[#A855F7] font-semibold">· Shortlisted</span>}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[12px] text-[#aaa]">
+                            {inf?.instagram_handle && <span>📸 @{inf.instagram_handle}</span>}
+                            {inf?.follower_count ? <span>· {inf.follower_count.toLocaleString()} followers</span> : null}
+                            {inf?.niche && <span>· {inf.niche}</span>}
+                            {inf?.rating ? <span>· ⭐ {inf.rating.toFixed(1)}</span> : null}
+                          </div>
+                        </div>
+                        {a.proposed_amount != null && (
+                          <span className="font-display text-[18px] font-extrabold text-white flex-shrink-0">${a.proposed_amount}</span>
+                        )}
+                      </div>
+                      {a.pitch && <p className="text-[13px] text-[#ccc] mt-2.5 leading-snug">{a.pitch}</p>}
+                      <div className="flex gap-2 mt-3">
+                        <button onClick={() => decideApplication(a.id, 'accept')} disabled={busy}
+                          className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50" style={{ background: '#16A34A' }}>
+                          {busy ? '…' : 'Accept'}
+                        </button>
+                        {a.status !== 'shortlisted' && (
+                          <button onClick={() => decideApplication(a.id, 'shortlist')} disabled={busy}
+                            className="h-9 px-4 rounded-brands text-[13px] font-semibold disabled:opacity-50" style={{ border: '1px solid #A855F7', color: '#A855F7' }}>
+                            Shortlist
+                          </button>
+                        )}
+                        <button onClick={() => decideApplication(a.id, 'decline')} disabled={busy}
+                          className="h-9 px-4 rounded-brands text-[13px] font-semibold text-[#888] disabled:opacity-50" style={{ border: '1px solid #333' }}>
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* ── Creator Collabs (escrow) ───────────────────────── */}
             {collabs.filter((c) => c.influencer_id).length > 0 && (
