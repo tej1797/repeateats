@@ -22,6 +22,7 @@ import {
 } from '@/lib/restaurantDealForm';
 import { dealUsesBasePrice, isFreeItemDiscount, getEffectivePrice, priceTagForPrice } from '@/lib/dealPricing';
 import ScannerPanel from '@/components/restaurant/ScannerPanel';
+import PlansPanel from '@/components/restaurant/PlansPanel';
 import RestaurantSearch, { type PlaceResult } from '@/components/restaurant/RestaurantSearch';
 import {
   defaultHours as defaultHoursEntries,
@@ -1790,7 +1791,7 @@ function Step5Photo({
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'scanner' | 'settings';
+type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'plans' | 'scanner' | 'settings';
 
 interface ManagerPerms {
   dashboard: boolean; deals: boolean; analytics: boolean;
@@ -2206,6 +2207,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     deals:     'Deals',
     analytics: 'Analytics',
     profile:   'Profile',
+    plans:     'Plans',
     scanner:   'Scan QR',
     settings:  'Settings',
   };
@@ -2216,6 +2218,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     { id: 'analytics', label: 'Analytics', perm: 'analytics' },
     { id: 'scanner',   label: 'Scanner',   perm: 'scanner'   },
     { id: 'profile',   label: 'Profile',   perm: 'profile'   },
+    { id: 'plans',     label: 'Plans'                        },
     { id: 'settings',  label: 'Settings'                     },
   ];
 
@@ -2298,7 +2301,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                   <span className="text-[#CCC]">{tierLabel}</span>
                   <button
                     type="button"
-                    onClick={() => { window.location.href = '/restaurant/plans'; }}
+                    onClick={() => setTabPersist('plans')}
                     className="text-[11px] font-bold ml-1"
                     style={{ color: BLUE }}
                   >
@@ -2351,7 +2354,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               {[
                 { label: 'New deal',   icon: IconPlus,          action: () => setShowCreateDeal(true) },
                 { label: 'Analytics', icon: IconChartBar,      action: () => setTabPersist('analytics') },
-                { label: 'Plans',     icon: IconStar,          action: () => setTabPersist('settings') },
+                { label: 'Plans',     icon: IconStar,          action: () => setTabPersist('plans') },
                 { label: 'Profile',   icon: IconBuildingStore, action: () => setTabPersist('profile') },
               ].map(({ label, icon: Icon, action }) => (
                 <button
@@ -2723,7 +2726,19 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
         {/* ── PROFILE TAB ───────────────────────────────────────── */}
         {tab === 'profile' && (!managerMode || managerPerms.profile) && (
-          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} user={user} onGoSettings={() => setTabPersist('settings')} trialLabel={tierLabel} />
+          <ProfileTab restaurant={restaurant} setRestaurant={setRestaurant} supabase={supabase} user={user} onGoPlans={() => setTabPersist('plans')} trialLabel={tierLabel} />
+        )}
+
+        {/* ── PLANS TAB ─────────────────────────────────────────── */}
+        {tab === 'plans' && !managerMode && (
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <PlansPanel
+              restaurantId={restaurant.id}
+              tier={restaurantTier}
+              billingMode={(restMeta.billing_mode as string | null) ?? null}
+              trialEndsAt={trialEndsAt}
+            />
+          </div>
         )}
 
         {/* ── SETTINGS TAB ──────────────────────────────────────── */}
@@ -2860,12 +2875,12 @@ function HoursAccordion({ hoursEntries, updateHours, setEditing, labelCls }: {
 
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
 
-function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, trialLabel }: {
+function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoPlans, trialLabel }: {
   restaurant: Restaurant;
   setRestaurant: (r: Restaurant) => void;
   supabase: ReturnType<typeof createClient>;
   user: SupabaseUser;
-  onGoSettings: () => void;
+  onGoPlans: () => void;
   trialLabel: string;
 }) {
   const [form, setForm] = useState({
@@ -2973,7 +2988,7 @@ function ProfileTab({ restaurant, setRestaurant, supabase, user, onGoSettings, t
       {/* Plans & billing card */}
       <button
         type="button"
-        onClick={onGoSettings}
+        onClick={onGoPlans}
         className="w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-all hover:bg-[#1A1A1A]"
         style={{ background: '#141414', border: '1px solid #222' }}
       >
