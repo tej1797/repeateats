@@ -32,7 +32,7 @@ export function limitsForTier(tier: string | null | undefined): RestaurantPlanLi
 }
 
 // ── Pricing (CA$) ──────────────────────────────────────────────────────────
-// Flat = unlimited redemptions. Usage = lower base + 60 free then 0.5¢ each.
+// Flat = unlimited redemptions. Usage = lower base + 60 free then 5¢ each.
 // Yearly = 20% off the monthly rate (shown as the per-month equivalent).
 export interface PlanPrice { flatMonthly: number; usageMonthly: number }
 export const RESTAURANT_PRICES: Record<'starter' | 'pro', PlanPrice> = {
@@ -41,7 +41,7 @@ export const RESTAURANT_PRICES: Record<'starter' | 'pro', PlanPrice> = {
 };
 
 export const USAGE_FREE_REDEMPTIONS = 60;
-export const USAGE_OVERAGE_CENTS = 0.5; // per redemption past the free bucket
+export const USAGE_OVERAGE_CENTS = 5; // per redemption past the free bucket
 export const TRIAL_DAYS = 90;
 export const YEARLY_DISCOUNT = 0.2;
 

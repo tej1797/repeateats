@@ -11,7 +11,7 @@ each location has its own subscription.
 
 ## Billing modes (Starter & Pro only)
 - **Flat monthly** — unlimited scanner-verified QR redemptions included.
-- **Monthly + usage** — 60 free redemptions/month, then **CA$0.005 (0.5¢) each**.
+- **Monthly + usage** — 60 free redemptions/month, then **CA$0.05 (5¢) each**.
   Only scanner-verified QR redemptions count toward usage.
 
 ## Monthly vs Yearly
@@ -79,7 +79,7 @@ collab escrow, an analytics dashboard, mobile + web plans screens.
 1. Free **60/mo restaurant redemption hard cap** — must be enforced server-side
    in `claim-deal` (count scanner-verified redemptions for the restaurant in the
    current Toronto month; block at 60 on free tier). Owned by mobile/edge.
-2. Usage metering (60 free then 0.5¢ → Stripe Meter + usage reporting from the
+2. Usage metering (60 free then 5¢ → Stripe Meter + usage reporting from the
    redeem path). Owned by mobile/edge. **Open question:** ship real metering now
    (needs a Stripe Meter + metered price) or keep usage-mode as the discounted
    flat price for v1 and add metering later.
