@@ -72,8 +72,20 @@ export default function PlansPanel({ restaurantId, tier, billingMode, trialEndsA
           cancel_url: `${returnBase}&sub=cancelled`,
         },
       });
+      if (fnErr) {
+        // FunctionsHttpError carries the real response body in .context — surface it.
+        let detail = fnErr.message;
+        try {
+          const ctx = (fnErr as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json() as { error?: string; message?: string };
+            detail = body.error ?? body.message ?? detail;
+          }
+        } catch { /* keep generic message */ }
+        throw new Error(detail || 'Could not start checkout');
+      }
       const url = (data as { url?: string } | null)?.url;
-      if (fnErr || !url) throw new Error(fnErr?.message ?? 'Could not start checkout');
+      if (!url) throw new Error('Could not start checkout');
       window.location.href = url;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
