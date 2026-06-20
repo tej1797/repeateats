@@ -55,3 +55,7 @@ alter table public.influencers
   add column if not exists primary_platform    text,
   add column if not exists city                text,
   add column if not exists instagram_verified  boolean not null default false;
+
+-- One creator profile per user, and required so upsert(onConflict:'user_id')
+-- works in the signup flow (was missing → upsert threw → no profile created).
+alter table public.influencers add constraint influencers_user_id_key unique (user_id);
