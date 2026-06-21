@@ -74,6 +74,9 @@ import {
   IconRepeat,
   IconMinus,
   IconHelp,
+  IconMessage,
+  IconUser,
+  IconSend,
 } from '@tabler/icons-react';
 import RestaurantAnalytics from '@/components/restaurant/RestaurantAnalytics';
 import type { ClaimRow } from '@/lib/restaurantAnalytics';
@@ -1950,6 +1953,78 @@ type CollabApplication = {
   posting: { id: string; title: string | null } | null;
 };
 
+// Chat thread with the hired creator for one collab (per collab_id).
+function CollabChatModal({ collab, userId, onClose }: {
+  collab: RestaurantCollab; userId: string; onClose: () => void;
+}) {
+  const [msgs, setMsgs] = useState<{ id: string; sender_id: string; text: string; created_at: string }[]>([]);
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const handle = collab.influencer?.instagram_handle ? `@${collab.influencer.instagram_handle}`
+    : collab.influencer?.tiktok_handle ? `@${collab.influencer.tiktok_handle}` : 'Creator';
+
+  useEffect(() => {
+    let on = true;
+    const load = async () => {
+      const res = await fetch(`/api/messages?collab_id=${collab.id}`);
+      const json = await res.json().catch(() => ({}));
+      if (on) { setMsgs(json.data ?? []); setLoading(false); }
+    };
+    void load();
+    const t = setInterval(load, 5000); // light polling
+    return () => { on = false; clearInterval(t); };
+  }, [collab.id]);
+
+  const send = async () => {
+    const body = text.trim();
+    if (!body) return;
+    setText('');
+    const res = await fetch('/api/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collab_id: collab.id, text: body }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (json.data) setMsgs((m) => [...m, json.data]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full sm:max-w-[480px] h-[80vh] sm:h-[600px] flex flex-col rounded-t-[20px] sm:rounded-2xl overflow-hidden" style={{ background: '#0D0D0D', border: '1px solid #222' }}>
+        <div className="flex items-center justify-between px-4 h-14 border-b border-[#222] flex-shrink-0">
+          <div>
+            <p className="font-bold text-[15px] text-white">{handle}</p>
+            <p className="text-[11px] text-[#888]">{collab.title ?? collab.deliverables ?? 'Collab'}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[#888]" style={{ background: '#1A1A1A' }}><IconX size={16} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+          {loading ? <p className="text-[13px] text-[#888] text-center">Loading…</p>
+            : msgs.length === 0 ? <p className="text-[13px] text-[#888] text-center py-8">No messages yet. Say hi 👋</p>
+            : msgs.map((m) => {
+              const mine = m.sender_id === userId;
+              return (
+                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div className="max-w-[75%] px-3.5 py-2 rounded-2xl text-[14px]" style={mine ? { background: '#7E22CE', color: '#fff' } : { background: '#1A1A1A', color: '#eee' }}>
+                    {m.text}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+        <div className="flex items-center gap-2 p-3 border-t border-[#222] flex-shrink-0">
+          <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void send(); }}
+            placeholder="Type a message…"
+            className="flex-1 h-11 px-3.5 rounded-full text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE]" />
+          <button onClick={() => void send()} className="w-11 h-11 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: '#7E22CE' }}>
+            <IconSend size={17} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }: {
   restaurant: Restaurant;
   user: SupabaseUser;
@@ -1981,6 +2056,8 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [postingDraft,    setPostingDraft]    = useState({ title: '', deliverables: '', brief: '', min: '', max: '', deadline: '' });
   const [postingBusy,     setPostingBusy]     = useState(false);
   const [postingError,    setPostingError]    = useState('');
+  const [collabFilter,    setCollabFilter]    = useState<'all' | 'open' | 'applications' | 'accepted' | 'released' | 'history'>('all');
+  const [chatCollab,      setChatCollab]      = useState<RestaurantCollab | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
@@ -2754,19 +2831,59 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
 
         {/* ── COLLABS TAB ───────────────────────────────────────── */}
         {tab === 'collabs' && (!managerMode || managerPerms.collabs) && (() => {
-          const postings  = collabs.filter((c) => !c.influencer_id && (!c.status || c.status === 'open'));
-          const contracts = collabs.filter((c) => c.influencer_id);
+          const FILTERS = ['all', 'open', 'applications', 'accepted', 'released', 'history'] as const;
+          const FILTER_LABEL: Record<typeof FILTERS[number], string> = {
+            all: 'All', open: 'Open', applications: 'Applications', accepted: 'Accepted', released: 'Released', history: 'History',
+          };
+          const isOpen     = (c: RestaurantCollab) => !c.influencer_id && (!c.status || c.status === 'open');
+          const isReleased = (c: RestaurantCollab) => c.payment_status === 'released';
+          const isAccepted = (c: RestaurantCollab) => !!c.influencer_id && c.payment_status !== 'released';
+          const visibleCollabs = collabs.filter((c) => {
+            switch (collabFilter) {
+              case 'open':     return isOpen(c);
+              case 'accepted': return isAccepted(c);
+              case 'released': return isReleased(c);
+              case 'history':  return isReleased(c) || c.status === 'completed' || c.status === 'cancelled';
+              default:         return true; // 'all'
+            }
+          });
+          const STATUS_BADGE = (c: RestaurantCollab) => {
+            if (isReleased(c))                   return { label: 'Released', color: '#4ADE80', bg: 'rgba(74,222,128,0.15)' };
+            if (c.payment_status === 'escrowed') return { label: 'In escrow', color: '#60A5FA', bg: 'rgba(96,165,250,0.15)' };
+            if (c.influencer_id)                 return { label: 'Accepted', color: '#A855F7', bg: 'rgba(168,85,247,0.15)' };
+            return { label: 'Open', color: '#888', bg: '#222' };
+          };
+
           return (
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-display text-xl font-bold text-white">Creator Collabs</h2>
+                <div>
+                  <h2 className="font-display text-xl font-bold text-white">Creator Collabs</h2>
+                  <p className="text-[12px] text-[#888] mt-0.5">{collabs.length} collab{collabs.length === 1 ? '' : 's'}</p>
+                </div>
                 <button onClick={() => { setShowNewPosting((v) => !v); setPostingError(''); }}
                   className="inline-flex items-center gap-1.5 h-9 px-4 rounded-brands text-sm font-semibold text-white" style={{ background: '#7E22CE' }}>
-                  <IconPlus size={15} /> New collab
+                  <IconPlus size={15} /> New Brief
                 </button>
               </div>
 
-              {/* New posting form */}
+              {/* Filter chips */}
+              <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+                {FILTERS.map((f) => {
+                  const count = f === 'applications' ? applications.length
+                    : f === 'all' ? collabs.length
+                    : collabs.filter((c) => f === 'open' ? isOpen(c) : f === 'accepted' ? isAccepted(c) : f === 'released' ? isReleased(c) : (isReleased(c) || c.status === 'completed' || c.status === 'cancelled')).length;
+                  return (
+                    <button key={f} onClick={() => setCollabFilter(f)}
+                      className="h-8 px-3.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-colors"
+                      style={collabFilter === f ? { background: '#7E22CE', color: '#fff' } : { background: '#1A1A1A', color: '#999', border: '1px solid #2A2A2A' }}>
+                      {FILTER_LABEL[f]}{count ? ` ${count}` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* New brief form */}
               {showNewPosting && (
                 <div className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #2A2A2A' }}>
                   <input value={postingDraft.title} onChange={(e) => setPostingDraft((d) => ({ ...d, title: e.target.value }))}
@@ -2793,19 +2910,16 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                   <div className="flex gap-2">
                     <button onClick={() => setShowNewPosting(false)} className="flex-1 h-10 rounded-xl text-[13px] font-semibold text-t2 border border-[#333]">Cancel</button>
                     <button onClick={createPosting} disabled={postingBusy} className="flex-1 h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50" style={{ background: '#7E22CE' }}>
-                      {postingBusy ? 'Posting…' : 'Post collab'}
+                      {postingBusy ? 'Posting…' : 'Post brief'}
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Applications inbox */}
-              <div className="space-y-3">
-                <h3 className="font-display text-[16px] font-bold text-white">
-                  Applications <span className="text-[#888] font-semibold">({applications.length})</span>
-                </h3>
-                {applications.length === 0 ? (
-                  <p className="text-[13px] text-[#888]">No applications yet. Post a collab and creators can apply.</p>
+              {/* APPLICATIONS filter → applicant cards */}
+              {collabFilter === 'applications' ? (
+                applications.length === 0 ? (
+                  <p className="text-[13px] text-[#888] py-6 text-center">No applications yet. Post a brief and creators can apply.</p>
                 ) : applications.map((a) => {
                   const inf = a.influencer;
                   const who = inf?.display_name || (inf?.instagram_handle ? `@${inf.instagram_handle}` : 'Creator');
@@ -2815,10 +2929,10 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                     <div key={a.id} className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-bold text-[15px] text-white truncate">{who}</p>
+                          <p className="text-[12px] text-[#888]">{restaurant.name}</p>
+                          <p className="font-bold text-[15px] text-white truncate">{a.posting?.title ?? 'Collab'}</p>
                           <p className="text-[12px] text-[#888] mt-0.5">
-                            {a.posting?.title ?? 'Collab'} · applied {when}
-                            {a.status === 'shortlisted' && <span className="ml-2 text-[#A855F7] font-semibold">· Shortlisted</span>}
+                            {who} · applied {when}{a.status === 'shortlisted' && <span className="ml-1 text-[#A855F7] font-semibold">· Shortlisted</span>}
                           </p>
                           <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[12px] text-[#aaa]">
                             {inf?.instagram_handle && <span>📸 @{inf.instagram_handle}</span>}
@@ -2850,66 +2964,64 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                       </div>
                     </div>
                   );
-                })}
-              </div>
-
-              {/* Open postings */}
-              {postings.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-display text-[16px] font-bold text-white">Open postings</h3>
-                  {postings.map((p) => {
-                    const n = applications.filter((a) => a.posting_id === p.id).length;
-                    return (
-                      <div key={p.id} className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-bold text-[14px] text-white truncate">{p.title ?? p.deliverables ?? 'Collab'}</p>
-                            <p className="text-[12px] text-[#888] mt-0.5">
-                              {p.deliverables ?? ''}{p.offer_amount_min || p.offer_amount_max ? ` · $${p.offer_amount_min ?? ''}${p.offer_amount_max ? `–$${p.offer_amount_max}` : ''}` : ''}
-                            </p>
-                          </div>
-                          <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: 'rgba(168,85,247,0.15)', color: '#A855F7' }}>
-                            {n} applicant{n === 1 ? '' : 's'}
-                          </span>
-                        </div>
+                })
+              ) : visibleCollabs.length === 0 ? (
+                <p className="text-[13px] text-[#888] py-6 text-center">No collabs here yet. Tap &ldquo;New Brief&rdquo; to post one.</p>
+              ) : visibleCollabs.map((c) => {
+                const badge = STATUS_BADGE(c);
+                const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min ?? 0;
+                const budgetLabel = c.agreed_amount != null
+                  ? `CA$${c.agreed_amount}`
+                  : (c.offer_amount_min || c.offer_amount_max)
+                    ? `CA$${c.offer_amount_min ?? ''}${c.offer_amount_max ? ` – CA$${c.offer_amount_max}` : ''}`
+                    : '—';
+                const handle = c.influencer?.instagram_handle ? `@${c.influencer.instagram_handle}`
+                  : c.influencer?.tiktok_handle ? `@${c.influencer.tiktok_handle}` : 'Creator';
+                const applicantCount = applications.filter((a) => a.posting_id === c.id).length;
+                const busy = collabBusyId === c.id;
+                const creatorNet = ((amount * 100 - Math.round(amount * 100 * 0.005)) / 100).toFixed(2);
+                return (
+                  <div key={c.id} className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #222' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[12px] text-[#888]">{restaurant.name}</p>
+                        <p className="font-bold text-[16px] text-white truncate">{c.title ?? c.deliverables ?? 'Collab'}</p>
+                        {c.deliverables && c.title && <p className="text-[12px] text-[#888] mt-0.5 truncate">{c.deliverables}</p>}
+                        <p className="text-[13px] text-[#bbb] mt-1">{budgetLabel}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: badge.bg, color: badge.color }}>
+                        {badge.label}
+                      </span>
+                    </div>
 
-              {/* Active contracts (escrow) */}
-              {contracts.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-display text-[16px] font-bold text-white">Active collabs</h3>
-                  {contracts.map((c) => {
-                    const handle = c.influencer?.instagram_handle ? `@${c.influencer.instagram_handle}`
-                      : c.influencer?.tiktok_handle ? `@${c.influencer.tiktok_handle}` : 'Creator';
-                    const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min ?? 0;
-                    const busy = collabBusyId === c.id;
-                    const creatorNet = ((amount * 100 - Math.round(amount * 100 * 0.005)) / 100).toFixed(2);
-                    const PAY_BADGE = {
-                      pending:  { label: 'Not funded', color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' },
-                      escrowed: { label: 'In escrow',  color: '#60A5FA', bg: 'rgba(96,165,250,0.15)' },
-                      released: { label: 'Paid out',   color: '#4ADE80', bg: 'rgba(74,222,128,0.15)' },
-                    }[c.payment_status] ?? { label: c.payment_status, color: '#888', bg: '#222' };
-                    return (
-                      <div key={c.id} className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #222' }}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-semibold text-[14px] text-white truncate">{c.title ?? c.deliverables ?? 'Collab'}</div>
-                            <div className="text-[12px] text-[#888] mt-0.5">{handle} · ${amount} CAD</div>
-                          </div>
-                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: PAY_BADGE.bg, color: PAY_BADGE.color }}>
-                            {PAY_BADGE.label}
-                          </span>
+                    {/* Creator row */}
+                    <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5" style={{ background: '#1A1A1A' }}>
+                      <span className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(126,34,206,0.2)' }}>
+                        <IconUser size={16} style={{ color: '#A855F7' }} />
+                      </span>
+                      <span className="text-[14px] font-semibold text-white truncate">
+                        {c.influencer_id ? handle : (applicantCount > 0 ? `${applicantCount} applicant${applicantCount === 1 ? '' : 's'}` : 'No creator yet')}
+                      </span>
+                    </div>
+
+                    {c.influencer_id && (
+                      <button onClick={() => setChatCollab(c)}
+                        className="w-full h-10 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2" style={{ background: '#7E22CE' }}>
+                        <IconMessage size={15} /> Open chat
+                      </button>
+                    )}
+
+                    {collabError?.id === c.id && <p className="text-[12px] text-red-400">{collabError.msg}</p>}
+
+                    {c.influencer_id && (
+                      <>
+                        <div className="flex items-center justify-between text-[12px]">
+                          <span className="text-[#888]">Payment</span>
+                          <span className="font-bold" style={{ color: badge.color }}>{badge.label}</span>
                         </div>
                         {c.payment_status === 'escrowed' && (
-                          <div className="text-[11px] text-[#888]">
-                            ${amount} held in escrow · creator gets ${creatorNet} after RepEAT&apos;s 0.5% fee
-                          </div>
+                          <p className="text-[11px] text-[#888]">${amount} in escrow · creator gets ${creatorNet} after RepEAT&apos;s 0.5% fee</p>
                         )}
-                        {collabError?.id === c.id && <p className="text-[12px] text-red-400">{collabError.msg}</p>}
                         {c.payment_status === 'pending' && (
                           <button onClick={() => fundCollab(c)} disabled={busy}
                             className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#7E22CE' }}>
@@ -2918,7 +3030,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                         )}
                         {c.payment_status === 'escrowed' && (
                           <button onClick={() => releaseCollab(c)} disabled={busy || !c.influencer?.payouts_enabled}
-                            className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#16A34A' }}>
+                            className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#F59E0B' }}>
                             {busy ? <IconLoader2 size={15} className="animate-spin" />
                               : !c.influencer?.payouts_enabled ? 'Waiting on creator payout setup'
                               : <><IconCheck size={14} /> Release payment</>}
@@ -2929,11 +3041,18 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
                             <IconCheck size={14} /> Paid out{c.released_at ? ` · ${new Date(c.released_at).toLocaleDateString('en-CA')}` : ''}
                           </div>
                         )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      </>
+                    )}
+
+                    {!c.influencer_id && applicantCount > 0 && (
+                      <button onClick={() => setCollabFilter('applications')}
+                        className="w-full h-9 rounded-xl text-[13px] font-semibold" style={{ border: '1px solid #A855F7', color: '#A855F7' }}>
+                        Review {applicantCount} applicant{applicantCount === 1 ? '' : 's'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
@@ -2961,6 +3080,10 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         )}
 
       </main>
+
+      {chatCollab && (
+        <CollabChatModal collab={chatCollab} userId={user.id} onClose={() => setChatCollab(null)} />
+      )}
 
       {(showCreateDeal || editingDeal) && (
         <CreateDealModal
