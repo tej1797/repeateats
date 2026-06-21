@@ -1791,7 +1791,7 @@ function Step5Photo({
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'plans' | 'scanner' | 'settings';
+type DashTab = 'dashboard' | 'deals' | 'analytics' | 'profile' | 'plans' | 'scanner' | 'collabs' | 'settings';
 
 interface ManagerPerms {
   dashboard: boolean; deals: boolean; analytics: boolean;
@@ -1977,6 +1977,10 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const [collabs,         setCollabs]         = useState<RestaurantCollab[]>([]);
   const [applications,    setApplications]    = useState<CollabApplication[]>([]);
   const [appBusyId,       setAppBusyId]       = useState<string | null>(null);
+  const [showNewPosting,  setShowNewPosting]  = useState(false);
+  const [postingDraft,    setPostingDraft]    = useState({ title: '', deliverables: '', brief: '', min: '', max: '', deadline: '' });
+  const [postingBusy,     setPostingBusy]     = useState(false);
+  const [postingError,    setPostingError]    = useState('');
   const [loading,         setLoading]         = useState(true);
   const [showCreateDeal,  setShowCreateDeal]  = useState(false);
   const [editingDeal,     setEditingDeal]     = useState<Deal | null>(null);
@@ -2093,6 +2097,36 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
   const toggleActive = async (deal: Deal) => {
     await supabase.from('deals').update({ is_active: !deal.is_active }).eq('id', deal.id);
     setDeals((prev) => prev.map((d) => d.id === deal.id ? { ...d, is_active: !d.is_active } : d));
+  };
+
+  // ── Create a collab posting (campaign) ─────────────────────────────────────
+  const createPosting = async () => {
+    if (!postingDraft.title.trim()) { setPostingError('Add a title'); return; }
+    setPostingBusy(true); setPostingError('');
+    try {
+      const res = await fetch('/api/collabs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurant_id:    restaurant.id,
+          title:            postingDraft.title.trim(),
+          deliverables:     postingDraft.deliverables.trim() || null,
+          brief:            postingDraft.brief.trim() || null,
+          offer_amount_min: postingDraft.min ? Number(postingDraft.min) : null,
+          offer_amount_max: postingDraft.max ? Number(postingDraft.max) : null,
+          deadline:         postingDraft.deadline || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Could not create posting');
+      setCollabs((prev) => [data.data as RestaurantCollab, ...prev]);
+      setPostingDraft({ title: '', deliverables: '', brief: '', min: '', max: '', deadline: '' });
+      setShowNewPosting(false);
+    } catch (e) {
+      setPostingError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setPostingBusy(false);
+    }
   };
 
   // ── Application decisions (accept / decline / shortlist) ────────────────────
@@ -2266,6 +2300,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     profile:   'Profile',
     plans:     'Plans',
     scanner:   'Scan QR',
+    collabs:   'Collabs',
     settings:  'Settings',
   };
 
@@ -2274,6 +2309,7 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
     { id: 'deals',     label: 'Deals',     perm: 'deals'     },
     { id: 'analytics', label: 'Analytics', perm: 'analytics' },
     { id: 'scanner',   label: 'Scanner',   perm: 'scanner'   },
+    { id: 'collabs',   label: 'Collabs',   perm: 'collabs'   },
     { id: 'profile',   label: 'Profile',   perm: 'profile'   },
     { id: 'plans',     label: 'Plans'                        },
     { id: 'settings',  label: 'Settings'                     },
@@ -2389,14 +2425,16 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
             {/* 2×2 metrics grid */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Awaiting scan',   value: awaitingCount,  icon: IconQrcode,  color: '#FF7A30' },
-                { label: 'Active deals',    value: activeDealCount, icon: IconTag,     color: BLUE },
-                { label: 'Redeemed',        value: redeemedCount,  icon: IconCheck,   color: GREEN },
-                { label: 'Collab applications', value: applications.length, icon: IconStar, color: '#A855F7' },
-              ].map(({ label, value, icon: Icon, color }) => (
+                { label: 'Awaiting scan',   value: awaitingCount,  icon: IconQrcode,  color: '#FF7A30', onClick: undefined as (() => void) | undefined },
+                { label: 'Active deals',    value: activeDealCount, icon: IconTag,     color: BLUE,      onClick: () => setTabPersist('deals') },
+                { label: 'Redeemed',        value: redeemedCount,  icon: IconCheck,   color: GREEN,     onClick: undefined },
+                { label: 'Collab applications', value: applications.length, icon: IconStar, color: '#A855F7', onClick: () => setTabPersist('collabs') },
+              ].map(({ label, value, icon: Icon, color, onClick }) => (
                 <div
                   key={label}
-                  className="rounded-2xl p-4"
+                  onClick={onClick}
+                  role={onClick ? 'button' : undefined}
+                  className={`rounded-2xl p-4 ${onClick ? 'cursor-pointer transition-colors hover:bg-[#1A1A1A]' : ''}`}
                   style={{ background: '#141414', border: '1px solid #222' }}
                 >
                   <Icon size={20} style={{ color }} className="mb-2" stroke={1.5} />
@@ -2437,130 +2475,6 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
               <IconSettings size={18} className="text-white" />
               <span className="text-[13px] font-semibold text-white">Settings</span>
             </button>
-
-            {/* ── Creator Applications inbox ─────────────────────── */}
-            {applications.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pt-1">
-                  <IconStar size={16} style={{ color: '#A855F7' }} />
-                  <h3 className="font-display text-[16px] font-bold text-white">
-                    Creator Applications <span className="text-[#888] font-semibold">({applications.length})</span>
-                  </h3>
-                </div>
-                {applications.map((a) => {
-                  const inf = a.influencer;
-                  const who = inf?.display_name || (inf?.instagram_handle ? `@${inf.instagram_handle}` : 'Creator');
-                  const when = new Date(a.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
-                  const busy = appBusyId === a.id;
-                  return (
-                    <div key={a.id} className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-bold text-[15px] text-white truncate">{who}</p>
-                          <p className="text-[12px] text-[#888] mt-0.5">
-                            {a.posting?.title ?? 'Collab'} · applied {when}
-                            {a.status === 'shortlisted' && <span className="ml-2 text-[#A855F7] font-semibold">· Shortlisted</span>}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[12px] text-[#aaa]">
-                            {inf?.instagram_handle && <span>📸 @{inf.instagram_handle}</span>}
-                            {inf?.follower_count ? <span>· {inf.follower_count.toLocaleString()} followers</span> : null}
-                            {inf?.niche && <span>· {inf.niche}</span>}
-                            {inf?.rating ? <span>· ⭐ {inf.rating.toFixed(1)}</span> : null}
-                          </div>
-                        </div>
-                        {a.proposed_amount != null && (
-                          <span className="font-display text-[18px] font-extrabold text-white flex-shrink-0">${a.proposed_amount}</span>
-                        )}
-                      </div>
-                      {a.pitch && <p className="text-[13px] text-[#ccc] mt-2.5 leading-snug">{a.pitch}</p>}
-                      <div className="flex gap-2 mt-3">
-                        <button onClick={() => decideApplication(a.id, 'accept')} disabled={busy}
-                          className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50" style={{ background: '#16A34A' }}>
-                          {busy ? '…' : 'Accept'}
-                        </button>
-                        {a.status !== 'shortlisted' && (
-                          <button onClick={() => decideApplication(a.id, 'shortlist')} disabled={busy}
-                            className="h-9 px-4 rounded-brands text-[13px] font-semibold disabled:opacity-50" style={{ border: '1px solid #A855F7', color: '#A855F7' }}>
-                            Shortlist
-                          </button>
-                        )}
-                        <button onClick={() => decideApplication(a.id, 'decline')} disabled={busy}
-                          className="h-9 px-4 rounded-brands text-[13px] font-semibold text-[#888] disabled:opacity-50" style={{ border: '1px solid #333' }}>
-                          Decline
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* ── Creator Collabs (escrow) ───────────────────────── */}
-            {collabs.filter((c) => c.influencer_id).length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pt-1">
-                  <IconStar size={16} style={{ color: '#A855F7' }} />
-                  <h3 className="font-display text-[16px] font-bold text-white">Creator Collabs</h3>
-                </div>
-                {collabs.filter((c) => c.influencer_id).map((c) => {
-                  const handle = c.influencer?.instagram_handle
-                    ? `@${c.influencer.instagram_handle}`
-                    : c.influencer?.tiktok_handle ? `@${c.influencer.tiktok_handle}` : 'Creator';
-                  const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min ?? 0;
-                  const busy = collabBusyId === c.id;
-                  const PAY_BADGE = {
-                    pending:  { label: 'Not funded', color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' },
-                    escrowed: { label: 'In escrow',  color: '#60A5FA', bg: 'rgba(96,165,250,0.15)' },
-                    released: { label: 'Paid out',   color: '#4ADE80', bg: 'rgba(74,222,128,0.15)' },
-                  }[c.payment_status] ?? { label: c.payment_status, color: '#888', bg: '#222' };
-                  return (
-                    <div key={c.id} className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #222' }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-[14px] text-white truncate">{c.title ?? c.deliverables ?? 'Collab'}</div>
-                          <div className="text-[12px] text-[#888] mt-0.5">{handle} · ${amount} CAD</div>
-                        </div>
-                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: PAY_BADGE.bg, color: PAY_BADGE.color }}>
-                          {PAY_BADGE.label}
-                        </span>
-                      </div>
-
-                      {c.payment_status === 'escrowed' && (
-                        <div className="text-[11px] text-[#888]">
-                          ${amount} held in escrow · creator gets ${(((amount * 100) - (c.platform_fee_cents ?? Math.round(amount * 2))) / 100).toFixed(2)} after RepEAT&apos;s 2% fee
-                        </div>
-                      )}
-
-                      {collabError?.id === c.id && (
-                        <p className="text-[12px] text-red-400">{collabError.msg}</p>
-                      )}
-
-                      {c.payment_status === 'pending' && (
-                        <button onClick={() => fundCollab(c)} disabled={busy}
-                          className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                          style={{ background: '#7E22CE' }}>
-                          {busy ? <IconLoader2 size={15} className="animate-spin" /> : <><IconLock size={14} /> Fund collab (hold ${amount})</>}
-                        </button>
-                      )}
-                      {c.payment_status === 'escrowed' && (
-                        <button onClick={() => releaseCollab(c)} disabled={busy || !c.influencer?.payouts_enabled}
-                          className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                          style={{ background: '#16A34A' }}>
-                          {busy ? <IconLoader2 size={15} className="animate-spin" />
-                            : !c.influencer?.payouts_enabled ? 'Waiting on creator payout setup'
-                            : <><IconCheck size={14} /> Release payment</>}
-                        </button>
-                      )}
-                      {c.payment_status === 'released' && (
-                        <div className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: '#4ADE80' }}>
-                          <IconCheck size={14} /> Paid out{c.released_at ? ` · ${new Date(c.released_at).toLocaleDateString('en-CA')}` : ''}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
           </div>
         )}
@@ -2837,6 +2751,192 @@ function Dashboard({ restaurant: initialRestaurant, user, onSignOut, supabase }:
         {tab === 'scanner' && (!managerMode || managerPerms.scanner) && (
           <ScannerPanel restaurantId={restaurant.id} />
         )}
+
+        {/* ── COLLABS TAB ───────────────────────────────────────── */}
+        {tab === 'collabs' && (!managerMode || managerPerms.collabs) && (() => {
+          const postings  = collabs.filter((c) => !c.influencer_id && (!c.status || c.status === 'open'));
+          const contracts = collabs.filter((c) => c.influencer_id);
+          return (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-xl font-bold text-white">Creator Collabs</h2>
+                <button onClick={() => { setShowNewPosting((v) => !v); setPostingError(''); }}
+                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-brands text-sm font-semibold text-white" style={{ background: '#7E22CE' }}>
+                  <IconPlus size={15} /> New collab
+                </button>
+              </div>
+
+              {/* New posting form */}
+              {showNewPosting && (
+                <div className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #2A2A2A' }}>
+                  <input value={postingDraft.title} onChange={(e) => setPostingDraft((d) => ({ ...d, title: e.target.value }))}
+                    placeholder="Title (e.g. Pizza launch reel)"
+                    className="w-full h-10 px-3 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE]" />
+                  <input value={postingDraft.deliverables} onChange={(e) => setPostingDraft((d) => ({ ...d, deliverables: e.target.value }))}
+                    placeholder="Deliverables (e.g. 1 reel + 3 stories)"
+                    className="w-full h-10 px-3 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE]" />
+                  <textarea value={postingDraft.brief} onChange={(e) => setPostingDraft((d) => ({ ...d, brief: e.target.value }))}
+                    placeholder="Brief — what should the creator highlight?" rows={2}
+                    className="w-full px-3 py-2 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE] resize-none" />
+                  <div className="grid grid-cols-3 gap-2">
+                    <input value={postingDraft.min} onChange={(e) => setPostingDraft((d) => ({ ...d, min: e.target.value.replace(/[^0-9]/g, '') }))}
+                      inputMode="numeric" placeholder="Budget min $"
+                      className="h-10 px-3 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE]" />
+                    <input value={postingDraft.max} onChange={(e) => setPostingDraft((d) => ({ ...d, max: e.target.value.replace(/[^0-9]/g, '') }))}
+                      inputMode="numeric" placeholder="Budget max $"
+                      className="h-10 px-3 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE]" />
+                    <input value={postingDraft.deadline} onChange={(e) => setPostingDraft((d) => ({ ...d, deadline: e.target.value }))}
+                      type="date"
+                      className="h-10 px-3 rounded-xl text-[14px] text-white outline-none border border-[#333] bg-[#1A1A1A] focus:border-[#7E22CE]" />
+                  </div>
+                  {postingError && <p className="text-[12px] text-red-400">{postingError}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowNewPosting(false)} className="flex-1 h-10 rounded-xl text-[13px] font-semibold text-t2 border border-[#333]">Cancel</button>
+                    <button onClick={createPosting} disabled={postingBusy} className="flex-1 h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50" style={{ background: '#7E22CE' }}>
+                      {postingBusy ? 'Posting…' : 'Post collab'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Applications inbox */}
+              <div className="space-y-3">
+                <h3 className="font-display text-[16px] font-bold text-white">
+                  Applications <span className="text-[#888] font-semibold">({applications.length})</span>
+                </h3>
+                {applications.length === 0 ? (
+                  <p className="text-[13px] text-[#888]">No applications yet. Post a collab and creators can apply.</p>
+                ) : applications.map((a) => {
+                  const inf = a.influencer;
+                  const who = inf?.display_name || (inf?.instagram_handle ? `@${inf.instagram_handle}` : 'Creator');
+                  const when = new Date(a.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+                  const busy = appBusyId === a.id;
+                  return (
+                    <div key={a.id} className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-[15px] text-white truncate">{who}</p>
+                          <p className="text-[12px] text-[#888] mt-0.5">
+                            {a.posting?.title ?? 'Collab'} · applied {when}
+                            {a.status === 'shortlisted' && <span className="ml-2 text-[#A855F7] font-semibold">· Shortlisted</span>}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[12px] text-[#aaa]">
+                            {inf?.instagram_handle && <span>📸 @{inf.instagram_handle}</span>}
+                            {inf?.follower_count ? <span>· {inf.follower_count.toLocaleString()} followers</span> : null}
+                            {inf?.niche && <span>· {inf.niche}</span>}
+                            {inf?.rating ? <span>· ⭐ {inf.rating.toFixed(1)}</span> : null}
+                          </div>
+                        </div>
+                        {a.proposed_amount != null && (
+                          <span className="font-display text-[18px] font-extrabold text-white flex-shrink-0">${a.proposed_amount}</span>
+                        )}
+                      </div>
+                      {a.pitch && <p className="text-[13px] text-[#ccc] mt-2.5 leading-snug">{a.pitch}</p>}
+                      <div className="flex gap-2 mt-3">
+                        <button onClick={() => decideApplication(a.id, 'accept')} disabled={busy}
+                          className="flex-1 h-9 rounded-brands text-[13px] font-bold text-white disabled:opacity-50" style={{ background: '#16A34A' }}>
+                          {busy ? '…' : 'Accept'}
+                        </button>
+                        {a.status !== 'shortlisted' && (
+                          <button onClick={() => decideApplication(a.id, 'shortlist')} disabled={busy}
+                            className="h-9 px-4 rounded-brands text-[13px] font-semibold disabled:opacity-50" style={{ border: '1px solid #A855F7', color: '#A855F7' }}>
+                            Shortlist
+                          </button>
+                        )}
+                        <button onClick={() => decideApplication(a.id, 'decline')} disabled={busy}
+                          className="h-9 px-4 rounded-brands text-[13px] font-semibold text-[#888] disabled:opacity-50" style={{ border: '1px solid #333' }}>
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Open postings */}
+              {postings.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-display text-[16px] font-bold text-white">Open postings</h3>
+                  {postings.map((p) => {
+                    const n = applications.filter((a) => a.posting_id === p.id).length;
+                    return (
+                      <div key={p.id} className="rounded-2xl p-4" style={{ background: '#141414', border: '1px solid #222' }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-[14px] text-white truncate">{p.title ?? p.deliverables ?? 'Collab'}</p>
+                            <p className="text-[12px] text-[#888] mt-0.5">
+                              {p.deliverables ?? ''}{p.offer_amount_min || p.offer_amount_max ? ` · $${p.offer_amount_min ?? ''}${p.offer_amount_max ? `–$${p.offer_amount_max}` : ''}` : ''}
+                            </p>
+                          </div>
+                          <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: 'rgba(168,85,247,0.15)', color: '#A855F7' }}>
+                            {n} applicant{n === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Active contracts (escrow) */}
+              {contracts.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-display text-[16px] font-bold text-white">Active collabs</h3>
+                  {contracts.map((c) => {
+                    const handle = c.influencer?.instagram_handle ? `@${c.influencer.instagram_handle}`
+                      : c.influencer?.tiktok_handle ? `@${c.influencer.tiktok_handle}` : 'Creator';
+                    const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min ?? 0;
+                    const busy = collabBusyId === c.id;
+                    const creatorNet = ((amount * 100 - Math.round(amount * 100 * 0.005)) / 100).toFixed(2);
+                    const PAY_BADGE = {
+                      pending:  { label: 'Not funded', color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' },
+                      escrowed: { label: 'In escrow',  color: '#60A5FA', bg: 'rgba(96,165,250,0.15)' },
+                      released: { label: 'Paid out',   color: '#4ADE80', bg: 'rgba(74,222,128,0.15)' },
+                    }[c.payment_status] ?? { label: c.payment_status, color: '#888', bg: '#222' };
+                    return (
+                      <div key={c.id} className="rounded-2xl p-4 space-y-3" style={{ background: '#141414', border: '1px solid #222' }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-[14px] text-white truncate">{c.title ?? c.deliverables ?? 'Collab'}</div>
+                            <div className="text-[12px] text-[#888] mt-0.5">{handle} · ${amount} CAD</div>
+                          </div>
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: PAY_BADGE.bg, color: PAY_BADGE.color }}>
+                            {PAY_BADGE.label}
+                          </span>
+                        </div>
+                        {c.payment_status === 'escrowed' && (
+                          <div className="text-[11px] text-[#888]">
+                            ${amount} held in escrow · creator gets ${creatorNet} after RepEAT&apos;s 0.5% fee
+                          </div>
+                        )}
+                        {collabError?.id === c.id && <p className="text-[12px] text-red-400">{collabError.msg}</p>}
+                        {c.payment_status === 'pending' && (
+                          <button onClick={() => fundCollab(c)} disabled={busy}
+                            className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#7E22CE' }}>
+                            {busy ? <IconLoader2 size={15} className="animate-spin" /> : <><IconLock size={14} /> Fund collab (hold ${amount})</>}
+                          </button>
+                        )}
+                        {c.payment_status === 'escrowed' && (
+                          <button onClick={() => releaseCollab(c)} disabled={busy || !c.influencer?.payouts_enabled}
+                            className="w-full h-10 rounded-xl text-[13px] font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#16A34A' }}>
+                            {busy ? <IconLoader2 size={15} className="animate-spin" />
+                              : !c.influencer?.payouts_enabled ? 'Waiting on creator payout setup'
+                              : <><IconCheck size={14} /> Release payment</>}
+                          </button>
+                        )}
+                        {c.payment_status === 'released' && (
+                          <div className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: '#4ADE80' }}>
+                            <IconCheck size={14} /> Paid out{c.released_at ? ` · ${new Date(c.released_at).toLocaleDateString('en-CA')}` : ''}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── PROFILE TAB ───────────────────────────────────────── */}
         {tab === 'profile' && (!managerMode || managerPerms.profile) && (
