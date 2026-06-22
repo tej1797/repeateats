@@ -23,6 +23,14 @@ import {
   IconUsers,
   IconStar,
   IconChevronDown,
+  IconSearch,
+  IconWallet,
+  IconMessage,
+  IconHelpCircle,
+  IconArrowsExchange,
+  IconLogout,
+  IconBrandTiktok,
+  IconPencil,
 } from '@tabler/icons-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -42,16 +50,27 @@ const OFFER_CHIPS = [50, 100, 150, 200, 300];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+type CreatorTab = 'discover' | 'collabs' | 'earnings' | 'profile' | 'settings';
+const CREATOR_TABS: { id: CreatorTab; label: string }[] = [
+  { id: 'discover', label: 'Discover' },
+  { id: 'collabs',  label: 'Collabs'  },
+  { id: 'earnings', label: 'Earnings' },
+  { id: 'profile',  label: 'Profile'  },
+  { id: 'settings', label: 'Settings' },
+];
+
 export default function InfluencerPage() {
   const supabase = useRef(createClient()).current;
 
   const [view,        setView]       = useState<'loading' | 'auth' | 'feed'>('loading');
   const [user,        setUser]       = useState<SupabaseUser | null>(null);
   const [influencer,  setInfluencer] = useState<Influencer | null>(null);
+  const [tab,         setTab]        = useState<CreatorTab>('discover');
 
   // Filter state passed to useCollabs
   const [filterCuisine, setFilterCuisine] = useState('');
   const [filterCity,    setFilterCity]    = useState('');
+  const [search,        setSearch]        = useState('');
 
   // Negotiate modal
   const [activeCollab, setActiveCollab] = useState<CollabWithDetails | null>(null);
@@ -180,43 +199,68 @@ export default function InfluencerPage() {
               <span className="ml-1.5 text-[13px] font-semibold text-t3 tracking-normal">Creator</span>
             </div>
           </a>
-          <div className="flex items-center gap-3">
-            <a href="/influencer/profile"
-              className="text-[13px] font-semibold transition-colors hover:text-tx"
-              style={{ color: '#7E22CE' }}>
-              My profile
-            </a>
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              className="text-[13px] text-t2 hover:text-tx transition-colors"
-            >
-              Sign out
+          <button
+            type="button"
+            onClick={() => void handleSignOut()}
+            className="text-[13px] text-t2 hover:text-tx transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+        {/* Tab nav */}
+        <div className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto scrollbar-none">
+          {CREATOR_TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className="px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 transition-colors"
+              style={{ borderColor: tab === t.id ? '#7E22CE' : 'transparent', color: tab === t.id ? '#7E22CE' : 'var(--t2)' }}>
+              {t.label}
             </button>
-          </div>
+          ))}
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
-        {/* Creator stats banner */}
-        {influencer && (
-          <CreatorBanner influencer={influencer} />
+        {/* ── DISCOVER TAB ─────────────────────────────────────── */}
+        {tab === 'discover' && (
+          <>
+            {influencer && <CreatorBanner influencer={influencer} />}
+            <div className="relative mb-4">
+              <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search restaurants, cities…"
+                className="w-full h-11 pl-10 pr-3 rounded-full text-[14px] outline-none"
+                style={{ background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' }} />
+            </div>
+            <FilterRow
+              cuisineFilter={filterCuisine}
+              cityFilter={filterCity}
+              onCuisineChange={setFilterCuisine}
+              onCityChange={setFilterCity}
+            />
+            <CollabFeed
+              cuisine={filterCuisine}
+              city={filterCity}
+              search={search}
+              onSelectCollab={(c) => { setActiveCollab(c); setChatOpen(false); }}
+            />
+          </>
         )}
 
-        {/* Filter chips */}
-        <FilterRow
-          cuisineFilter={filterCuisine}
-          cityFilter={filterCity}
-          onCuisineChange={setFilterCuisine}
-          onCityChange={setFilterCity}
-        />
+        {/* ── COLLABS TAB ──────────────────────────────────────── */}
+        {tab === 'collabs' && influencer && (
+          <CreatorCollabsTab influencer={influencer} onOpenChat={(c) => { setActiveCollab(c); setChatOpen(true); }} />
+        )}
 
-        {/* Collab feed */}
-        <CollabFeed
-          cuisine={filterCuisine}
-          city={filterCity}
-          onSelectCollab={(c) => { setActiveCollab(c); setChatOpen(false); }}
-        />
+        {/* ── EARNINGS TAB ─────────────────────────────────────── */}
+        {tab === 'earnings' && <CreatorEarningsTab />}
+
+        {/* ── PROFILE TAB ──────────────────────────────────────── */}
+        {tab === 'profile' && influencer && (
+          <CreatorProfileTab influencer={influencer} supabase={supabase} onSaved={setInfluencer} />
+        )}
+
+        {/* ── SETTINGS TAB ─────────────────────────────────────── */}
+        {tab === 'settings' && <CreatorSettingsTab onSignOut={() => void handleSignOut()} />}
       </main>
 
       {/* Negotiate modal — rendered when a collab card is tapped */}
@@ -641,10 +685,11 @@ function FilterRow({
 // ─── Collab feed ──────────────────────────────────────────────────────────────
 
 function CollabFeed({
-  cuisine, city, onSelectCollab,
+  cuisine, city, search = '', onSelectCollab,
 }: {
   cuisine: string;
   city: string;
+  search?: string;
   onSelectCollab: (c: CollabWithDetails) => void;
 }) {
   // Build filters object — empty string means no filter
@@ -654,7 +699,16 @@ function CollabFeed({
     ...(city    ? { city }    : {}),
   }), [cuisine, city]);
 
-  const { collabs, loading, error } = useCollabs(filters);
+  const { collabs: allCollabs, loading, error } = useCollabs(filters);
+  const q = search.trim().toLowerCase();
+  const collabs = q
+    ? allCollabs.filter((c) => {
+        const r = (c as { restaurant?: { name?: string; city?: string } }).restaurant;
+        return (r?.name ?? '').toLowerCase().includes(q)
+          || (r?.city ?? '').toLowerCase().includes(q)
+          || (c.title ?? '').toLowerCase().includes(q);
+      })
+    : allCollabs;
 
   if (loading) {
     return (
@@ -1121,3 +1175,314 @@ function ChatPanel({
 // Imported icon used in the banner — kept here to avoid an unused-import warning
 // if the banner is conditionally not rendered.
 void IconBrandInstagram;
+
+// ─── Creator Collabs tab ──────────────────────────────────────────────────────
+type MyApplication = {
+  id: string; posting_id: string; proposed_amount: number | null; status: string; created_at: string;
+  posting: { id: string; title: string | null; restaurant: { name: string | null; city: string | null } | null } | null;
+};
+type MyContract = {
+  id: string; title: string | null; deliverables: string | null; agreed_amount: number | null;
+  offer_amount_min: number | null; offer_amount_max: number | null; status: string | null;
+  payment_status: string | null; released_at: string | null;
+  restaurant: { name: string | null; city: string | null } | null;
+};
+
+function CreatorCollabsTab({ influencer, onOpenChat }: {
+  influencer: Influencer; onOpenChat: (c: CollabWithDetails) => void;
+}) {
+  const supabase = useRef(createClient()).current;
+  const [apps, setApps] = useState<MyApplication[]>([]);
+  const [contracts, setContracts] = useState<MyContract[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'applied' | 'accepted' | 'active' | 'completed'>('all');
+
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const [ar, cr] = await Promise.all([
+        supabase.from('collab_applications')
+          .select('id, posting_id, proposed_amount, status, created_at, posting:collabs!posting_id(id, title, restaurant:restaurants(name, city))')
+          .eq('influencer_id', influencer.id).order('created_at', { ascending: false }),
+        supabase.from('collabs')
+          .select('id, title, deliverables, agreed_amount, offer_amount_min, offer_amount_max, status, payment_status, released_at, restaurant:restaurants(name, city)')
+          .eq('influencer_id', influencer.id).order('created_at', { ascending: false }),
+      ]);
+      if (!on) return;
+      setApps((ar.data ?? []) as unknown as MyApplication[]);
+      setContracts((cr.data ?? []) as unknown as MyContract[]);
+      setLoading(false);
+    })();
+    return () => { on = false; };
+  }, [supabase, influencer.id]);
+
+  const pendingApps = apps.filter((a) => a.status === 'pending' || a.status === 'shortlisted');
+  const FILTERS = ['all', 'applied', 'accepted', 'active', 'completed'] as const;
+  const LABEL: Record<typeof FILTERS[number], string> = { all: 'All', applied: 'Applied', accepted: 'Accepted', active: 'Active', completed: 'Completed' };
+
+  const showApps = filter === 'all' || filter === 'applied';
+  const visibleContracts = contracts.filter((c) => {
+    if (filter === 'completed') return c.payment_status === 'released';
+    if (filter === 'active')    return c.payment_status === 'escrowed';
+    if (filter === 'accepted')  return c.payment_status !== 'released';
+    if (filter === 'applied')   return false;
+    return true; // all
+  });
+
+  if (loading) return <p className="text-t2 text-sm py-10 text-center">Loading your collabs…</p>;
+
+  const empty = (showApps ? pendingApps.length : 0) + visibleContracts.length === 0;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="font-display text-xl font-bold">My Collabs</h2>
+      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+        {FILTERS.map((f) => (
+          <button key={f} onClick={() => setFilter(f)}
+            className="h-8 px-3.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-colors"
+            style={filter === f ? { background: '#7E22CE', color: '#fff' } : { background: 'var(--sf)', color: 'var(--t2)', border: '1px solid var(--bd)' }}>
+            {LABEL[f]}
+          </button>
+        ))}
+      </div>
+
+      {empty && <p className="text-t2 text-sm py-10 text-center">Nothing here yet. Apply to collabs from Discover.</p>}
+
+      {/* Pending applications */}
+      {showApps && pendingApps.map((a) => (
+        <div key={a.id} className="rounded-brand p-4 bg-surface border border-[var(--bd)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[12px]" style={{ color: '#A855F7' }}>{a.posting?.restaurant?.name ?? 'Restaurant'}</p>
+              <p className="font-bold text-[15px] truncate">{a.posting?.title ?? 'Collab'}</p>
+              {a.proposed_amount != null && <p className="text-[13px] text-t2 mt-0.5">CA${a.proposed_amount}</p>}
+            </div>
+            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0"
+              style={a.status === 'shortlisted' ? { background: 'rgba(168,85,247,0.15)', color: '#A855F7' } : { background: 'var(--sf2,#222)', color: 'var(--t2)' }}>
+              {a.status === 'shortlisted' ? 'Shortlisted' : 'Applied'}
+            </span>
+          </div>
+        </div>
+      ))}
+
+      {/* Contracts */}
+      {visibleContracts.map((c) => {
+        const amount = c.agreed_amount ?? c.offer_amount_max ?? c.offer_amount_min ?? 0;
+        const badge = c.payment_status === 'released' ? { label: 'Paid out', color: '#16A34A' }
+          : c.payment_status === 'escrowed' ? { label: 'In escrow', color: '#2563EB' }
+          : { label: 'Accepted', color: '#A855F7' };
+        return (
+          <div key={c.id} className="rounded-brand p-4 bg-surface border border-[var(--bd)] space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px]" style={{ color: '#A855F7' }}>{c.restaurant?.name ?? 'Restaurant'}</p>
+                <p className="font-bold text-[16px] truncate">{c.title ?? c.deliverables ?? 'Collab'}</p>
+                <p className="text-[13px] font-semibold mt-0.5" style={{ color: '#16A34A' }}>CA${amount}</p>
+              </div>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: `${badge.color}22`, color: badge.color }}>{badge.label}</span>
+            </div>
+            <button onClick={() => onOpenChat(c as unknown as CollabWithDetails)}
+              className="w-full h-10 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-2" style={{ background: '#7E22CE' }}>
+              <IconMessage size={15} /> Open chat
+            </button>
+            {c.payment_status === 'released' && (
+              <p className="text-[12px] font-semibold" style={{ color: '#16A34A' }}>
+                Paid out{c.released_at ? ` · ${new Date(c.released_at).toLocaleDateString('en-CA')}` : ''}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Creator Earnings tab ─────────────────────────────────────────────────────
+function CreatorEarningsTab() {
+  const supabase = useRef(createClient()).current;
+  const [stats, setStats] = useState({ applied: 0, accepted: 0, completed: 0, rejected: 0, earned: 0 });
+  const [payouts, setPayouts] = useState<{ connected: boolean; payouts_enabled: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: inf } = await supabase.from('influencers').select('id').eq('user_id', session.user.id).maybeSingle();
+      if (!inf) return;
+      const [ar, cr, statusRes] = await Promise.all([
+        supabase.from('collab_applications').select('status').eq('influencer_id', inf.id),
+        supabase.from('collabs').select('agreed_amount, payment_status').eq('influencer_id', inf.id),
+        fetch('/api/stripe/connect/status').then((r) => r.json()).catch(() => null),
+      ]);
+      if (!on) return;
+      const apps = ar.data ?? [];
+      const contracts = cr.data ?? [];
+      const accepted = apps.filter((a) => a.status === 'accepted').length;
+      const rejected = apps.filter((a) => a.status === 'declined').length;
+      const completed = contracts.filter((c) => c.payment_status === 'released').length;
+      const earned = contracts.filter((c) => c.payment_status === 'released')
+        .reduce((s, c) => s + ((c.agreed_amount ?? 0) * 0.995), 0);
+      setStats({ applied: apps.length, accepted: accepted || contracts.length, completed, rejected, earned: Math.round(earned) });
+      if (statusRes && !statusRes.error) setPayouts({ connected: !!statusRes.connected, payouts_enabled: !!statusRes.payouts_enabled });
+    })();
+    return () => { on = false; };
+  }, [supabase]);
+
+  const setupPayouts = async () => {
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/stripe/connect/onboard', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not start payout setup');
+      window.location.href = data.url;
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Something went wrong'); setBusy(false);
+    }
+  };
+
+  const decided = stats.accepted + stats.rejected;
+  const acceptRate = decided > 0 ? Math.round((stats.accepted / decided) * 100) : 0;
+  const STAT = (label: string, value: number | string, color: string) => (
+    <div className="rounded-brand p-4 bg-surface border border-[var(--bd)]" style={{ borderTop: `2px solid ${color}` }}>
+      <div className="font-display text-[28px] font-extrabold leading-none">{value}</div>
+      <div className="text-[12px] text-t2 mt-1 uppercase tracking-wide">{label}</div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-display text-xl font-bold">Hey, Creator!</h2>
+        <p className="text-[13px] text-t2">Your collab overview</p>
+      </div>
+
+      <div className="rounded-brand p-5 bg-surface border border-[var(--bd)] flex items-center gap-3">
+        <span className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
+          <IconWallet size={20} style={{ color: '#F59E0B' }} />
+        </span>
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-t2">Total earned</p>
+          <p className="font-display text-[28px] font-extrabold leading-none">${stats.earned}</p>
+        </div>
+      </div>
+
+      {/* Payout setup */}
+      {!payouts?.payouts_enabled && (
+        <div className="rounded-brand p-5 bg-surface border border-[var(--bd)] space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(126,34,206,0.15)' }}>
+              <IconWallet size={18} style={{ color: '#7E22CE' }} />
+            </span>
+            <div>
+              <p className="font-bold text-[15px]">Set up payouts</p>
+              <p className="text-[13px] text-t2">Connect a Stripe account to receive collab payments directly to your bank.</p>
+            </div>
+          </div>
+          <p className="text-[12px] text-t2 rounded-xl px-3 py-2.5" style={{ background: 'var(--sf2,#1A1A1A)' }}>
+            🔒 RepEAT holds collab money in escrow and releases it to you minus a 0.5% platform fee.
+          </p>
+          {err && <p className="text-[12px] text-red-500">{err}</p>}
+          <button onClick={setupPayouts} disabled={busy}
+            className="w-full h-12 rounded-xl font-bold text-[15px] text-white disabled:opacity-50" style={{ background: '#7E22CE' }}>
+            {busy ? 'Starting…' : 'Set up payouts with Stripe'}
+          </button>
+        </div>
+      )}
+      {payouts?.payouts_enabled && (
+        <div className="rounded-brand p-4 bg-surface border border-[var(--bd)] flex items-center gap-2 text-[14px] font-semibold" style={{ color: '#16A34A' }}>
+          <IconCheck size={16} /> Payouts active — you&apos;re ready to get paid.
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        {STAT('Applied', stats.applied, '#2563EB')}
+        {STAT('Accepted', stats.accepted, '#16A34A')}
+        {STAT('Completed', stats.completed, '#7E22CE')}
+        {STAT('Rejected', stats.rejected, '#EF4444')}
+      </div>
+
+      <div className="rounded-brand p-4 bg-surface border border-[var(--bd)]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[12px] uppercase tracking-wide text-t2">Acceptance rate</span>
+          <span className="font-display text-[20px] font-extrabold" style={{ color: '#7E22CE' }}>{acceptRate}%</span>
+        </div>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--sf2,#222)' }}>
+          <div className="h-full rounded-full" style={{ width: `${acceptRate}%`, background: '#7E22CE' }} />
+        </div>
+        <p className="text-[11px] text-t3 mt-2">{stats.accepted} accepted of {decided} decided application{decided === 1 ? '' : 's'}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Creator Profile tab ──────────────────────────────────────────────────────
+function CreatorProfileTab({ influencer, supabase, onSaved }: {
+  influencer: Influencer; supabase: ReturnType<typeof createClient>; onSaved: (i: Influencer) => void;
+}) {
+  const i = influencer as unknown as Record<string, string | null>;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    display_name: i.display_name ?? '', instagram_handle: i.instagram_handle ?? '', tiktok_handle: i.tiktok_handle ?? '',
+    niche: i.niche ?? '', follower_range: i.follower_range ?? '', primary_platform: i.primary_platform ?? '', city: i.city ?? '',
+  });
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    setBusy(true);
+    const { data } = await supabase.from('influencers').update(draft).eq('id', influencer.id).select().single();
+    setBusy(false);
+    if (data) { onSaved(data as Influencer); setEditing(false); }
+  };
+
+  const ROWS: [string, keyof typeof draft][] = [
+    ['Display Name', 'display_name'], ['Instagram', 'instagram_handle'], ['TikTok', 'tiktok_handle'],
+    ['Niche', 'niche'], ['Followers', 'follower_range'], ['Platform', 'primary_platform'], ['City', 'city'],
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-brand p-5 bg-surface border border-[var(--bd)]">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-xl font-bold">Creator Profile</h2>
+          {!editing
+            ? <button onClick={() => setEditing(true)} className="text-[13px] font-semibold flex items-center gap-1" style={{ color: '#7E22CE' }}><IconPencil size={14} /> Edit</button>
+            : <button onClick={save} disabled={busy} className="text-[13px] font-bold disabled:opacity-50" style={{ color: '#7E22CE' }}>{busy ? 'Saving…' : 'Save'}</button>}
+        </div>
+        <div className="divide-y divide-[var(--bd)]">
+          {ROWS.map(([label, key]) => (
+            <div key={key} className="flex items-center justify-between gap-3 py-3">
+              <span className="text-[14px] text-t2">{label}</span>
+              {editing
+                ? <input value={draft[key]} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                    className="text-[14px] text-right bg-transparent outline-none border-b border-[var(--bd2)] focus:border-[#7E22CE] max-w-[60%]" placeholder="—" />
+                : <span className="text-[14px] font-semibold">{draft[key] || '—'}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Creator Settings tab ─────────────────────────────────────────────────────
+function CreatorSettingsTab({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <div className="space-y-3 max-w-md">
+      <h2 className="font-display text-xl font-bold mb-2">Settings</h2>
+      <a href="/influencer/help" className="flex items-center gap-3 rounded-brand p-4 bg-surface border border-[var(--bd)] hover:opacity-90">
+        <IconHelpCircle size={18} style={{ color: '#7E22CE' }} /> <span className="text-[14px] font-semibold">Help &amp; Support</span>
+      </a>
+      <a href="/" className="flex items-center gap-3 rounded-brand p-4 bg-surface border border-[var(--bd)] hover:opacity-90">
+        <IconArrowsExchange size={18} style={{ color: '#7E22CE' }} /> <span className="text-[14px] font-semibold">Switch Portal</span>
+      </a>
+      <button onClick={onSignOut} className="w-full flex items-center gap-3 rounded-brand p-4 bg-surface border border-[var(--bd)] hover:opacity-90 text-left">
+        <IconLogout size={18} className="text-red-500" /> <span className="text-[14px] font-semibold text-red-500">Sign Out</span>
+      </button>
+    </div>
+  );
+}
+
+void IconBrandTiktok; void IconUsers; void IconMapPin; void IconStar;
