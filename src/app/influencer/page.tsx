@@ -31,6 +31,8 @@ import {
   IconLogout,
   IconBrandTiktok,
   IconPencil,
+  IconCircleCheckFilled,
+  IconExternalLink,
 } from '@tabler/icons-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -582,40 +584,63 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
 // ─── Creator stats banner ─────────────────────────────────────────────────────
 
 function CreatorBanner({ influencer }: { influencer: Influencer }) {
-  const handle = influencer.instagram_handle ?? influencer.tiktok_handle ?? 'Creator';
+  const inf = influencer as unknown as Record<string, string | number | null>;
+  const ig = influencer.instagram_handle ?? null;
+  const tt = influencer.tiktok_handle ?? null;
+  const name = (inf.display_name as string) || ig || tt || 'Creator';
+  const verified = !!inf.instagram_verified;
+  const initial = (name[0] ?? 'C').toUpperCase();
 
   return (
-    <div className="bg-surface rounded-brand shadow-brand p-5 mb-5 flex items-center gap-4">
-      {/* Avatar placeholder */}
-      <div
-        className="w-14 h-14 rounded-full flex items-center justify-center text-2xl shrink-0"
-        style={{ background: '#FDF4FF' }}
-      >
-        📱
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-display text-lg font-extrabold leading-tight truncate">
-          {handle}
+    <div className="relative rounded-[20px] overflow-hidden mb-5" style={{ background: 'linear-gradient(135deg,#7E22CE 0%,#4C1D95 55%,#1E1B4B 100%)' }}>
+      {/* glow accents */}
+      <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(40px)' }} />
+      <div className="relative p-5 sm:p-6 flex items-center gap-4">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-display text-[28px] font-extrabold text-white shrink-0 ring-2 ring-white/30"
+          style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
+          {initial}
         </div>
-        <div className="flex items-center gap-3 mt-1 flex-wrap">
-          {influencer.follower_count && (
-            <span className="text-[12px] text-t2 flex items-center gap-1">
-              <IconUsers size={12} /> {influencer.follower_count.toLocaleString()} followers
-            </span>
-          )}
-          {influencer.total_collabs > 0 && (
-            <span className="text-[12px] text-t2 flex items-center gap-1">
-              <IconCheck size={12} /> {influencer.total_collabs} collabs done
-            </span>
-          )}
-          {influencer.rating > 0 && (
-            <span className="text-[12px] text-t2 flex items-center gap-1">
-              <IconStar size={12} /> {influencer.rating.toFixed(1)}
-            </span>
-          )}
-          {influencer.niche && (
-            <span className="text-[12px] text-t3">{influencer.niche}</span>
-          )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="font-display text-[22px] sm:text-[26px] font-extrabold text-white leading-tight truncate">{name}</h2>
+            {verified && <IconCircleCheckFilled size={20} style={{ color: '#60A5FA' }} />}
+          </div>
+          {/* social links */}
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            {ig && (
+              <a href={`https://instagram.com/${ig}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-white/90 hover:text-white">
+                <IconBrandInstagram size={15} /> @{ig}
+              </a>
+            )}
+            {tt && (
+              <a href={`https://tiktok.com/@${tt}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-white/90 hover:text-white">
+                <IconBrandTiktok size={15} /> @{tt}
+              </a>
+            )}
+          </div>
+          {/* stat chips */}
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {!!influencer.follower_count && (
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">
+                <IconUsers size={12} /> {influencer.follower_count.toLocaleString()} followers
+              </span>
+            )}
+            {influencer.total_collabs > 0 && (
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">
+                <IconCheck size={12} /> {influencer.total_collabs} collabs
+              </span>
+            )}
+            {influencer.rating > 0 && (
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">
+                <IconStar size={12} /> {influencer.rating.toFixed(1)}
+              </span>
+            )}
+            {influencer.niche && (
+              <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">{influencer.niche}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1470,15 +1495,55 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
     ['Niche', 'niche'], ['Followers', 'follower_range'], ['Platform', 'primary_platform'], ['City', 'city'],
   ];
 
+  const igLink = draft.instagram_handle.trim().replace(/^@/, '');
+  const ttLink = draft.tiktok_handle.trim().replace(/^@/, '');
+  const heroName = draft.display_name.trim() || (igLink ? `@${igLink}` : 'Your name');
+  const initial = (heroName.replace(/^@/, '')[0] ?? 'C').toUpperCase();
+  const followersDisplay = draft.follower_range.trim()
+    ? (/^\d+$/.test(draft.follower_range.trim()) ? Number(draft.follower_range).toLocaleString() : draft.follower_range)
+    : null;
+
   return (
     <div className="space-y-4">
-      <div className="rounded-brand p-5 bg-surface border border-[var(--bd)]">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-xl font-bold">Creator Profile</h2>
-          {!editing
-            ? <button onClick={() => setEditing(true)} className="text-[13px] font-semibold flex items-center gap-1" style={{ color: '#7E22CE' }}><IconPencil size={14} /> Edit</button>
-            : <button onClick={save} disabled={busy} className="text-[13px] font-bold disabled:opacity-50" style={{ color: '#7E22CE' }}>{busy ? 'Saving…' : 'Save'}</button>}
+      {/* Premium gradient header */}
+      <div className="relative rounded-[20px] overflow-hidden" style={{ background: 'linear-gradient(135deg,#7E22CE 0%,#4C1D95 55%,#1E1B4B 100%)' }}>
+        <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(46px)' }} />
+        <div className="relative p-6">
+          <div className="flex items-start justify-between">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center font-display text-[32px] font-extrabold text-white ring-2 ring-white/30"
+              style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>{initial}</div>
+            {!editing
+              ? <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-3.5 h-9 rounded-full bg-white/15 text-white hover:bg-white/25"><IconPencil size={14} /> Edit</button>
+              : <button onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-4 h-9 rounded-full bg-white text-[#7E22CE] disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>}
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <h2 className="font-display text-[26px] font-extrabold text-white leading-tight">{heroName}</h2>
+            {igVerified && <IconCircleCheckFilled size={20} style={{ color: '#60A5FA' }} />}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            {igLink && (
+              <a href={`https://instagram.com/${igLink}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-semibold text-white/90 hover:text-white">
+                <IconBrandInstagram size={15} /> @{igLink} <IconExternalLink size={12} />
+              </a>
+            )}
+            {ttLink && (
+              <a href={`https://tiktok.com/@${ttLink}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-semibold text-white/90 hover:text-white">
+                <IconBrandTiktok size={15} /> @{ttLink} <IconExternalLink size={12} />
+              </a>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {followersDisplay && <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white"><IconUsers size={12} /> {followersDisplay} followers</span>}
+            {draft.niche && <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">{draft.niche}</span>}
+            {draft.city && <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white"><IconMapPin size={12} /> {draft.city}</span>}
+          </div>
         </div>
+      </div>
+
+      {/* Editable details */}
+      <div className="rounded-[20px] p-5 bg-surface border border-[var(--bd)]">
+        <h3 className="font-display text-[15px] font-bold mb-1">Details</h3>
+        <p className="text-[12px] text-t3 mb-3">{editing ? 'Edit your details — Instagram auto-fills followers when connected.' : 'Tap Edit above to update.'}</p>
         <div className="divide-y divide-[var(--bd)]">
           {ROWS.map(([label, key]) => (
             <div key={key} className="flex items-center justify-between gap-3 py-3">
