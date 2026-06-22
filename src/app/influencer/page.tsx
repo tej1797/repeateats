@@ -1429,10 +1429,38 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
     niche: i.niche ?? '', follower_range: i.follower_range ?? '', primary_platform: i.primary_platform ?? '', city: i.city ?? '',
   });
   const [busy, setBusy] = useState(false);
+  const [igStatus, setIgStatus] = useState<'idle' | 'checking' | 'verified' | 'unverified'>('idle');
+  const [igVerified, setIgVerified] = useState(false);
+
+  // Auto-verify the IG handle (debounced) while editing → pull followers + name
+  // from Meta when configured. Falls back to format-only.
+  useEffect(() => {
+    if (!editing) return;
+    const h = draft.instagram_handle.trim().replace(/^@/, '');
+    if (h.length < 2) { setIgStatus('idle'); return; }
+    setIgStatus('checking');
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/verify-instagram?handle=${encodeURIComponent(h)}`);
+        const d = await res.json() as { valid?: boolean; verified?: boolean; followers?: number | null; full_name?: string | null };
+        if (!d.valid) { setIgStatus('unverified'); setIgVerified(false); return; }
+        setIgStatus('verified');
+        setIgVerified(!!d.verified);
+        if (d.followers != null) setDraft((prev) => ({ ...prev, follower_range: String(d.followers) }));
+        if (d.full_name && !draft.display_name.trim()) setDraft((prev) => ({ ...prev, display_name: d.full_name as string }));
+      } catch { setIgStatus('idle'); }
+    }, 700);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.instagram_handle, editing]);
 
   const save = async () => {
     setBusy(true);
-    const { data } = await supabase.from('influencers').update(draft).eq('id', influencer.id).select().single();
+    const followersNum = parseInt(draft.follower_range.replace(/[^0-9]/g, ''), 10);
+    const payload: Record<string, unknown> = { ...draft };
+    if (!Number.isNaN(followersNum)) payload.follower_count = followersNum;
+    if (igVerified) payload.instagram_verified = true;
+    const { data } = await supabase.from('influencers').update(payload).eq('id', influencer.id).select().single();
     setBusy(false);
     if (data) { onSaved(data as Influencer); setEditing(false); }
   };
@@ -1455,10 +1483,19 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
           {ROWS.map(([label, key]) => (
             <div key={key} className="flex items-center justify-between gap-3 py-3">
               <span className="text-[14px] text-t2">{label}</span>
-              {editing
-                ? <input value={draft[key]} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                    className="text-[14px] text-right bg-transparent outline-none border-b border-[var(--bd2)] focus:border-[#7E22CE] max-w-[60%]" placeholder="—" />
-                : <span className="text-[14px] font-semibold">{draft[key] || '—'}</span>}
+              {editing ? (
+                <div className="flex items-center gap-2 max-w-[60%]">
+                  {key === 'instagram_handle' && igStatus !== 'idle' && (
+                    <span className="text-[11px] font-semibold whitespace-nowrap"
+                      style={{ color: igStatus === 'verified' ? '#16A34A' : igStatus === 'checking' ? '#888' : '#EF4444' }}>
+                      {igStatus === 'checking' ? 'checking…' : igStatus === 'verified' ? (igVerified ? '✓ verified' : '✓ format ok') : 'invalid'}
+                    </span>
+                  )}
+                  <input value={draft[key]} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                    className="text-[14px] text-right bg-transparent outline-none border-b border-[var(--bd2)] focus:border-[#7E22CE] flex-1 min-w-0"
+                    placeholder={key === 'follower_range' ? 'auto from IG' : '—'} />
+                </div>
+              ) : <span className="text-[14px] font-semibold">{draft[key] || '—'}</span>}
             </div>
           ))}
         </div>
