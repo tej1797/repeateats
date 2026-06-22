@@ -596,10 +596,15 @@ function CreatorBanner({ influencer }: { influencer: Influencer }) {
       {/* glow accents */}
       <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(40px)' }} />
       <div className="relative p-5 sm:p-6 flex items-center gap-4">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-display text-[28px] font-extrabold text-white shrink-0 ring-2 ring-white/30"
-          style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
-          {initial}
-        </div>
+        {inf.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={inf.avatar_url as string} alt={name} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0 ring-2 ring-white/30" />
+        ) : (
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-display text-[28px] font-extrabold text-white shrink-0 ring-2 ring-white/30"
+            style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
+            {initial}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="font-display text-[22px] sm:text-[26px] font-extrabold text-white leading-tight truncate">{name}</h2>
@@ -1510,8 +1515,13 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
         <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(46px)' }} />
         <div className="relative p-6">
           <div className="flex items-start justify-between">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center font-display text-[32px] font-extrabold text-white ring-2 ring-white/30"
-              style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>{initial}</div>
+            {i.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={i.avatar_url as string} alt={heroName} className="w-20 h-20 rounded-full object-cover ring-2 ring-white/30" />
+            ) : (
+              <div className="w-20 h-20 rounded-full flex items-center justify-center font-display text-[32px] font-extrabold text-white ring-2 ring-white/30"
+                style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>{initial}</div>
+            )}
             {!editing
               ? <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-3.5 h-9 rounded-full bg-white/15 text-white hover:bg-white/25"><IconPencil size={14} /> Edit</button>
               : <button onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-4 h-9 rounded-full bg-white text-[#7E22CE] disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>}
