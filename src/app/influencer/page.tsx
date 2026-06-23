@@ -1544,106 +1544,124 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
     if (data) { onSaved(data as Influencer); setEditing(false); }
   };
 
-  const ROWS: [string, keyof typeof draft][] = [
-    ['Username', 'display_name'], ['Instagram', 'instagram_handle'], ['TikTok', 'tiktok_handle'],
-    ['Niche', 'niche'], ['Followers', 'follower_range'], ['Platform', 'primary_platform'], ['City', 'city'],
-  ];
-
   const igLink = draft.instagram_handle.trim().replace(/^@/, '');
-  const ttLink = draft.tiktok_handle.trim().replace(/^@/, '');
   const heroName = draft.display_name.trim() || (igLink ? `@${igLink}` : 'Your name');
   const initial = (heroName.replace(/^@/, '')[0] ?? 'C').toUpperCase();
   const followersDisplay = draft.follower_range.trim()
     ? (/^\d+$/.test(draft.follower_range.trim()) ? Number(draft.follower_range).toLocaleString() : draft.follower_range)
     : null;
 
+  const boxStyle = { background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' } as const;
+  const field = (label: string, key: keyof typeof draft, placeholder = '') => (
+    <div>
+      <label className="block text-[12px] text-t2 mb-1.5">{label}</label>
+      {editing ? (
+        <input value={draft[key]} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+          placeholder={placeholder} className="w-full h-11 px-3.5 rounded-xl text-[14px] outline-none focus:border-[#7E22CE]" style={boxStyle} />
+      ) : (
+        <div className="w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={boxStyle}>{draft[key] || placeholder || '—'}</div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      {/* Premium gradient header */}
-      <div className="relative rounded-[20px] overflow-hidden" style={{ background: 'linear-gradient(135deg,#7E22CE 0%,#4C1D95 55%,#1E1B4B 100%)' }}>
-        <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(46px)' }} />
-        <div className="relative p-6">
-          <div className="flex items-start justify-between">
+      {/* Compact 2-row gradient header */}
+      <div className="relative rounded-[16px] overflow-hidden" style={{ background: 'linear-gradient(135deg,#7E22CE 0%,#4C1D95 55%,#1E1B4B 100%)' }}>
+        <div className="absolute -top-10 -right-8 w-36 h-36 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(44px)' }} />
+        <div className="relative px-4 py-3.5">
+          {/* Row 1: avatar + name + edit */}
+          <div className="flex items-center gap-3">
             {i.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={i.avatar_url as string} alt={heroName} className="w-16 h-16 rounded-full object-cover ring-2 ring-white/30" />
+              <img src={i.avatar_url as string} alt={heroName} className="w-11 h-11 rounded-full object-cover ring-2 ring-white/30 shrink-0" />
             ) : (
-              <div className="w-16 h-16 rounded-full flex items-center justify-center font-display text-[24px] font-extrabold text-white ring-2 ring-white/30"
+              <div className="w-11 h-11 rounded-full flex items-center justify-center font-display text-[18px] font-extrabold text-white ring-2 ring-white/30 shrink-0"
                 style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>{initial}</div>
             )}
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <h2 className="font-display text-[18px] font-extrabold text-white leading-tight truncate">{heroName}</h2>
+              {igVerified && <IconCircleCheckFilled size={15} style={{ color: '#60A5FA' }} className="shrink-0" />}
+            </div>
             {!editing
-              ? <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-3.5 h-9 rounded-full bg-white/15 text-white hover:bg-white/25"><IconPencil size={14} /> Edit</button>
-              : <button onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-4 h-9 rounded-full bg-white text-[#7E22CE] disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>}
+              ? <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[12px] font-bold px-3 h-8 rounded-full bg-white/15 text-white hover:bg-white/25 shrink-0"><IconPencil size={13} /> Edit</button>
+              : <button onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 text-[12px] font-bold px-3.5 h-8 rounded-full bg-white text-[#7E22CE] disabled:opacity-50 shrink-0">{busy ? 'Saving…' : 'Save'}</button>}
           </div>
-          <div className="flex items-center gap-1.5 mt-3">
-            <h2 className="font-display text-[20px] font-extrabold text-white leading-tight">{heroName}</h2>
-            {igVerified && <IconCircleCheckFilled size={16} style={{ color: '#60A5FA' }} />}
-          </div>
-          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+          {/* Row 2: handle + chips */}
+          <div className="flex items-center gap-2 mt-2.5 flex-wrap">
             {igLink && (
-              <a href={`https://instagram.com/${igLink}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-semibold text-white/90 hover:text-white">
-                <IconBrandInstagram size={15} /> @{igLink} <IconExternalLink size={12} />
+              <a href={`https://instagram.com/${igLink}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold text-white/90 hover:text-white">
+                <IconBrandInstagram size={13} /> @{igLink} <IconExternalLink size={11} />
               </a>
             )}
-            {ttLink && (
-              <a href={`https://tiktok.com/@${ttLink}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-semibold text-white/90 hover:text-white">
-                <IconBrandTiktok size={15} /> @{ttLink} <IconExternalLink size={12} />
-              </a>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {followersDisplay && <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white"><IconUsers size={12} /> {followersDisplay} followers</span>}
-            {draft.niche && <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">{draft.niche}</span>}
-            {draft.city && <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white"><IconMapPin size={12} /> {draft.city}</span>}
+            {followersDisplay && <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white"><IconUsers size={11} /> {followersDisplay}</span>}
+            {draft.niche && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white truncate max-w-[180px]">{draft.niche}</span>}
+            {draft.city && <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white"><IconMapPin size={11} /> {draft.city}</span>}
           </div>
         </div>
       </div>
 
-      {/* Editable details */}
-      <div className="rounded-[20px] p-5 bg-surface border border-[var(--bd)]">
-        <h3 className="font-display text-[15px] font-bold mb-1">Details</h3>
-        <p className="text-[12px] text-t3 mb-3">{editing ? 'Edit your details — connect Instagram to auto-fill followers & photo.' : 'Tap Edit above to update.'}</p>
+      {/* Details — boxed fields */}
+      <div className="rounded-[16px] p-5 bg-surface border border-[var(--bd)] space-y-4">
+        <div>
+          <h3 className="font-display text-[16px] font-bold">Details</h3>
+          <p className="text-[12px] text-t3 mt-0.5">{editing ? 'Edit your details below.' : 'Tap Edit above to update.'}</p>
+        </div>
 
-        {/* Connect Instagram (real OAuth) */}
-        <div className="mb-4">
-          {igVerified ? (
-            <div className="flex items-center gap-2 rounded-xl px-3.5 py-3" style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.35)' }}>
-              <IconCircleCheckFilled size={18} style={{ color: '#16A34A' }} />
-              <span className="text-[13px] font-semibold" style={{ color: '#16A34A' }}>Instagram connected — followers &amp; photo auto-update daily</span>
-            </div>
-          ) : (
+        {field('Username', 'display_name', 'Your name')}
+
+        {/* Instagram — link when viewing, input + status when editing */}
+        <div>
+          <label className="block text-[12px] text-t2 mb-1.5">Instagram</label>
+          {editing ? (
             <>
-              <button onClick={connectInstagram} disabled={connecting}
-                className="w-full h-11 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
-                <IconBrandInstagram size={17} /> {connecting ? 'Connecting…' : 'Connect Instagram'}
-              </button>
-              <p className="text-[11px] text-t3 mt-1.5">Authorize your IG to verify your account and auto-fill followers, name &amp; photo.</p>
-              {connectErr && <p className="text-[12px] text-red-500 mt-1">{connectErr}</p>}
+              <input value={draft.instagram_handle} onChange={(e) => setDraft((d) => ({ ...d, instagram_handle: e.target.value }))}
+                placeholder="@handle" className="w-full h-11 px-3.5 rounded-xl text-[14px] outline-none focus:border-[#7E22CE]" style={boxStyle} />
+              {igStatus !== 'idle' && (
+                <span className="text-[11px] font-semibold mt-1 inline-block"
+                  style={{ color: igStatus === 'verified' ? '#16A34A' : igStatus === 'checking' ? '#888' : '#EF4444' }}>
+                  {igStatus === 'checking' ? 'checking…' : igStatus === 'verified' ? (igVerified ? '✓ verified' : '✓ format ok') : 'invalid'}
+                </span>
+              )}
             </>
+          ) : igLink ? (
+            <a href={`https://instagram.com/${igLink}`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={{ ...boxStyle, color: '#A855F7' }}>
+              @{igLink} <IconExternalLink size={13} />
+            </a>
+          ) : (
+            <div className="w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={boxStyle}>Not connected</div>
           )}
         </div>
 
-        <div className="divide-y divide-[var(--bd)]">
-          {ROWS.map(([label, key]) => (
-            <div key={key} className="flex items-center justify-between gap-3 py-3">
-              <span className="text-[14px] text-t2">{label}</span>
-              {editing ? (
-                <div className="flex items-center gap-2 max-w-[60%]">
-                  {key === 'instagram_handle' && igStatus !== 'idle' && (
-                    <span className="text-[11px] font-semibold whitespace-nowrap"
-                      style={{ color: igStatus === 'verified' ? '#16A34A' : igStatus === 'checking' ? '#888' : '#EF4444' }}>
-                      {igStatus === 'checking' ? 'checking…' : igStatus === 'verified' ? (igVerified ? '✓ verified' : '✓ format ok') : 'invalid'}
-                    </span>
-                  )}
-                  <input value={draft[key]} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                    className="text-[14px] text-right bg-transparent outline-none border-b border-[var(--bd2)] focus:border-[#7E22CE] flex-1 min-w-0"
-                    placeholder={key === 'follower_range' ? 'auto from IG' : '—'} />
-                </div>
-              ) : <span className="text-[14px] font-semibold">{draft[key] || '—'}</span>}
-            </div>
-          ))}
+        {field('TikTok', 'tiktok_handle', 'Not added')}
+
+        <div className="grid grid-cols-2 gap-3">
+          {field('Niche', 'niche')}
+          {field('Followers', 'follower_range', editing ? 'auto from IG' : '')}
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          {field('Platform', 'primary_platform')}
+          {field('City', 'city')}
+        </div>
+
+        {/* Connect Instagram (real OAuth) — at the bottom, mobile parity */}
+        {igVerified ? (
+          <div className="flex items-center gap-2 rounded-xl px-3.5 py-3" style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.35)' }}>
+            <IconCircleCheckFilled size={18} style={{ color: '#16A34A' }} />
+            <span className="text-[13px] font-semibold" style={{ color: '#16A34A' }}>Instagram connected — auto-updates daily</span>
+          </div>
+        ) : (
+          <div>
+            <button onClick={connectInstagram} disabled={connecting}
+              className="w-full h-11 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
+              <IconBrandInstagram size={17} /> {connecting ? 'Connecting…' : 'Connect Instagram'}
+            </button>
+            <p className="text-[11px] text-t3 mt-1.5">Authorize your IG to verify and auto-fill followers, name &amp; photo.</p>
+            {connectErr && <p className="text-[12px] text-red-500 mt-1">{connectErr}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
