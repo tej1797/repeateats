@@ -65,7 +65,7 @@ const CREATOR_TABS: { id: CreatorTab; label: string }[] = [
 export default function InfluencerPage() {
   const supabase = useRef(createClient()).current;
 
-  const [view,        setView]       = useState<'loading' | 'auth' | 'feed'>('loading');
+  const [view,        setView]       = useState<'loading' | 'auth' | 'onboarding' | 'feed'>('loading');
   const [user,        setUser]       = useState<SupabaseUser | null>(null);
   const [influencer,  setInfluencer] = useState<Influencer | null>(null);
   const [tab,         setTab]        = useState<CreatorTab>('discover');
@@ -97,8 +97,9 @@ export default function InfluencerPage() {
     let mounted = true;
 
     const resolveSession = async (userId: string) => {
-      await loadInfluencer(userId);
-      if (mounted) setView('feed');
+      const hasProfile = await loadInfluencer(userId);
+      // No creator profile yet → onboard (don't auto-create a blank one).
+      if (mounted) setView(hasProfile ? 'feed' : 'onboarding');
     };
 
     const init = async () => {
@@ -166,13 +167,13 @@ export default function InfluencerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  async function loadInfluencer(uid: string) {
+  async function loadInfluencer(uid: string): Promise<boolean> {
     const { data } = await supabase
       .from('influencers')
       .select('*')
       .eq('user_id', uid)
       .maybeSingle();
-    if (data) { setInfluencer(data as Influencer); return; }
+    if (data) { setInfluencer(data as Influencer); return true; }
 
     // No row found — check for profile saved during email-confirmation signup
     const pending = localStorage.getItem('rp_pending_influencer');
@@ -187,9 +188,11 @@ export default function InfluencerPage() {
         if (created) {
           setInfluencer(created as Influencer);
           localStorage.removeItem('rp_pending_influencer');
+          return true;
         }
-      } catch { /* silent — user can fill profile later */ }
+      } catch { /* silent — fall through to onboarding */ }
     }
+    return false;
   }
 
   const handleSignOut = useCallback(async () => {
@@ -217,6 +220,15 @@ export default function InfluencerPage() {
     );
   }
   if (view === 'auth') return <AuthView supabase={supabase} />;
+  if (view === 'onboarding' && user) return (
+    <CreatorOnboarding
+      user={user}
+      supabase={supabase}
+      defaultCity={locReady && detectedCity !== 'GTA Area' ? detectedCity : ''}
+      onSignOut={() => void handleSignOut()}
+      onComplete={(inf) => { setInfluencer(inf); setView('feed'); }}
+    />
+  );
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -1656,3 +1668,142 @@ function CreatorSettingsTab({ onSignOut }: { onSignOut: () => void }) {
 }
 
 void IconBrandTiktok; void IconUsers; void IconMapPin; void IconStar;
+
+// ─── Creator onboarding (first entry, no profile yet) ──────────────────────────
+const NICHE_OPTIONS = ['Foodie', 'Fine Dining', 'Cheap Eats', 'Brunch', 'Vegan', 'Desserts', 'Reviews', 'Vlogger'];
+const PLATFORM_OPTIONS = ['Instagram', 'TikTok', 'YouTube', 'Twitter', 'Blog'];
+
+function CreatorOnboarding({ user, supabase, defaultCity, onComplete, onSignOut }: {
+  user: SupabaseUser;
+  supabase: ReturnType<typeof createClient>;
+  defaultCity: string;
+  onComplete: (i: Influencer) => void;
+  onSignOut: () => void;
+}) {
+  const [displayName, setDisplayName] = useState('');
+  const [handle, setHandle] = useState('');
+  const [city, setCity] = useState(defaultCity);
+  const [followers, setFollowers] = useState('');
+  const [bio, setBio] = useState('');
+  const [niches, setNiches] = useState<Set<string>>(new Set());
+  const [platforms, setPlatforms] = useState<Set<string>>(new Set());
+  const [igHint, setIgHint] = useState('');
+  const [igVerified, setIgVerified] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Auto-fetch followers from the handle (Meta → scrape → manual).
+  useEffect(() => {
+    const h = handle.trim().replace(/^@/, '');
+    if (h.length < 2) { setIgHint(''); return; }
+    setIgHint('checking…');
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/verify-instagram?handle=${encodeURIComponent(h)}`);
+        const d = await res.json() as { valid?: boolean; verified?: boolean; followers?: number | null; full_name?: string | null };
+        if (!d.valid) { setIgHint('invalid handle'); return; }
+        setIgVerified(!!d.verified);
+        if (d.followers != null) {
+          setFollowers(String(d.followers));
+          setIgHint(d.verified ? `✓ verified · ${d.followers.toLocaleString()} followers` : `found · ${d.followers.toLocaleString()} followers`);
+        } else {
+          setIgHint("Couldn't fetch — enter followers manually");
+        }
+        if (d.full_name && !displayName.trim()) setDisplayName(d.full_name);
+      } catch { setIgHint("Couldn't fetch — enter followers manually"); }
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handle]);
+
+  const toggle = (set: Set<string>, v: string, fn: (s: Set<string>) => void) => {
+    const next = new Set(set);
+    if (next.has(v)) next.delete(v); else next.add(v);
+    fn(next);
+  };
+
+  const save = async () => {
+    const h = handle.trim().replace(/^@/, '');
+    if (!h) { setError('Add your public handle.'); return; }
+    setSaving(true); setError('');
+    const followersNum = parseInt(followers.replace(/[^0-9]/g, ''), 10);
+    const { data, error: e } = await supabase.from('influencers').upsert({
+      user_id: user.id,
+      display_name: displayName.trim() || null,
+      instagram_handle: h,
+      city: city.trim() || null,
+      follower_count: Number.isNaN(followersNum) ? null : followersNum,
+      follower_range: followers.trim() || null,
+      bio: bio.trim() || null,
+      niche: niches.size ? Array.from(niches).join(', ') : null,
+      primary_platform: platforms.size ? Array.from(platforms)[0] : null,
+      instagram_verified: igVerified,
+    }, { onConflict: 'user_id' }).select().single();
+    setSaving(false);
+    if (e) { setError(e.message); return; }
+    if (data) onComplete(data as Influencer);
+  };
+
+  const chip = (label: string, active: boolean, onClick: () => void) => (
+    <button key={label} type="button" onClick={onClick}
+      className="h-9 px-4 rounded-full text-[13px] font-semibold border transition-colors"
+      style={active ? { background: '#7E22CE', color: '#fff', borderColor: '#7E22CE' } : { background: 'var(--sf)', color: 'var(--t2)', borderColor: 'var(--bd2)' }}>
+      {label}
+    </button>
+  );
+  const inputCls = 'w-full h-12 px-3.5 rounded-xl text-[15px] outline-none';
+  const inputStyle = { background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' } as const;
+
+  return (
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+      <header className="sticky top-0 z-10 bg-surface border-b border-[var(--bd)]">
+        <div className="max-w-xl mx-auto px-4 h-14 flex items-center justify-between">
+          <button onClick={onSignOut} className="text-[13px] text-t2 hover:text-tx">← Sign out</button>
+          <div className="font-display text-[16px] font-extrabold">Rep<span className="text-brand">EAT</span></div>
+          <span className="w-12" />
+        </div>
+      </header>
+      <main className="max-w-xl mx-auto px-4 py-6 pb-24">
+        <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: '#7E22CE' }}>● Creator profile</p>
+        <h1 className="font-display text-[30px] font-extrabold leading-tight">Tell restaurants who you are</h1>
+        <p className="text-[14px] text-t2 mt-2 mb-6">Restaurants browse this profile before they invite you to a collab. Be honest, be specific.</p>
+
+        <div className="space-y-5">
+          <div>
+            <label className="block text-[14px] font-semibold mb-1.5">Display name</label>
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Priya from Hungry Ontario" className={inputCls} style={inputStyle} />
+          </div>
+          <div>
+            <label className="block text-[14px] font-semibold mb-1.5">Public handle <span className="text-red-500">*</span></label>
+            <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@yourhandle" className={inputCls} style={inputStyle} />
+            {igHint && <p className="text-[12px] mt-1.5" style={{ color: igHint.startsWith('✓') ? '#16A34A' : igHint.includes("Couldn't") || igHint === 'invalid handle' ? '#9A9A9A' : '#7E22CE' }}>{igHint}</p>}
+          </div>
+          <div>
+            <label className="block text-[14px] font-semibold mb-1.5">City</label>
+            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Toronto" className={inputCls} style={inputStyle} />
+          </div>
+          <div>
+            <label className="block text-[14px] font-semibold mb-1.5">Total followers (across platforms)</label>
+            <input value={followers} inputMode="numeric" onChange={(e) => setFollowers(e.target.value.replace(/[^0-9]/g, ''))} placeholder="15000" className={inputCls} style={inputStyle} />
+          </div>
+          <div>
+            <label className="block text-[14px] font-semibold mb-1.5">Short bio</label>
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="What kind of restaurants do you love covering?" className="w-full px-3.5 py-2.5 rounded-xl text-[15px] outline-none resize-none" style={inputStyle} />
+          </div>
+          <div>
+            <label className="block text-[14px] font-semibold mb-2">Niche (pick any)</label>
+            <div className="flex flex-wrap gap-2">{NICHE_OPTIONS.map((n) => chip(n, niches.has(n), () => toggle(niches, n, setNiches)))}</div>
+          </div>
+          <div>
+            <label className="block text-[14px] font-semibold mb-2">Active platforms</label>
+            <div className="flex flex-wrap gap-2">{PLATFORM_OPTIONS.map((p) => chip(p, platforms.has(p), () => toggle(platforms, p, setPlatforms)))}</div>
+          </div>
+          {error && <p className="text-[13px] text-red-500">{error}</p>}
+          <button onClick={save} disabled={saving} className="w-full h-13 py-3.5 rounded-xl font-bold text-[15px] text-white disabled:opacity-50" style={{ background: '#7E22CE' }}>
+            {saving ? 'Saving…' : 'Save & enter creator portal'}
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
