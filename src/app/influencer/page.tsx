@@ -1727,6 +1727,14 @@ function CreatorOnboarding({ user, supabase, defaultCity, onComplete, onSignOut 
     if (!h) { setError('Add your public handle.'); return; }
     setSaving(true); setError('');
     const followersNum = parseInt(followers.replace(/[^0-9]/g, ''), 10);
+
+    // influencers.user_id → users(id); ensure the users row exists first (this
+    // account may not have one — no auth trigger creates it). RLS allows self-insert.
+    await supabase.from('users').upsert(
+      { id: user.id, email: user.email ?? '' },
+      { onConflict: 'id' },
+    );
+
     const { data, error: e } = await supabase.from('influencers').upsert({
       user_id: user.id,
       display_name: displayName.trim() || null,
