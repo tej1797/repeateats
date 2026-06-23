@@ -135,6 +135,24 @@ export default function InfluencerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
+  // Honor ?tab= and handle the Instagram OAuth return (?ig=connected) — reload
+  // the freshly-synced influencer row and clean the URL.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user) return;
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('tab');
+    if (t && CREATOR_TABS.some((x) => x.id === t)) setTab(t as CreatorTab);
+    const ig = params.get('ig');
+    if (ig) {
+      if (ig === 'connected') void loadInfluencer(user.id);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('ig');
+      url.searchParams.delete('tab');
+      window.history.replaceState({}, '', url.toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   async function loadInfluencer(uid: string) {
     const { data } = await supabase
       .from('influencers')
@@ -1460,7 +1478,29 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
   });
   const [busy, setBusy] = useState(false);
   const [igStatus, setIgStatus] = useState<'idle' | 'checking' | 'verified' | 'unverified'>('idle');
-  const [igVerified, setIgVerified] = useState(false);
+  const [igVerified, setIgVerified] = useState(!!i.instagram_verified);
+  const [connecting, setConnecting] = useState(false);
+  const [connectErr, setConnectErr] = useState('');
+
+  // Real Instagram OAuth — uses the SHARED `instagram-connect` edge fn (same
+  // callback + token store as mobile). The creator authorizes their own IG.
+  const connectInstagram = async () => {
+    setConnecting(true); setConnectErr('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/instagram-connect?action=start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ return_url: `${window.location.origin}/influencer?tab=profile` }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'Instagram connect is not available yet.');
+      window.location.href = data.url;
+    } catch (e) {
+      setConnectErr(e instanceof Error ? e.message : 'Could not start Instagram connect');
+      setConnecting(false);
+    }
+  };
 
   // Auto-verify the IG handle (debounced) while editing → pull followers + name
   // from Meta when configured. Falls back to format-only.
@@ -1553,7 +1593,28 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
       {/* Editable details */}
       <div className="rounded-[20px] p-5 bg-surface border border-[var(--bd)]">
         <h3 className="font-display text-[15px] font-bold mb-1">Details</h3>
-        <p className="text-[12px] text-t3 mb-3">{editing ? 'Edit your details — Instagram auto-fills followers when connected.' : 'Tap Edit above to update.'}</p>
+        <p className="text-[12px] text-t3 mb-3">{editing ? 'Edit your details — connect Instagram to auto-fill followers & photo.' : 'Tap Edit above to update.'}</p>
+
+        {/* Connect Instagram (real OAuth) */}
+        <div className="mb-4">
+          {igVerified ? (
+            <div className="flex items-center gap-2 rounded-xl px-3.5 py-3" style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.35)' }}>
+              <IconCircleCheckFilled size={18} style={{ color: '#16A34A' }} />
+              <span className="text-[13px] font-semibold" style={{ color: '#16A34A' }}>Instagram connected — followers &amp; photo auto-update daily</span>
+            </div>
+          ) : (
+            <>
+              <button onClick={connectInstagram} disabled={connecting}
+                className="w-full h-11 rounded-xl font-bold text-[14px] text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
+                <IconBrandInstagram size={17} /> {connecting ? 'Connecting…' : 'Connect Instagram'}
+              </button>
+              <p className="text-[11px] text-t3 mt-1.5">Authorize your IG to verify your account and auto-fill followers, name &amp; photo.</p>
+              {connectErr && <p className="text-[12px] text-red-500 mt-1">{connectErr}</p>}
+            </>
+          )}
+        </div>
+
         <div className="divide-y divide-[var(--bd)]">
           {ROWS.map(([label, key]) => (
             <div key={key} className="flex items-center justify-between gap-3 py-3">
