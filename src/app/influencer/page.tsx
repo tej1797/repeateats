@@ -1506,7 +1506,13 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
       if (!res.ok || !data.url) throw new Error(data.error ?? 'Instagram connect is not available yet.');
       window.location.href = data.url;
     } catch (e) {
-      setConnectErr(e instanceof Error ? e.message : 'Could not start Instagram connect');
+      const msg = e instanceof Error ? e.message : 'Could not start Instagram connect';
+      // Not-configured is expected (Meta app not set up yet) — show a soft note,
+      // not a scary red error; manual handle entry still works.
+      const notSetUp = /not set up|not available|IG_APP|not configured/i.test(msg);
+      setConnectErr(notSetUp
+        ? 'Instagram connect is coming soon — add your handle & followers manually for now.'
+        : msg);
       setConnecting(false);
     }
   };
@@ -1659,7 +1665,7 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
               <IconBrandInstagram size={17} /> {connecting ? 'Connecting…' : 'Connect Instagram'}
             </button>
             <p className="text-[11px] text-t3 mt-1.5">Authorize your IG to verify and auto-fill followers, name &amp; photo.</p>
-            {connectErr && <p className="text-[12px] text-red-500 mt-1">{connectErr}</p>}
+            {connectErr && <p className="text-[12px] mt-1" style={{ color: connectErr.includes('coming soon') ? '#9A9A9A' : '#EF4444' }}>{connectErr}</p>}
           </div>
         )}
       </div>
