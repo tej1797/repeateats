@@ -12,6 +12,7 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { Influencer, CollabWithDetails } from '@/types';
 import { useCollabs } from '@/hooks/useCollabs';
 import { useMessages } from '@/hooks/useMessages';
+import { useCustomerLocation } from '@/hooks/useCustomerLocation';
 import {
   IconX,
   IconSend,
@@ -73,6 +74,18 @@ export default function InfluencerPage() {
   const [filterCuisine, setFilterCuisine] = useState('');
   const [filterCity,    setFilterCity]    = useState('');
   const [search,        setSearch]        = useState('');
+
+  // Detect the creator's city (same geolocation the customer portal uses) and
+  // default the city filter to it once.
+  const { city: detectedCity, ready: locReady } = useCustomerLocation();
+  const cityDefaulted = useRef(false);
+  useEffect(() => {
+    if (cityDefaulted.current || !locReady) return;
+    if (detectedCity && detectedCity !== 'GTA Area' && CITY_FILTERS.includes(detectedCity)) {
+      setFilterCity(detectedCity);
+    }
+    cityDefaulted.current = true;
+  }, [locReady, detectedCity]);
 
   // Negotiate modal
   const [activeCollab, setActiveCollab] = useState<CollabWithDetails | null>(null);
@@ -244,19 +257,28 @@ export default function InfluencerPage() {
         {tab === 'discover' && (
           <>
             {influencer && <CreatorBanner influencer={influencer} />}
-            <div className="relative mb-4">
-              <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search restaurants, cities…"
-                className="w-full h-11 pl-10 pr-3 rounded-full text-[14px] outline-none"
-                style={{ background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' }} />
+            {/* Search + city (two filters: cuisine chips below + this city picker) */}
+            <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="relative flex-1">
+                <IconSearch size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-t3" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search restaurants, cities…"
+                  className="w-full h-11 pl-10 pr-3 rounded-full text-[14px] outline-none"
+                  style={{ background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' }} />
+              </div>
+              <div className="relative shrink-0">
+                <IconMapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7E22CE] pointer-events-none" />
+                <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)}
+                  className="h-11 pl-9 pr-8 rounded-full text-[14px] font-semibold outline-none appearance-none cursor-pointer min-w-[160px]"
+                  style={{ background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' }}>
+                  {CITY_FILTERS.map((c) => (
+                    <option key={c} value={c === 'All' ? '' : c}>{c === 'All' ? 'All cities' : c}</option>
+                  ))}
+                </select>
+                <IconChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-t3 pointer-events-none" />
+              </div>
             </div>
-            <FilterRow
-              cuisineFilter={filterCuisine}
-              cityFilter={filterCity}
-              onCuisineChange={setFilterCuisine}
-              onCityChange={setFilterCity}
-            />
+            <FilterRow cuisineFilter={filterCuisine} onCuisineChange={setFilterCuisine} />
             <CollabFeed
               cuisine={filterCuisine}
               city={filterCity}
@@ -607,26 +629,26 @@ function CreatorBanner({ influencer }: { influencer: Influencer }) {
   const tt = influencer.tiktok_handle ?? null;
   const name = (inf.display_name as string) || ig || tt || 'Creator';
   const verified = !!inf.instagram_verified;
-  const initial = (name[0] ?? 'C').toUpperCase();
+  const initial = (name.replace(/^@/, '')[0] ?? 'C').toUpperCase();
 
   return (
-    <div className="relative rounded-[20px] overflow-hidden mb-5" style={{ background: 'linear-gradient(135deg,#7E22CE 0%,#4C1D95 55%,#1E1B4B 100%)' }}>
+    <div className="relative rounded-[18px] overflow-hidden mb-5" style={{ background: 'linear-gradient(135deg,#7E22CE 0%,#4C1D95 55%,#1E1B4B 100%)' }}>
       {/* glow accents */}
-      <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(40px)' }} />
-      <div className="relative p-5 sm:p-6 flex items-center gap-4">
+      <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full" style={{ background: 'rgba(217,70,239,0.35)', filter: 'blur(40px)' }} />
+      <div className="relative px-4 py-4 flex items-center gap-3">
         {inf.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={inf.avatar_url as string} alt={name} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0 ring-2 ring-white/30" />
+          <img src={inf.avatar_url as string} alt={name} className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-white/30" />
         ) : (
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-display text-[28px] font-extrabold text-white shrink-0 ring-2 ring-white/30"
+          <div className="w-12 h-12 rounded-full flex items-center justify-center font-display text-[18px] font-extrabold text-white shrink-0 ring-2 ring-white/30"
             style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>
             {initial}
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="font-display text-[22px] sm:text-[26px] font-extrabold text-white leading-tight truncate">{name}</h2>
-            {verified && <IconCircleCheckFilled size={20} style={{ color: '#60A5FA' }} />}
+          <div className="flex items-center gap-1.5">
+            <h2 className="font-display text-[18px] font-extrabold text-white leading-tight truncate">{name}</h2>
+            {verified && <IconCircleCheckFilled size={16} style={{ color: '#60A5FA' }} />}
           </div>
           {/* social links */}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -673,12 +695,10 @@ function CreatorBanner({ influencer }: { influencer: Influencer }) {
 // ─── Filter row ───────────────────────────────────────────────────────────────
 
 function FilterRow({
-  cuisineFilter, cityFilter, onCuisineChange, onCityChange,
+  cuisineFilter, onCuisineChange,
 }: {
   cuisineFilter: string;
-  cityFilter: string;
   onCuisineChange: (v: string) => void;
-  onCityChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-2 mb-5">
@@ -703,29 +723,6 @@ function FilterRow({
         })}
       </div>
 
-      {/* City chips */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <span className="shrink-0 flex items-center gap-1 text-[12px] text-t3 pr-1">
-          <IconMapPin size={12} /> City:
-        </span>
-        {CITY_FILTERS.map((city) => {
-          const value = city === 'All' ? '' : city;
-          const active = cityFilter === value;
-          return (
-            <button
-              key={city}
-              onClick={() => onCityChange(active ? '' : value)}
-              className={`shrink-0 h-7 px-3 rounded-full text-[12px] font-semibold border transition-colors ${
-                active
-                  ? 'bg-[#7E22CE] text-white border-[#7E22CE]'
-                  : 'bg-surface border-[var(--bd2)] text-t2 hover:border-[#7E22CE] hover:text-[#7E22CE]'
-              }`}
-            >
-              {city}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -1536,7 +1533,7 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
   };
 
   const ROWS: [string, keyof typeof draft][] = [
-    ['Display Name', 'display_name'], ['Instagram', 'instagram_handle'], ['TikTok', 'tiktok_handle'],
+    ['Username', 'display_name'], ['Instagram', 'instagram_handle'], ['TikTok', 'tiktok_handle'],
     ['Niche', 'niche'], ['Followers', 'follower_range'], ['Platform', 'primary_platform'], ['City', 'city'],
   ];
 
@@ -1557,18 +1554,18 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
           <div className="flex items-start justify-between">
             {i.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={i.avatar_url as string} alt={heroName} className="w-20 h-20 rounded-full object-cover ring-2 ring-white/30" />
+              <img src={i.avatar_url as string} alt={heroName} className="w-16 h-16 rounded-full object-cover ring-2 ring-white/30" />
             ) : (
-              <div className="w-20 h-20 rounded-full flex items-center justify-center font-display text-[32px] font-extrabold text-white ring-2 ring-white/30"
+              <div className="w-16 h-16 rounded-full flex items-center justify-center font-display text-[24px] font-extrabold text-white ring-2 ring-white/30"
                 style={{ background: 'linear-gradient(135deg,#D946EF,#7E22CE)' }}>{initial}</div>
             )}
             {!editing
               ? <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-3.5 h-9 rounded-full bg-white/15 text-white hover:bg-white/25"><IconPencil size={14} /> Edit</button>
               : <button onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 text-[13px] font-bold px-4 h-9 rounded-full bg-white text-[#7E22CE] disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>}
           </div>
-          <div className="flex items-center gap-2 mt-4">
-            <h2 className="font-display text-[26px] font-extrabold text-white leading-tight">{heroName}</h2>
-            {igVerified && <IconCircleCheckFilled size={20} style={{ color: '#60A5FA' }} />}
+          <div className="flex items-center gap-1.5 mt-3">
+            <h2 className="font-display text-[20px] font-extrabold text-white leading-tight">{heroName}</h2>
+            {igVerified && <IconCircleCheckFilled size={16} style={{ color: '#60A5FA' }} />}
           </div>
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {igLink && (
