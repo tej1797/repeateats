@@ -92,6 +92,24 @@ export default function InfluencerPage() {
   // Chat panel (inside the negotiate modal)
   const [chatOpen,     setChatOpen]     = useState(false);
 
+  // ── Instagram one-tap auth return: ?ig=auth&token_hash → verifyOtp → session ─
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('ig') !== 'auth') return;
+    const token_hash = p.get('token_hash');
+    void (async () => {
+      if (token_hash) {
+        try { await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' }); }
+        catch (e) { console.error('[ig auth] verifyOtp failed', e); }
+      }
+      const url = new URL(window.location.href);
+      ['ig', 'token_hash', 'type'].forEach((k) => url.searchParams.delete(k));
+      window.history.replaceState({}, '', url.toString());
+      // onAuthStateChange (below) picks up the new session and loads the profile.
+    })();
+  }, [supabase]);
+
   // ── Auth listener ────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
@@ -158,7 +176,9 @@ export default function InfluencerPage() {
     if (t && CREATOR_TABS.some((x) => x.id === t)) setTab(t as CreatorTab);
     const ig = params.get('ig');
     if (ig) {
-      if (ig === 'connected') void loadInfluencer(user.id);
+      // Connecting during onboarding creates the profile server-side → load it
+      // and enter the portal.
+      if (ig === 'connected') void loadInfluencer(user.id).then((ok) => { if (ok) setView('feed'); });
       const url = new URL(window.location.href);
       url.searchParams.delete('ig');
       url.searchParams.delete('tab');
@@ -425,12 +445,49 @@ function CreatorStatPill({ text }: { text: string }) {
 
 // ─── AuthView ─────────────────────────────────────────────────────────────────
 
+// Compact count formatting for IG-style stats (12300 → 12.3K, 1500000 → 1.5M).
+function formatCount(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
+  return String(n);
+}
+
+// One-tap "Sign in with Instagram" — unauthenticated auth mode of the shared
+// instagram-connect edge fn. Redirects to IG; callback returns ?ig=auth&token_hash.
+async function startInstagramAuth() {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/instagram-connect?action=start_auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '' },
+    body: JSON.stringify({ return_url: `${window.location.origin}/influencer` }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) throw new Error(data.error ?? 'Instagram sign-in is not available yet.');
+  window.location.href = data.url;
+}
+
+// IG glyph for buttons.
+function IgGlyph({ size = 18 }: { size?: number }) {
+  return <IconBrandInstagram size={size} />;
+}
+
 function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState('');
   const [btnState, setBtnState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [igBusy,   setIgBusy]   = useState(false);
+
+  const handleInstagram = async () => {
+    setIgBusy(true); setError('');
+    try { await startInstagramAuth(); }
+    catch (e) {
+      const msg = e instanceof Error ? e.message : 'Instagram sign-in failed';
+      setError(/not available|not set up|IG_APP/i.test(msg) ? 'Instagram sign-in is coming soon.' : msg);
+      setIgBusy(false);
+    }
+  };
 
   // Cursor glow on left panel
   const leftRef = useRef<HTMLDivElement>(null);
@@ -563,8 +620,8 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
             </p>
           </div>
 
-          {/* Google button */}
-          <div className="mb-5">
+          {/* Social buttons */}
+          <div className="mb-5 space-y-2.5">
             <button
               onClick={handleGoogle}
               className="w-full h-12 rounded-xl flex items-center justify-center gap-3 font-semibold text-[14px] transition-all hover:-translate-y-0.5 hover:shadow-md"
@@ -572,6 +629,15 @@ function AuthView({ supabase }: { supabase: ReturnType<typeof createClient> }) {
             >
               <GoogleSVG /> Continue with Google
             </button>
+            <button
+              onClick={handleInstagram}
+              disabled={igBusy}
+              className="w-full h-12 rounded-xl flex items-center justify-center gap-2.5 font-semibold text-[14px] text-white transition-all hover:-translate-y-0.5 hover:shadow-md disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#F58529,#DD2A7B,#8134AF,#515BD4)' }}
+            >
+              <IgGlyph /> {igBusy ? 'Opening Instagram…' : 'Continue with Instagram'}
+            </button>
+            <p className="text-[11px] text-center" style={{ color: '#9CA3AF' }}>Instagram works with Professional (Business/Creator) accounts.</p>
           </div>
 
           {/* Divider */}
@@ -677,27 +743,13 @@ function CreatorBanner({ influencer }: { influencer: Influencer }) {
               </a>
             )}
           </div>
-          {/* stat chips */}
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {!!influencer.follower_count && (
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">
-                <IconUsers size={12} /> {influencer.follower_count.toLocaleString()} followers
-              </span>
-            )}
-            {influencer.total_collabs > 0 && (
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">
-                <IconCheck size={12} /> {influencer.total_collabs} collabs
-              </span>
-            )}
-            {influencer.rating > 0 && (
-              <span className="inline-flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">
-                <IconStar size={12} /> {influencer.rating.toFixed(1)}
-              </span>
-            )}
-            {influencer.niche && (
-              <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-white/15 text-white">{influencer.niche}</span>
-            )}
+          {/* IG-style stat row: Posts · Followers · Following */}
+          <div className="flex items-center gap-5 mt-3">
+            <span className="text-white"><b className="font-extrabold">{formatCount(inf.posts_count as number)}</b> <span className="text-white/70 text-[13px]">Posts</span></span>
+            <span className="text-white"><b className="font-extrabold">{formatCount(influencer.follower_count)}</b> <span className="text-white/70 text-[13px]">Followers</span></span>
+            <span className="text-white"><b className="font-extrabold">{formatCount(inf.following_count as number)}</b> <span className="text-white/70 text-[13px]">Following</span></span>
           </div>
+          {(inf.bio as string) && <p className="text-[13px] text-white/85 mt-2 line-clamp-2">{inf.bio as string}</p>}
         </div>
       </div>
     </div>
@@ -1553,9 +1605,6 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
   const igLink = draft.instagram_handle.trim().replace(/^@/, '');
   const heroName = draft.display_name.trim() || (igLink ? `@${igLink}` : 'Your name');
   const initial = (heroName.replace(/^@/, '')[0] ?? 'C').toUpperCase();
-  const followersDisplay = draft.follower_range.trim()
-    ? (/^\d+$/.test(draft.follower_range.trim()) ? Number(draft.follower_range).toLocaleString() : draft.follower_range)
-    : null;
 
   const boxStyle = { background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' } as const;
   const field = (label: string, key: keyof typeof draft, placeholder = '') => (
@@ -1593,17 +1642,21 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
               ? <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-[12px] font-bold px-3 h-8 rounded-full bg-white/15 text-white hover:bg-white/25 shrink-0"><IconPencil size={13} /> Edit</button>
               : <button onClick={save} disabled={busy} className="inline-flex items-center gap-1.5 text-[12px] font-bold px-3.5 h-8 rounded-full bg-white text-[#7E22CE] disabled:opacity-50 shrink-0">{busy ? 'Saving…' : 'Save'}</button>}
           </div>
-          {/* Row 2: handle + chips */}
-          <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+          {/* Row 2: handle + IG-style stats */}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             {igLink && (
               <a href={`https://instagram.com/${igLink}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold text-white/90 hover:text-white">
                 <IconBrandInstagram size={13} /> @{igLink} <IconExternalLink size={11} />
               </a>
             )}
-            {followersDisplay && <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white"><IconUsers size={11} /> {followersDisplay}</span>}
-            {draft.niche && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white truncate max-w-[180px]">{draft.niche}</span>}
             {draft.city && <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-white"><IconMapPin size={11} /> {draft.city}</span>}
           </div>
+          <div className="flex items-center gap-4 mt-2">
+            <span className="text-white"><b className="font-extrabold">{formatCount(i.posts_count as unknown as number)}</b> <span className="text-white/70 text-[12px]">Posts</span></span>
+            <span className="text-white"><b className="font-extrabold">{formatCount((i.follower_count as unknown as number) ?? (Number(draft.follower_range) || 0))}</b> <span className="text-white/70 text-[12px]">Followers</span></span>
+            <span className="text-white"><b className="font-extrabold">{formatCount(i.following_count as unknown as number)}</b> <span className="text-white/70 text-[12px]">Following</span></span>
+          </div>
+          {(i.bio as string) && <p className="text-[12px] text-white/85 mt-2 line-clamp-2">{i.bio as string}</p>}
         </div>
       </div>
 
@@ -1715,6 +1768,27 @@ function CreatorOnboarding({ user, supabase, defaultCity, onComplete, onSignOut 
   const [igVerified, setIgVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [connecting, setConnecting] = useState(false);
+
+  // One-tap connect during signup — the callback creates the profile from IG data.
+  const connectInstagram = async () => {
+    setConnecting(true); setError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/instagram-connect?action=start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ return_url: `${window.location.origin}/influencer?tab=profile` }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'not available');
+      window.location.href = data.url;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not connect Instagram';
+      setError(/not available|not set up|IG_APP/i.test(msg) ? 'Instagram connect is coming soon — fill the form below for now.' : msg);
+      setConnecting(false);
+    }
+  };
 
   // Auto-fetch followers from the handle (Meta → scrape → manual).
   useEffect(() => {
@@ -1798,7 +1872,15 @@ function CreatorOnboarding({ user, supabase, defaultCity, onComplete, onSignOut 
       <main className="max-w-xl mx-auto px-4 py-6 pb-24">
         <p className="text-[12px] font-bold uppercase tracking-wider mb-2" style={{ color: '#7E22CE' }}>● Creator profile</p>
         <h1 className="font-display text-[30px] font-extrabold leading-tight">Tell restaurants who you are</h1>
-        <p className="text-[14px] text-t2 mt-2 mb-6">Restaurants browse this profile before they invite you to a collab. Be honest, be specific.</p>
+        <p className="text-[14px] text-t2 mt-2 mb-5">Restaurants browse this profile before they invite you to a collab. Be honest, be specific.</p>
+
+        {/* One-tap connect — fills everything from IG */}
+        <button onClick={connectInstagram} disabled={connecting}
+          className="w-full h-12 rounded-xl flex items-center justify-center gap-2.5 font-bold text-[14px] text-white disabled:opacity-60 mb-2"
+          style={{ background: 'linear-gradient(135deg,#F58529,#DD2A7B,#8134AF,#515BD4)' }}>
+          <IconBrandInstagram size={18} /> {connecting ? 'Opening Instagram…' : 'Connect Instagram (fills everything)'}
+        </button>
+        <p className="text-[11px] text-t3 mb-5">Professional (Business/Creator) IG accounts only. Or fill in the details manually below.</p>
 
         <div className="space-y-5">
           <div>
