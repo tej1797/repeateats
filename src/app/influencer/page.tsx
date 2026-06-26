@@ -1606,15 +1606,21 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
   const heroName = draft.display_name.trim() || (igLink ? `@${igLink}` : 'Your name');
   const initial = (heroName.replace(/^@/, '')[0] ?? 'C').toUpperCase();
 
+  // When the profile is connected to Instagram, IG-sourced fields are locked.
+  const igLocked = igVerified;
   const boxStyle = { background: 'var(--sf)', border: '1px solid var(--bd)', color: 'var(--tx)' } as const;
-  const field = (label: string, key: keyof typeof draft, placeholder = '') => (
+  const field = (label: string, key: keyof typeof draft, placeholder = '', locked = false) => (
     <div>
-      <label className="block text-[12px] text-t2 mb-1.5">{label}</label>
-      {editing ? (
+      <label className="block text-[12px] text-t2 mb-1.5 flex items-center gap-1">
+        {label}{locked && <span className="text-[10px] text-t3">🔒 from Instagram</span>}
+      </label>
+      {editing && !locked ? (
         <input value={draft[key]} onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
           placeholder={placeholder} className="w-full h-11 px-3.5 rounded-xl text-[14px] outline-none focus:border-[#7E22CE]" style={boxStyle} />
       ) : (
-        <div className="w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={boxStyle}>{draft[key] || placeholder || '—'}</div>
+        <div className="w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={{ ...boxStyle, opacity: locked && editing ? 0.6 : 1 }}>
+          {draft[key] || placeholder || '—'}
+        </div>
       )}
     </div>
   );
@@ -1667,12 +1673,15 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
           <p className="text-[12px] text-t3 mt-0.5">{editing ? 'Edit your details below.' : 'Tap Edit above to update.'}</p>
         </div>
 
-        {field('Username', 'display_name', 'Your name')}
+        {/* Editable: your own display name (falls back to the username if blank) */}
+        {field('Display name', 'display_name', igLink ? `@${igLink}` : 'Your name')}
 
-        {/* Instagram — link when viewing, input + status when editing */}
+        {/* Instagram — locked when connected; editable handle only when not connected */}
         <div>
-          <label className="block text-[12px] text-t2 mb-1.5">Instagram</label>
-          {editing ? (
+          <label className="block text-[12px] text-t2 mb-1.5 flex items-center gap-1">
+            Instagram{igLocked && <span className="text-[10px] text-t3">🔒 from Instagram</span>}
+          </label>
+          {editing && !igLocked ? (
             <>
               <input value={draft.instagram_handle} onChange={(e) => setDraft((d) => ({ ...d, instagram_handle: e.target.value }))}
                 placeholder="@handle" className="w-full h-11 px-3.5 rounded-xl text-[14px] outline-none focus:border-[#7E22CE]" style={boxStyle} />
@@ -1685,7 +1694,7 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
             </>
           ) : igLink ? (
             <a href={`https://instagram.com/${igLink}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={{ ...boxStyle, color: '#A855F7' }}>
+              className="flex items-center gap-1 w-full min-h-11 px-3.5 py-3 rounded-xl text-[14px] font-semibold" style={{ ...boxStyle, color: '#A855F7', opacity: igLocked && editing ? 0.6 : 1 }}>
               @{igLink} <IconExternalLink size={13} />
             </a>
           ) : (
@@ -1693,15 +1702,16 @@ function CreatorProfileTab({ influencer, supabase, onSaved }: {
           )}
         </div>
 
+        {/* Editable: TikTok (not from IG) */}
         {field('TikTok', 'tiktok_handle', 'Not added')}
 
         <div className="grid grid-cols-2 gap-3">
-          {field('Niche', 'niche')}
-          {field('Followers', 'follower_range', editing ? 'auto from IG' : '')}
+          {field('Niche', 'niche', 'e.g. Foodie')}
+          {field('Followers', 'follower_range', igLocked ? '' : 'enter manually', igLocked)}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {field('Platform', 'primary_platform')}
-          {field('City', 'city')}
+          {field('Platform', 'primary_platform', igLocked ? 'Instagram' : '', igLocked)}
+          {field('City', 'city', 'Your city')}
         </div>
 
         {/* Connect Instagram (real OAuth) — at the bottom, mobile parity */}
