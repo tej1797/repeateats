@@ -15,25 +15,34 @@ These are sent by **Supabase Auth**, not app code. Point Supabase at ZeptoMail S
 
 Save. Supabase will now send all auth emails via ZeptoMail. (DNS: the CNAME/TXT you added in Porkbun for ZeptoMail domain verification must be verified — confirm in the ZeptoMail dashboard.)
 
-## 2. App transactional emails (support ticket confirmations, collab notifications, …)
-Sent by app code via `src/lib/zeptoMail.ts` (ZeptoMail HTTP API). Set these env vars in **Vercel → Settings → Environment Variables** (then redeploy):
+## 2. App transactional emails (support, collab notifications, …)
+These go through the shared Supabase **`send-email`** edge function (which calls
+ZeptoMail). **No Vercel env is needed** — web calls the edge fn with the
+service-role key it already has, and the ZeptoMail token lives only as a
+**Supabase edge secret**.
+
+Set as **Supabase → Edge Functions → Secrets** (same place as the IG secrets —
+NOT Vercel):
 
 | Key | Value |
 |---|---|
-| `ZEPTOMAIL_TOKEN` | the ZeptoMail Send Mail token (same value as the SMTP password) |
+| `ZEPTOMAIL_TOKEN` | the ZeptoMail Send Mail token |
 | `ZEPTOMAIL_FROM` | `noreply@support.repeateats.ca` |
-| `ZEPTOMAIL_FROM_NAME` | `RepEAT` (optional) |
-| `ZEPTOMAIL_API_URL` | optional; defaults to `https://api.zeptomail.ca/v1.1/email` |
 
-Until `ZEPTOMAIL_TOKEN` is set, `sendEmail()` no-ops gracefully (nothing breaks).
+`src/lib/zeptoMail.ts` `sendEmail()` POSTs `{SUPABASE_URL}/functions/v1/send-email`
+with `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`. No-ops if the URL/service
+key are missing; the edge fn no-ops if `ZEPTOMAIL_TOKEN` is unset.
 
-### Wired so far
-- **Support ticket confirmation** — `POST /api/support/tickets` emails the contact address a "request received" confirmation.
+### Wired
+- **Support ticket** — DB-triggered (`support_ticket_created_email` →
+  `send-support-email`) on any insert (web or mobile). Web does NOT send it
+  directly (would duplicate).
+- **Collab application received** → restaurant owner (`restaurants.owner_email`).
+- **Collab accepted / declined / shortlisted** → creator (`users.email`).
 
-### Easy next uses (not wired yet)
-- Collab application received (→ restaurant), accepted/declined (→ creator).
-- Restaurant notification toggles (Deal claimed / expired / Collab requests / Weekly summary).
-Each is one `sendEmail({ to, subject, html: emailLayout(...) })` call at the relevant event.
+### Easy next uses
+- Restaurant notification toggles (Deal claimed / expired / Weekly summary).
+Each is one `sendEmail({ to, subject, html: emailLayout(...) })` call.
 
 ## Notes
 - Region: `.ca` endpoints (`smtp.zeptomail.ca`, `api.zeptomail.ca`). Don't mix with `.com`.
