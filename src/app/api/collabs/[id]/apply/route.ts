@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveUser, getServiceClient } from '@/lib/stripeAuth';
+import { sendEmail, emailLayout } from '@/lib/zeptoMail';
 
 type RouteParams = { params: { id: string } };
 
@@ -71,21 +72,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Notify the restaurant owner.
+  // Notify the restaurant owner (in-app + email).
   const { data: restaurant } = await db
     .from('restaurants')
-    .select('owner_id, name')
+    .select('owner_id, name, owner_email')
     .eq('id', posting.restaurant_id)
     .maybeSingle();
   if (restaurant?.owner_id) {
     const who = inf.display_name || (inf.instagram_handle ? `@${inf.instagram_handle}` : 'A creator');
+    const postingTitle = posting.title ?? 'your collab';
     await db.from('notifications').insert({
       user_id: restaurant.owner_id,
       type:    'collab_application',
       title:   'New collab application',
-      body:    `${who} applied to "${posting.title ?? 'your collab'}"${proposed_amount ? ` — proposed $${proposed_amount}` : ''}.`,
+      body:    `${who} applied to "${postingTitle}"${proposed_amount ? ` — proposed $${proposed_amount}` : ''}.`,
       read:    false,
     });
+    if (restaurant.owner_email) {
+      void sendEmail({
+        to: restaurant.owner_email,
+        subject: `New collab application: ${postingTitle}`,
+        html: emailLayout('New creator application', `
+          <p><b>${who}</b> applied to your collab <b>"${postingTitle}"</b>${proposed_amount ? ` and proposed <b>$${proposed_amount}</b>` : ''}.</p>
+          ${pitch?.trim() ? `<p style="margin-top:10px;color:#555">"${pitch.trim().replace(/</g, '&lt;')}"</p>` : ''}
+          <p style="margin-top:12px">Review and accept them in your RepEAT dashboard → Collabs → Applications.</p>
+        `),
+        replyTo: 'contact@contact.repeateats.ca',
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json({ ok: true, application }, { status: 201 });

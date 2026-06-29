@@ -1,19 +1,14 @@
-// ZeptoMail transactional email sender (HTTP API).
-// Used for app-sent emails (support ticket confirmations, collab notifications…).
-// Auth emails (signup verification, OTP, recovery) are sent by Supabase Auth —
-// point those at ZeptoMail via Supabase → Auth → SMTP settings (no code).
+// Transactional email — sends via the shared Supabase `send-email` edge function
+// (which talks to ZeptoMail). Web calls the edge fn with the service-role key it
+// already has, so the ZeptoMail token lives ONLY as a Supabase edge secret — no
+// Vercel env needed. Auth emails (verification/OTP/recovery) ride Supabase SMTP.
 //
-// Env:
-//   ZEPTOMAIL_TOKEN — the ZeptoMail "Send Mail" token (a.k.a. enczapikey). Same
-//                     token works for SMTP password and the HTTP API.
-//   ZEPTOMAIL_FROM  — verified sender, e.g. "noreply@support.repeateats.ca"
-//   ZEPTOMAIL_FROM_NAME — display name, defaults to "RepEAT"
-//   ZEPTOMAIL_API_URL — defaults to the .ca region endpoint.
+// Edge fn: POST {SUPABASE_URL}/functions/v1/send-email
+//   Authorization: Bearer <service role key>  (not callable with anon key)
+//   body { to, to_name?, subject, html, reply_to?, reply_to_name? }
+//   → { ok:true } | { ok:true, skipped } (token unset) | { error }
 //
-// No-ops (returns { ok:false, skipped:true }) when ZEPTOMAIL_TOKEN is unset, so
-// nothing breaks before the token is configured.
-
-const API_URL = process.env.ZEPTOMAIL_API_URL ?? 'https://api.zeptomail.ca/v1.1/email';
+// No-ops gracefully if the Supabase URL/service key are missing.
 
 export interface SendEmailInput {
   to: string;
@@ -30,32 +25,19 @@ export interface SendEmailResult {
 }
 
 export async function sendEmail({ to, toName, subject, html, replyTo }: SendEmailInput): Promise<SendEmailResult> {
-  const token = process.env.ZEPTOMAIL_TOKEN;
-  const from  = process.env.ZEPTOMAIL_FROM ?? 'noreply@support.repeateats.ca';
-  const fromName = process.env.ZEPTOMAIL_FROM_NAME ?? 'RepEAT';
-
-  if (!token) return { ok: false, skipped: true };
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return { ok: false, skipped: true };
 
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(`${url}/functions/v1/send-email`, {
       method: 'POST',
-      headers: {
-        // ZeptoMail uses this exact scheme; the token already includes its prefix.
-        Authorization: token.startsWith('Zoho-enczapikey') ? token : `Zoho-enczapikey ${token}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        from: { address: from, name: fromName },
-        to: [{ email_address: { address: to, name: toName ?? to } }],
-        ...(replyTo ? { reply_to: [{ address: replyTo }] } : {}),
-        subject,
-        htmlbody: html,
-      }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ to, to_name: toName, subject, html, reply_to: replyTo }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      return { ok: false, error: `ZeptoMail ${res.status}: ${body.slice(0, 200)}` };
+      return { ok: false, error: `send-email ${res.status}: ${body.slice(0, 200)}` };
     }
     return { ok: true };
   } catch (err) {
@@ -63,7 +45,7 @@ export async function sendEmail({ to, toName, subject, html, replyTo }: SendEmai
   }
 }
 
-/** Minimal branded wrapper so transactional emails look consistent. */
+/** Minimal branded wrapper so transactional emails look consistent (shared with mobile). */
 export function emailLayout(title: string, bodyHtml: string): string {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a">
     <div style="font-size:22px;font-weight:800;margin-bottom:4px">Rep<span style="color:#E85D04">EAT</span></div>

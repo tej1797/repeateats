@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { sendEmail, emailLayout } from '@/lib/zeptoMail';
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -53,17 +52,9 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Confirmation email via ZeptoMail (best-effort; no-ops if token unset, never blocks).
-  void sendEmail({
-    to: contact_email,
-    subject: `We got your request: ${subject}`,
-    html: emailLayout('Support request received', `
-      <p>Thanks for reaching out — we've logged your ${category} request and our team will reply within 24 hours.</p>
-      <p style="margin-top:12px"><b>Subject:</b> ${subject}<br/>
-      <b>Details:</b><br/>${String(description).replace(/</g, '&lt;')}</p>
-      <p style="margin-top:12px">We'll email updates to this address.</p>
-    `),
-  }).catch(() => {});
+  // Confirmation email is sent server-side by the support_ticket_created_email
+  // DB trigger (→ send-support-email edge fn), so we don't send it here (avoids
+  // duplicates). Same trigger fires for tickets created on web or mobile.
 
   return NextResponse.json({ ticket: data }, { status: 201 });
 }

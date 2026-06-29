@@ -10,6 +10,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveUser, getServiceClient } from '@/lib/stripeAuth';
+import { sendEmail, emailLayout } from '@/lib/zeptoMail';
 
 type RouteParams = { params: { appId: string } };
 
@@ -48,14 +49,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Not your collab' }, { status: 403 });
   }
 
-  // Creator's user id (for notifications).
+  // Creator's user id + email (for notifications).
   const { data: inf } = await db
     .from('influencers')
     .select('user_id, display_name, instagram_handle')
     .eq('id', app.influencer_id)
     .maybeSingle();
+  let creatorEmail: string | null = null;
+  if (inf?.user_id) {
+    const { data: u } = await db.from('users').select('email').eq('id', inf.user_id).maybeSingle();
+    creatorEmail = (u as { email: string | null } | null)?.email ?? null;
+  }
   const notifyCreator = async (title: string, body: string) => {
     if (inf?.user_id) await db.from('notifications').insert({ user_id: inf.user_id, type: 'collab_decision', title, body, read: false });
+    if (creatorEmail) void sendEmail({ to: creatorEmail, subject: title, html: emailLayout(title, `<p>${body}</p>`), replyTo: 'contact@contact.repeateats.ca' }).catch(() => {});
   };
   const postingTitle = posting.title ?? 'the collab';
 
