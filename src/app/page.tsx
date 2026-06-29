@@ -26,7 +26,6 @@ const ORANGE = '#FF6B00';
 export default function LandingPage() {
   const router = useRouter();
   const [processing, setProcessing] = useState(false);
-  const [city, setCity] = useState('');
 
   // ── OAuth code exchange — must be preserved (unchanged) ──────────────────
   useEffect(() => {
@@ -58,13 +57,6 @@ export default function LandingPage() {
     void processOAuthReturn();
   }, [router]);
 
-  // ── Search box (existing functionality, preserved) ───────────────────────
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = city.trim();
-    router.push(q ? `/customer/preview?city=${encodeURIComponent(q)}` : '/customer/preview');
-  };
-
   if (processing) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0A0A0A' }}>
@@ -82,7 +74,7 @@ export default function LandingPage() {
       <div style={{ background: '#0A0A0A', color: '#fff', overflowX: 'hidden', fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)' }}>
         <Nav />
         <main>
-          <Hero city={city} setCity={setCity} onSearch={handleSearch} />
+          <Hero />
           <LiveTicker />
           <PortalCards />
           <LogoMarquee />

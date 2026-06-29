@@ -12,6 +12,10 @@ Restaurant=blue, Creator=purple). Floating food/restaurant/creator cutouts in he
 - Added libs: framer-motion ^12, lenis ^1.3 (smooth scroll).
 
 ## What's Been Implemented (2026-06-29)
+- Hero v2 (Influish-style): glassy floating value-prop pills around headline, NO search bar,
+  NO cutouts, faded background (concentric ring borders + faint grid + soft glow), glassy trust
+  strip, two CTAs (Browse deals / List your restaurant), light mouse parallax. Giant faded "RepEAT"
+  wordmark watermark added to the final CTA section.
 - Full homepage rebuild at `src/app/page.tsx` (OAuth code-exchange useEffect + city search handler
   preserved exactly — navigates to `/customer/preview?city=`).
 - New presentational components in `src/components/home/`:
