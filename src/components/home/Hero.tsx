@@ -69,8 +69,7 @@ const SELECT = [
   { key: 'creator',    label: "I'm a Creator",    sub: 'Find paid collabs',     icon: <IconCamera size={19} /> },
 ] as const;
 
-function HeroPortals() {
-  const [hovered, setHovered] = useState<string | null>(null);
+function HeroPortals({ hovered, setHovered }: { hovered: string | null; setHovered: (v: string | null) => void }) {
   return (
     <div data-testid="hero-portal-select" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
       {SELECT.map((s) => {
@@ -107,6 +106,8 @@ function HeroPortals() {
 }
 
 export default function Hero() {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const accent = hovered ? (PORTALS.find((p) => p.key === hovered)?.color ?? C.orange) : C.orange;
   const rawX = useMotionValue(0);
   const rawY = useMotionValue(0);
   const mx = useSpring(rawX, { stiffness: 55, damping: 18, mass: 0.4 });
@@ -136,12 +137,17 @@ export default function Hero() {
           }} />
         ))}
       </div>
-      {/* soft radial glow */}
-      <div aria-hidden style={{ position: 'absolute', top: '-6%', left: '50%', transform: 'translateX(-50%)', width: '78%', height: '60%', background: `radial-gradient(ellipse at center, ${C.orange}1f, transparent 62%)`, filter: 'blur(60px)', zIndex: 0 }} />
+      {/* soft radial glow — tints to the hovered portal color */}
+      <motion.div aria-hidden
+        animate={{ backgroundColor: accent }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        style={{ position: 'absolute', top: '2%', left: '50%', transform: 'translateX(-50%)', width: '64%', height: '46%', borderRadius: '50%', filter: 'blur(150px)', opacity: 0.16, zIndex: 0 }}
+      />
       {/* faint grid, masked */}
       <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(255,255,255,0.014) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.014) 1px, transparent 1px)', backgroundSize: '72px 72px', maskImage: 'radial-gradient(ellipse 70% 65% at 50% 42%, black, transparent 78%)' }} />
-      {/* bottom accent line */}
-      <div aria-hidden style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '55%', height: 1, background: `linear-gradient(90deg, transparent, ${C.orange}, transparent)`, opacity: 0.5, zIndex: 0 }} />
+      {/* bottom accent line — tints with hovered portal */}
+      <motion.div aria-hidden animate={{ backgroundColor: accent }} transition={{ duration: 0.5 }}
+        style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '55%', height: 1, opacity: 0.5, zIndex: 0, maskImage: 'linear-gradient(90deg, transparent, black, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black, transparent)' }} />
 
       {/* floating glass pills */}
       {PILLS.map((p) => <GlassPill key={p.label} pill={p} mx={mx} my={my} />)}
@@ -169,7 +175,7 @@ export default function Hero() {
 
         {/* portal selector cards (search/buttons removed) */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.95, ease: EASE }}>
-          <HeroPortals />
+          <HeroPortals hovered={hovered} setHovered={setHovered} />
         </motion.div>
       </div>
     </section>
