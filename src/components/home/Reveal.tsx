@@ -12,7 +12,8 @@ export function Reveal({
   children: ReactNode; delay?: number; y?: number; className?: string;
   as?: 'div' | 'section' | 'span';
 }) {
-  const Comp = (motion as any)[as ?? 'div'];
+  const COMPS = { div: motion.div, section: motion.section, span: motion.span };
+  const Comp = COMPS[as ?? 'div'];
   return (
     <Comp
       className={className}

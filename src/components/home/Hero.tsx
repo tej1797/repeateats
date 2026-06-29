@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform, type MotionValue } from 'framer-motion';
 import { IconBolt, IconArrowRight, IconToolsKitchen2, IconBuildingStore, IconCamera } from '@tabler/icons-react';
 import { C, FONT_DISPLAY, PORTALS } from './homeData';
 
@@ -32,7 +32,7 @@ const PILLS: Pill[] = [
   { label: 'Dine-in & Takeout',  pos: 'top-[60%] right-[4%] lg:right-[9%]',       depth: 40, delay: 1.45, floatDur: 7 },
 ];
 
-function GlassPill({ pill, mx, my }: { pill: Pill; mx: any; my: any }) {
+function GlassPill({ pill, mx, my }: { pill: Pill; mx: MotionValue<number>; my: MotionValue<number> }) {
   const x = useTransform(mx, (v: number) => v * pill.depth);
   const y = useTransform(my, (v: number) => v * pill.depth);
   return (
