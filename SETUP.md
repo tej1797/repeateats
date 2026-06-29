@@ -186,7 +186,7 @@ curl "http://localhost:3000/api/collabs?cuisine=Indian"
 ### Messages
 ```bash
 # Fetch messages for a collab (requires auth)
-curl "http://localhost:3000/api/messages?collab_id=33333333-0001-0000-0000-000000000000"
+curl "http://localhost:3000/api/messages?collab_id=repeat-saas-showcase"
 
 # Send a message
 curl -X POST http://localhost:3000/api/messages \
