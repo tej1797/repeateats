@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { IconBolt, IconArrowRight } from '@tabler/icons-react';
-import { C, FONT_DISPLAY } from './homeData';
+import { IconBolt, IconArrowRight, IconToolsKitchen2, IconBuildingStore, IconCamera } from '@tabler/icons-react';
+import { C, FONT_DISPLAY, PORTALS } from './homeData';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -60,6 +60,49 @@ function GlassPill({ pill, mx, my }: { pill: Pill; mx: any; my: any }) {
         {pill.label}
       </motion.div>
     </motion.div>
+  );
+}
+
+const SELECT = [
+  { key: 'customer',   label: "I'm a Customer",   sub: 'Browse & claim deals', icon: <IconToolsKitchen2 size={19} /> },
+  { key: 'restaurant', label: "I'm a Restaurant", sub: 'Post deals & go live',  icon: <IconBuildingStore size={19} /> },
+  { key: 'creator',    label: "I'm a Creator",    sub: 'Find paid collabs',     icon: <IconCamera size={19} /> },
+] as const;
+
+function HeroPortals() {
+  const [hovered, setHovered] = useState<string | null>(null);
+  return (
+    <div data-testid="hero-portal-select" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+      {SELECT.map((s) => {
+        const p = PORTALS.find((x) => x.key === s.key)!;
+        const on = hovered === s.key;
+        return (
+          <Link key={s.key} href={p.href} data-testid={`hero-portal-${s.key}`}
+            onMouseEnter={() => setHovered(s.key)} onMouseLeave={() => setHovered(null)}
+            style={{
+              textDecoration: 'none', width: 196, maxWidth: '46vw',
+              display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px',
+              borderRadius: 16, background: 'rgba(255,255,255,0.045)',
+              border: `1px solid ${on ? p.color : 'rgba(255,255,255,0.12)'}`,
+              backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+              boxShadow: on ? `0 16px 40px -16px ${p.glow}, inset 0 1px 0 rgba(255,255,255,0.08)` : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+              transition: 'border-color .2s, box-shadow .2s, transform .2s',
+              transform: on ? 'translateY(-3px)' : 'none',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: on ? p.color : 'rgba(255,255,255,0.08)', transition: 'background .2s' }}>
+                {s.icon}
+              </span>
+              <IconArrowRight size={16} style={{ color: on ? p.color : C.textMute, transition: 'color .2s' }} />
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', letterSpacing: '-0.2px' }}>{s.label}</div>
+              <div style={{ fontSize: 12, color: C.textMute, marginTop: 2 }}>{s.sub}</div>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
@@ -124,19 +167,9 @@ export default function Hero() {
           <span style={{ fontSize: 13.5, color: C.green, fontWeight: 600 }}>Verified local deals</span>
         </motion.div>
 
-        {/* CTAs (search removed) */}
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.95, ease: EASE }}
-          style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link href="/customer/preview" data-testid="hero-browse-btn"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 54, padding: '0 30px', background: C.orange, color: '#fff', fontSize: 15.5, fontWeight: 700, borderRadius: 14, textDecoration: 'none', boxShadow: '0 14px 40px -12px rgba(255,107,0,0.6)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = C.orangeHi)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = C.orange)}>
-            Browse deals <IconArrowRight size={18} />
-          </Link>
-          <Link href="/restaurant" data-testid="hero-restaurant-btn"
-            style={{ display: 'inline-flex', alignItems: 'center', height: 54, padding: '0 26px', color: '#fff', fontSize: 15.5, fontWeight: 600, borderRadius: 14, textDecoration: 'none', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.14)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-            List your restaurant
-          </Link>
+        {/* portal selector cards (search/buttons removed) */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.95, ease: EASE }}>
+          <HeroPortals />
         </motion.div>
       </div>
     </section>
