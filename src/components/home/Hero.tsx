@@ -25,7 +25,6 @@ function Word({ children, delay, color }: { children: string; delay: number; col
 // Glassy floating value-prop pills (Influish-style).
 type Pill = { label: string; pos: string; depth: number; delay: number; floatDur: number; hideSm?: boolean };
 const PILLS: Pill[] = [
-  { label: 'Instant QR Claim',   pos: 'top-[15%] left-1/2 -translate-x-1/2',     depth: 18, delay: 1.0, floatDur: 6.5 },
   { label: 'No Delivery Fees',   pos: 'top-[33%] left-[8%] lg:left-[13%]',        depth: 30, delay: 1.15, floatDur: 7.2 },
   { label: 'Weekly Deals',       pos: 'top-[33%] right-[8%] lg:right-[13%]',      depth: 30, delay: 1.25, floatDur: 6.8 },
   { label: '$0 Subscription',    pos: 'top-[60%] left-[4%] lg:left-[9%]',         depth: 40, delay: 1.35, floatDur: 7.6 },
