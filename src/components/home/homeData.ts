@@ -116,11 +116,13 @@ export const TRENDING_DEALS = [
 
 export const BENEFITS = [
   { icon: 'bolt', title: 'Instant claims', desc: 'One tap generates your QR. No forms, no codes to copy, no waiting.' },
-  { icon: 'wallet', title: 'Zero delivery fees', desc: 'Claim in person and save the full discount — no third-party surcharges.' },
+  { icon: 'wallet', title: 'Dine-in and Takeout', desc: 'Claim in person and save the full discount — no third-party surcharges.' },
   { icon: 'calendar', title: 'Fresh weekly deals', desc: 'New promotions drop every week from restaurants across Ontario.' },
   { icon: 'mapPin', title: 'Right in your city', desc: 'Filter by city, cuisine and deal type to find what is close to you.' },
   { icon: 'shield', title: 'No hidden costs', desc: 'Browsing and claiming deals is always free. No credit card required.' },
-  { icon: 'store', title: 'Support locals', desc: 'Every claim sends business straight to independent neighbourhood spots.' },
+  { icon: 'store', title: 'Support Small Restaurants', desc: 'Every claim sends business straight to independent neighbourhood spots.' },
+  { icon: 'wallet', title: 'Support Creators', desc: 'Creators or influencers can connect with restaurants for paid collaborations.' },
+  { icon: 'store', title: 'Flat Restaurant Fee', desc: 'Flat fees for restaurants, no commission on food prices.' },
 ];
 
 export const STATS = [
