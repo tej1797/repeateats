@@ -30,7 +30,7 @@ export default function PortalCards() {
           </div>
         </Reveal>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 22 }}>
           {PORTALS.map((p, i) => (
             <motion.div key={p.key}
               initial={{ opacity: 0, y: 36 }}

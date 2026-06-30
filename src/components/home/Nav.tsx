@@ -47,7 +47,7 @@ export default function Nav() {
           </span>
         </Link>
 
-        <div className="hidden md:flex" style={{ alignItems: 'center', gap: 34 }}>
+        <div className="hidden lg:flex" style={{ alignItems: 'center', gap: 34 }}>
           {LINKS.map((l) => (
             <Link key={l.label} href={l.href} data-testid={`nav-${l.label.toLowerCase().replace(/[^a-z]+/g, '-')}`}
               style={{ fontSize: 14, fontWeight: 500, textDecoration: 'none', color: l.accent ? C.orange : C.textSoft, transition: 'color .15s' }}
@@ -59,7 +59,7 @@ export default function Nav() {
           ))}
         </div>
 
-        <div className="hidden md:flex" style={{ gap: 10, alignItems: 'center' }}>
+        <div className="hidden lg:flex" style={{ gap: 10, alignItems: 'center' }}>
           <Link href="/customer/login" data-testid="nav-signin" style={{ color: C.textSoft, fontSize: 14, fontWeight: 500, textDecoration: 'none', padding: '8px 14px' }}>
             Sign in
           </Link>
@@ -70,7 +70,7 @@ export default function Nav() {
           </Link>
         </div>
 
-        <button data-testid="nav-mobile-toggle" aria-label="Menu" className="md:hidden" onClick={() => setOpen((v) => !v)}
+        <button data-testid="nav-mobile-toggle" aria-label="Menu" className="lg:hidden" onClick={() => setOpen((v) => !v)}
           style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 6 }}>
           {open ? <IconX size={24} /> : <IconMenu2 size={24} />}
         </button>
@@ -79,7 +79,7 @@ export default function Nav() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="md:hidden"
+            className="lg:hidden"
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
             style={{ position: 'absolute', top: 66, left: 0, right: 0, background: 'rgba(10,10,10,0.98)', backdropFilter: 'blur(16px)', borderBottom: `1px solid ${C.border}`, padding: '16px 24px 24px' }}
           >

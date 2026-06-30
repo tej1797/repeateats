@@ -37,7 +37,7 @@ function GlassPill({ pill, mx, my }: { pill: Pill; mx: MotionValue<number>; my: 
   const y = useTransform(my, (v: number) => v * pill.depth);
   return (
     <motion.div
-      className={`absolute ${pill.pos} hidden md:flex`}
+      className={`absolute ${pill.pos} hidden lg:flex`}
       style={{ x, y, zIndex: 2 }}
       initial={{ opacity: 0, scale: 0.85, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -79,7 +79,7 @@ function HeroPortals({ hovered, setHovered }: { hovered: string | null; setHover
           <Link key={s.key} href={p.href} data-testid={`hero-portal-${s.key}`}
             onMouseEnter={() => setHovered(s.key)} onMouseLeave={() => setHovered(null)}
             style={{
-              textDecoration: 'none', width: 196, maxWidth: '46vw',
+              textDecoration: 'none', flex: '1 1 190px', maxWidth: 240, minWidth: 150,
               display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px',
               borderRadius: 16, background: 'rgba(255,255,255,0.045)',
               border: `1px solid ${on ? p.color : 'rgba(255,255,255,0.12)'}`,
