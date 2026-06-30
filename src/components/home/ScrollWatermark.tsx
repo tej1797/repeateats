@@ -27,7 +27,7 @@ export default function ScrollWatermark() {
     <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', overflow: 'hidden' }}>
       <span style={{
         fontFamily: FONT_DISPLAY, fontWeight: 800, letterSpacing: '-0.04em',
-        fontSize: 'min(26vw, 40vh)', lineHeight: 1, whiteSpace: 'nowrap',
+        fontSize: 'min(15vw, 22vh)', lineHeight: 1, whiteSpace: 'nowrap',
         background: `linear-gradient(180deg, ${C.orange}, ${C.orange}22)`,
         WebkitBackgroundClip: 'text', backgroundClip: 'text',
         color: 'transparent', WebkitTextFillColor: 'transparent',

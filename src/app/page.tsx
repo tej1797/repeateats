@@ -17,7 +17,6 @@ import HowItWorks from '@/components/home/HowItWorks';
 import Stats from '@/components/home/Stats';
 import WhyRepEAT from '@/components/home/WhyRepEAT';
 import FAQ from '@/components/home/FAQ';
-import FinalCTA from '@/components/home/FinalCTA';
 import SiteFooter from '@/components/home/SiteFooter';
 
 const ORANGE = '#FF6B00';
@@ -83,7 +82,6 @@ export default function LandingPage() {
             <Stats />
             <WhyRepEAT />
             <FAQ />
-            <FinalCTA />
           </main>
           <SiteFooter />
         </div>
