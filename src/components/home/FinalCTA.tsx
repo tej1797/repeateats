@@ -8,8 +8,8 @@ import { Reveal } from './Reveal';
 
 export default function FinalCTA() {
   return (
-    <section data-testid="final-cta-section" style={{ padding: 'clamp(80px,11vw,140px) 24px clamp(40px,6vw,72px)', background: C.bg2, borderTop: `1px solid ${C.border}`, position: 'relative', overflow: 'hidden' }}>
-      <div aria-hidden style={{ position: 'absolute', left: '50%', top: '40%', transform: 'translate(-50%,-50%)', width: '70%', height: '120%', background: `radial-gradient(ellipse at center, ${C.orange}22, transparent 60%)`, filter: 'blur(40px)' }} />
+    <section data-testid="final-cta-section" style={{ padding: 'clamp(80px,11vw,140px) 24px', background: C.bg2, borderTop: `1px solid ${C.border}`, position: 'relative', overflow: 'hidden' }}>
+      <div aria-hidden style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '70%', height: '120%', background: `radial-gradient(ellipse at center, ${C.orange}22, transparent 60%)`, filter: 'blur(40px)' }} />
       <div style={{ position: 'relative', maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
         <Reveal>
           <h2 style={{ fontFamily: FONT_DISPLAY, fontSize: 'clamp(32px,5.5vw,60px)', fontWeight: 800, letterSpacing: '-2px', lineHeight: 1.08, color: '#fff', marginBottom: 20 }}>
@@ -33,19 +33,6 @@ export default function FinalCTA() {
             </motion.div>
           </div>
         </Reveal>
-      </div>
-
-      {/* giant faded brand watermark */}
-      <div aria-hidden style={{ position: 'relative', marginTop: 'clamp(48px,7vw,90px)', textAlign: 'center', lineHeight: 0.8, pointerEvents: 'none', overflow: 'hidden' }}>
-        <span style={{
-          fontFamily: FONT_DISPLAY, fontWeight: 800, letterSpacing: '-0.04em',
-          fontSize: 'clamp(80px, 20vw, 320px)', display: 'inline-block',
-          background: `linear-gradient(180deg, ${C.orange}33, ${C.orange}05)`,
-          WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
-          WebkitTextFillColor: 'transparent', userSelect: 'none',
-        }}>
-          RepEAT
-        </span>
       </div>
     </section>
   );

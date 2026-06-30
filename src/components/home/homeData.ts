@@ -2,10 +2,10 @@
 // Pure data — no React. Keeps section components lean.
 
 export const C = {
-  // base surfaces (dark premium)
-  bg0: '#0A0A0A',
-  bg1: '#0E0E0E',
-  bg2: '#111111',
+  // base surfaces (transparent so the scroll watermark shows through)
+  bg0: 'transparent',
+  bg1: 'transparent',
+  bg2: 'transparent',
   surface: '#151515',
   surfaceHi: '#1A1A1A',
   border: '#1E1E1E',

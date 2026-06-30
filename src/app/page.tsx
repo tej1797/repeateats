@@ -7,16 +7,15 @@ import { resolvePortalIntent, readPortalCookie, clearPortalIntent, portalPath } 
 import { handleOAuthReturn as completeOAuthReturn } from '@/lib/oauthCallback';
 
 import LenisProvider from '@/components/home/LenisProvider';
+import ScrollWatermark from '@/components/home/ScrollWatermark';
 import Nav from '@/components/home/Nav';
 import Hero from '@/components/home/Hero';
 import LiveTicker from '@/components/home/LiveTicker';
 import PortalCards from '@/components/home/PortalCards';
 import LogoMarquee from '@/components/home/LogoMarquee';
 import HowItWorks from '@/components/home/HowItWorks';
-import FeaturedDeals from '@/components/home/FeaturedDeals';
-import Benefits from '@/components/home/Benefits';
 import Stats from '@/components/home/Stats';
-import Testimonials from '@/components/home/Testimonials';
+import WhyRepEAT from '@/components/home/WhyRepEAT';
 import FAQ from '@/components/home/FAQ';
 import FinalCTA from '@/components/home/FinalCTA';
 import SiteFooter from '@/components/home/SiteFooter';
@@ -71,22 +70,23 @@ export default function LandingPage() {
 
   return (
     <LenisProvider>
-      <div style={{ background: '#0A0A0A', color: '#fff', overflowX: 'hidden', fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)' }}>
-        <Nav />
-        <main>
-          <Hero />
-          <LiveTicker />
-          <PortalCards />
-          <LogoMarquee />
-          <HowItWorks />
-          <FeaturedDeals />
-          <Benefits />
-          <Stats />
-          <Testimonials />
-          <FAQ />
-          <FinalCTA />
-        </main>
-        <SiteFooter />
+      <div style={{ position: 'relative', background: '#0A0A0A', color: '#fff', overflowX: 'hidden', fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)' }}>
+        <ScrollWatermark />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <Nav />
+          <main>
+            <Hero />
+            <LiveTicker />
+            <PortalCards />
+            <LogoMarquee />
+            <HowItWorks />
+            <Stats />
+            <WhyRepEAT />
+            <FAQ />
+            <FinalCTA />
+          </main>
+          <SiteFooter />
+        </div>
       </div>
     </LenisProvider>
   );
