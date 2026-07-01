@@ -18,7 +18,7 @@ const CUISINES: CuisineItem[] = [
   { id: 'desserts',  label: 'Desserts',    color: '#6B21A8', img: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&q=70' },
   { id: 'chinese',   label: 'Chinese',     color: '#991B1B', img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=200&q=70' },
   { id: 'cafe',      label: 'Cafe',        color: '#4B5563', img: 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=200&q=70' },
-  { id: 'ramen',     label: 'Ramen',       color: '#F97316', img: 'https://images.unsplash.com/photo-1549692520-acc6669e2f0c?w=200&q=70' },
+  { id: 'ramen',     label: 'Ramen',       color: '#F97316', img: 'https://img.magnific.com/free-psd/delicious-ramen-bowl-with-soft-boiled-eggs-spring-onions_191095-79612.jpg?ga=GA1.1.2046982588.1782879900&semt=ais_test_b&w=740&q=80' },
   { id: 'burgers',   label: 'Burgers',     color: '#9A3412', img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&q=70' },
   { id: 'italian',   label: 'Italian',     color: '#B45309', img: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&q=70' },
   { id: 'bubbletea', label: 'Bubble Tea',  color: '#701A75', img: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=200&q=70' },
