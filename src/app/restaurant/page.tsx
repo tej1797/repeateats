@@ -901,8 +901,8 @@ function Step1Places({
         });
         if (wizard.city) params.set('city', wizard.city);
         const res  = await fetch(`/api/google-places?${params.toString()}`);
-        const json = await res.json() as { data?: PlaceSuggestion[] };
-        const list = json.data ?? [];
+        const json = await res.json() as { data?: PlaceSuggestion[]; results?: PlaceSuggestion[] };
+        const list = json.data ?? json.results ?? [];
         setResults(list);
         setOpen(list.length > 0);
       } catch { setResults([]); setOpen(false); }
