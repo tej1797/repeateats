@@ -458,7 +458,7 @@ export default function CreateDealModal({
                 ))}
               </div>
               <p className="text-[11px] text-t3 mt-1.5">
-                Tag $6 or $12 specials so customers can find them under &quot;Under CA$6&quot; / &quot;Under CA$10&quot;.
+                Tag $6 or $12 specials so customers can find them under &quot;Under CA$6&quot; / &quot;Under CA$12&quot;.
               </p>
             </div>
 

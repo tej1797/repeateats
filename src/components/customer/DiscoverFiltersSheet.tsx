@@ -182,7 +182,7 @@ export default function DiscoverFiltersSheet({
               <div className="space-y-2">
                 {[
                   { id: 'all' as const, label: 'Any price' },
-                  { id: 'under10' as const, label: 'Under CA$10' },
+                  { id: 'under10' as const, label: 'Under CA$12' },
                 ].map(opt => (
                   <label key={opt.id} className="flex items-center gap-2.5 cursor-pointer py-1">
                     <input
