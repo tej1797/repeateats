@@ -68,7 +68,7 @@ interface FullClaim extends RecentClaim {
 }
 
 const CITIES = ['GTA Area', 'Mississauga', 'Brampton', 'Toronto', 'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville'];
-const CUISINES = ['Indian', 'Italian', 'BBQ', 'Bar & Grill', 'Canadian', 'Burgers', 'Chinese', 'Sushi', 'Pizza', 'Desserts', 'Vegan', 'Bubble Tea'];
+const CUISINES = ['Pizza', 'Indian', 'Shawarma', 'BBQ', 'Desserts', 'Chinese', 'Cafe', 'Burgers', 'Italian', 'Bubble Tea', 'Bar & Grill', 'Canadian', 'Sushi', 'Vegan'];
 
 // ─── Count-up hook ────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 1200) {

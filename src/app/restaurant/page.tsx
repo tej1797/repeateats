@@ -98,11 +98,11 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 // Maps the human-readable cuisine label to the category slug used in the deals feed
 const CUISINE_TO_CATEGORY: Record<string, string> = {
-  Indian: 'indian', Italian: 'italian', Japanese: 'japanese',
-  Chinese: 'chinese', Mexican: 'mexican', Thai: 'thai',
-  Mediterranean: 'mediterranean', American: 'american', BBQ: 'bbq',
-  Seafood: 'seafood', Vegan: 'vegan', Pizza: 'pizza',
-  Burgers: 'burgers', Other: 'other',
+  Pizza: 'pizza', Indian: 'indian', Shawarma: 'shawarma', BBQ: 'bbq',
+  Desserts: 'desserts', Chinese: 'chinese', Cafe: 'cafe', Burgers: 'burgers',
+  Italian: 'italian', 'Bubble Tea': 'bubbletea', Japanese: 'japanese',
+  Mexican: 'mexican', Thai: 'thai', Mediterranean: 'mediterranean',
+  American: 'american', Seafood: 'seafood', Vegan: 'vegan', Other: 'other',
 };
 
 const CUISINES = Object.keys(CUISINE_TO_CATEGORY);
