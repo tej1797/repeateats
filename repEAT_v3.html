@@ -21,7 +21,7 @@ h1,h2,h3,.logo{font-family:var(--fh)}
 .bbr{background:var(--br);color:#fff}.bbr:hover{background:var(--br2)}
 .bol{background:transparent;border:1.5px solid var(--bd2);color:var(--tx)}.bol:hover{border-color:var(--br);color:var(--br)}
 .bgh{background:transparent;border:none;color:var(--t2);font-family:var(--ff);font-size:14px;font-weight:500;cursor:pointer;padding:6px 10px;border-radius:var(--rs);transition:all .14s}.bgh:hover{background:var(--sf2);color:var(--tx)}
-.logo{letter-spacing:-2px;line-height:1;font-weight:800}.logo .e{color:var(--br)}
+.logo{letter-spacing:-2px;line-height:1;font-weight:800;font-size:clamp(28px,6vw,56px)}.logo .e{color:var(--br)}
 .f{margin-bottom:14px}.f label{display:block;font-size:13px;color:var(--t2);margin-bottom:5px;font-weight:600}
 .f input,.f select,.f textarea{width:100%;padding:0 14px;height:46px;border:1.5px solid var(--bd2);border-radius:var(--rs);background:var(--sf);color:var(--tx);font-size:15px;font-family:var(--ff);outline:none;transition:border-color .14s,box-shadow .14s}
 .f input:focus,.f select:focus,.f textarea:focus{border-color:var(--br);box-shadow:0 0 0 3px rgba(232,93,4,0.11)}
@@ -98,7 +98,7 @@ input[type=range]{accent-color:var(--br);width:100%}
 <div id="s-land" class="scr on">
 <div style="min-height:100vh;display:flex;flex-direction:column">
   <div style="padding:20px 24px 0;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;width:100%">
-    <div class="logo" style="font-size:40px">Rep<span class="e">EAT</span></div>
+    <div class="logo">Rep<span class="e">EAT</span></div>
     <div style="display:flex;gap:8px"><button class="btn bol" style="height:38px;font-size:13px" onclick="go('s-cl')">Sign in</button></div>
   </div>
   <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:2rem 1.5rem">
