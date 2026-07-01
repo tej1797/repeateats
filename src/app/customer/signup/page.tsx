@@ -215,7 +215,7 @@ export default function CustomerSignupPage() {
     })();
   };
 
-  const CUISINES = ['Pizza', 'Indian', 'Shawarma', 'BBQ', 'Desserts', 'Chinese', 'Cafe', 'Burgers', 'Italian', 'Bubble Tea', 'Japanese', 'Mexican', 'Thai', 'Vegan', 'Seafood'];
+  const CUISINES = ['Pizza', 'Indian', 'Shawarma', 'Mexican', 'Desserts', 'Chinese', 'Cafe', 'Ramen', 'Burgers', 'Italian', 'Bubble Tea'];
 
   return (
     <div className="min-h-screen flex" style={{ background: '#0D0D0D' }}>

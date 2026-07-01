@@ -35,17 +35,14 @@ export const CUISINES = [
   { id: 'pizza',     label: 'Pizza',      emoji: '🍕', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&q=70' },
   { id: 'indian',    label: 'Indian',     emoji: '🍛', image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200&q=70' },
   { id: 'shawarma',  label: 'Shawarma',   emoji: '🥙', image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=200&q=70' },
-  { id: 'bbq',       label: 'BBQ',        emoji: '🥩', image: 'https://images.unsplash.com/photo-1558030006-450675393462?w=200&q=70' },
+  { id: 'mexican',   label: 'Mexican',    emoji: '🌮', image: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=200&q=70' },
   { id: 'desserts',  label: 'Desserts',   emoji: '🧁', image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&q=70' },
   { id: 'chinese',   label: 'Chinese',    emoji: '🥢', image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=200&q=70' },
   { id: 'cafe',      label: 'Cafe',       emoji: '☕', image: 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=200&q=70' },
+  { id: 'ramen',     label: 'Ramen',      emoji: '🍜', image: 'https://images.unsplash.com/photo-1549692520-acc6669e2f0c?w=200&q=70' },
   { id: 'burgers',   label: 'Burgers',    emoji: '🍔', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&q=70' },
   { id: 'italian',   label: 'Italian',    emoji: '🍝', image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&q=70' },
   { id: 'bubbletea', label: 'Bubble Tea', emoji: '🧋', image: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=200&q=70' },
-  { id: 'bar',       label: 'Bar & Grill',emoji: '🍺', image: 'https://images.unsplash.com/photo-1536935338788-846bb9981813?w=200&q=70' },
-  { id: 'canadian',  label: 'Canadian',   emoji: '🍁', image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=200&q=70' },
-  { id: 'sushi',     label: 'Sushi',      emoji: '🍣', image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=200&q=70' },
-  { id: 'vegan',     label: 'Vegan',      emoji: '🥗', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&q=70' },
 ] as const
 
 export const DEAL_FILTERS = [

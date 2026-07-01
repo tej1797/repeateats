@@ -98,14 +98,14 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 // Maps the human-readable cuisine label to the category slug used in the deals feed
 const CUISINE_TO_CATEGORY: Record<string, string> = {
-  Pizza: 'pizza', Indian: 'indian', Shawarma: 'shawarma', BBQ: 'bbq',
-  Desserts: 'desserts', Chinese: 'chinese', Cafe: 'cafe', Burgers: 'burgers',
-  Italian: 'italian', 'Bubble Tea': 'bubbletea', Japanese: 'japanese',
-  Mexican: 'mexican', Thai: 'thai', Mediterranean: 'mediterranean',
-  American: 'american', Seafood: 'seafood', Vegan: 'vegan', Other: 'other',
+  Pizza: 'pizza', Indian: 'indian', Shawarma: 'shawarma', Mexican: 'mexican',
+  Desserts: 'desserts', Chinese: 'chinese', Cafe: 'cafe', Ramen: 'ramen',
+  Burgers: 'burgers', Italian: 'italian', 'Bubble Tea': 'bubbletea',
+  Japanese: 'japanese', Thai: 'thai', Mediterranean: 'mediterranean',
+  American: 'american', Other: 'other',
 };
 
-const CUISINES = Object.keys(CUISINE_TO_CATEGORY);
+const CUISINES = ['Pizza', 'Indian', 'Shawarma', 'Mexican', 'Desserts', 'Chinese', 'Cafe', 'Ramen', 'Burgers', 'Italian', 'Bubble Tea'];
 
 const ONTARIO_CITIES = [
   'Toronto', 'Mississauga', 'Brampton', 'Markham', 'Vaughan',

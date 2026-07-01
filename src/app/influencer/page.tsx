@@ -39,8 +39,7 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CUISINE_FILTERS = [
-  'All', 'Pizza', 'Indian', 'Shawarma', 'BBQ', 'Desserts', 'Chinese', 'Cafe', 'Burgers', 'Italian', 'Bubble Tea',
-  'Japanese', 'Mexican', 'Thai', 'Seafood', 'Vegan',
+  'All', 'Pizza', 'Indian', 'Shawarma', 'Mexican', 'Desserts', 'Chinese', 'Cafe', 'Ramen', 'Burgers', 'Italian', 'Bubble Tea',
 ];
 
 const CITY_FILTERS = [

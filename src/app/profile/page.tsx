@@ -68,7 +68,7 @@ interface FullClaim extends RecentClaim {
 }
 
 const CITIES = ['GTA Area', 'Mississauga', 'Brampton', 'Toronto', 'Markham', 'Kitchener-Waterloo', 'Hamilton', 'Oakville'];
-const CUISINES = ['Pizza', 'Indian', 'Shawarma', 'BBQ', 'Desserts', 'Chinese', 'Cafe', 'Burgers', 'Italian', 'Bubble Tea', 'Bar & Grill', 'Canadian', 'Sushi', 'Vegan'];
+const CUISINES = ['Pizza', 'Indian', 'Shawarma', 'Mexican', 'Desserts', 'Chinese', 'Cafe', 'Ramen', 'Burgers', 'Italian', 'Bubble Tea'];
 
 // ─── Count-up hook ────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 1200) {
@@ -142,9 +142,8 @@ function buildMonthlyData(claims: FullClaim[]) {
 
 // ─── Category emoji map ───────────────────────────────────────────────────────
 const CAT_EMOJI: Record<string, string> = {
-  indian: '🍛', bbq: '🥩', italian: '🍝', bar: '🍺', canadian: '🍁',
-  burgers: '🍔', chinese: '🥢', sushi: '🍣', pizza: '🍕', desserts: '🧁',
-  vegan: '🥗', bubbletea: '🧋',
+  indian: '🍛', italian: '🍝', burgers: '🍔', chinese: '🥢', ramen: '🍜',
+  pizza: '🍕', desserts: '🧁', bubbletea: '🧋',
 };
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
