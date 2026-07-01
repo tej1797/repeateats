@@ -37,7 +37,7 @@ export default function SiteFooter() {
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ display: 'flex', gap: 'clamp(32px,5vw,64px)', marginBottom: 52, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 260px', minWidth: 240 }}>
-            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 27, fontWeight: 800, letterSpacing: '-0.5px', color: '#fff', marginBottom: 14 }}>
+            <div className="site-logo" style={{ color: '#fff', marginBottom: 14 }}>
               Rep<span style={{ color: C.orange }}>EAT</span>
             </div>
             <p style={{ fontSize: 14, color: C.textMute, lineHeight: 1.7, maxWidth: 240, marginBottom: 18 }}>

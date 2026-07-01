@@ -42,7 +42,7 @@ export default function Nav() {
     >
       <div style={{ maxWidth: 1200, width: '100%', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Link href="/" data-testid="home-logo" style={{ textDecoration: 'none' }}>
-          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 25, fontWeight: 800, letterSpacing: '-0.5px', color: '#fff' }}>
+          <span className="site-logo" style={{ color: '#fff' }}>
             Rep<span style={{ color: C.orange }}>EAT</span>
           </span>
         </Link>
