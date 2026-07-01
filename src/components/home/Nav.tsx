@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconMenu2, IconX } from '@tabler/icons-react';
-import { C, FONT_DISPLAY } from './homeData';
+import { C } from './homeData';
 
 const LINKS = [
   { label: 'Browse Deals', href: '/customer/preview' },
